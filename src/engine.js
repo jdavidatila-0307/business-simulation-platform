@@ -292,6 +292,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 // ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────
 function ejecutarSimulador(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
+  
+  decisiones = expandirDecisionesMultiproducto(decisiones);
 
   // Calcular demanda formal de cada segmento
   const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos);
@@ -306,7 +308,42 @@ function ejecutarSimulador(decisiones, cfg) {
   });
 
   // Pre-calcular vendedores y marketing por equipo (necesarios para atractivo)
-  const vendedoresPorEquipo = {};
+  function expandirDecisionesMultiproducto(decisiones) {
+  const expandidas = [];
+
+  (decisiones || []).forEach(decisionEmpresa => {
+    const productos = Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos.length
+      ? decisionEmpresa.productos.filter(p => p.activo !== false)
+      : [decisionEmpresa];
+
+    productos.forEach((producto, idx) => {
+      const productoId = producto.productoId || `prod_${idx + 1}`;
+      const equipoOriginal = decisionEmpresa.equipo;
+      const equipoProductoId = `${equipoOriginal}__${productoId}`;
+
+      expandidas.push({
+        ...decisionEmpresa,
+        ...producto,
+
+        // ID interno único para que el motor compita producto contra producto
+        equipo: equipoProductoId,
+
+        // Referencias reales de empresa
+        equipoOriginal,
+        equipoProductoId,
+        equipoNombre: decisionEmpresa.equipoNombre,
+        productoId,
+
+        // Decisión completa original para futuras consolidaciones
+        empresaDecisionOriginal: decisionEmpresa
+      });
+    });
+  });
+
+  return expandidas;
+}
+  
+    const vendedoresPorEquipo = {};
   const mktEfectivoPorEquipo = {};
   const costoVendedoresPorEquipo = {};
 
@@ -351,6 +388,9 @@ function ejecutarSimulador(decisiones, cfg) {
 
     return {
       equipo:          d.equipo,
+      equipoOriginal:   d.equipoOriginal || d.equipo,
+      equipoProductoId: d.equipoProductoId || d.equipo,
+      productoId:       d.productoId || 'prod_1',
       equipoNombre:    d.equipoNombre,
       segmento:        d.segmentoObjetivo,
       producto:        d.producto,
@@ -384,6 +424,8 @@ function ejecutarSimulador(decisiones, cfg) {
  */
 function calcularPreSimulacion(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
+  
+  decisiones = expandirDecisionesMultiproducto(decisiones);
 
   const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos);
   const segmentoPorNombre = {};
