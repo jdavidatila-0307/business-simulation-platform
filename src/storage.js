@@ -222,17 +222,101 @@ async function updateRonda(simulacionId, n, data, ownerId = null) {
 
 function defaultDecision(equipoId, equipoNombre, params) {
   const p = params || {};
+
+  const productoBase = {
+    productoId: 'prod_1',
+    activo: true,
+
+    // Decisión comercial por producto
+    producto: 'Básico',
+    segmentoObjetivo: 'Masivo popular',
+    canalPrincipal: 'Mercado',
+    canalSecundario: 'Ninguno',
+
+    // Decisión operativa por producto
+    calidad: 5,
+    precioVenta: 3.60,
+    produccion: 18000,
+
+    // Marketing por producto
+    publicidad: 3000,
+    promocion: 2000,
+    eventos: 1000,
+    marketingRedes: 1000,
+    relacionesPublicas: 1000,
+
+    // Innovación por producto
+    innovacion: false,
+    tipoInnovacion: '',
+    montoInnovacion: 0,
+
+    // Variables acumulables futuras
+    brandEquityInicial: 50,
+    reputacionInicial: 50,
+    inventarioInicial: p.inventarioInicialUnid || 0
+  };
+
   return {
-    equipo: equipoId, equipoNombre,
-    producto: 'Básico', segmentoObjetivo: 'Masivo popular',
-    canalPrincipal: 'Mercado', canalSecundario: 'Ninguno',
-    calidad: 5, precioVenta: 3.60, produccion: 18000,
-    publicidad: 3000, promocion: 2000, eventos: 1000,
-    marketingRedes: 1000, relacionesPublicas: 1000,
-    contratarVendedores: 0, despedirVendedores: 0,
-    tipoPrestamo: 'Ninguno', montoPrestamo: 0, plazoPrestamo: 2, amortizacion: 0,
-    innovacion: false, tipoInnovacion: '', montoInnovacion: 0,
+    equipo: equipoId,
+    equipoNombre,
+
+    // NUEVO MODELO EMPRESARIAL
+    productos: [productoBase],
+
+    // COMPATIBILIDAD TEMPORAL CON EL MOTOR ACTUAL
+    producto: productoBase.producto,
+    segmentoObjetivo: productoBase.segmentoObjetivo,
+    canalPrincipal: productoBase.canalPrincipal,
+    canalSecundario: productoBase.canalSecundario,
+    calidad: productoBase.calidad,
+    precioVenta: productoBase.precioVenta,
+    produccion: productoBase.produccion,
+    publicidad: productoBase.publicidad,
+    promocion: productoBase.promocion,
+    eventos: productoBase.eventos,
+    marketingRedes: productoBase.marketingRedes,
+    relacionesPublicas: productoBase.relacionesPublicas,
+    innovacion: productoBase.innovacion,
+    tipoInnovacion: productoBase.tipoInnovacion,
+    montoInnovacion: productoBase.montoInnovacion,
+
+    // RRHH empresarial
+    rrhh: {
+      contratarVendedores: 0,
+      despedirVendedores: 0,
+      contratarOperarios: 0,
+      despedirOperarios: 0,
+      capacitacion: 0,
+      productividadInicial: 1
+    },
+
+    // COMPATIBILIDAD TEMPORAL RRHH
+    contratarVendedores: 0,
+    despedirVendedores: 0,
+
+    // Finanzas
+    finanzas: {
+      tipoPrestamo: 'Ninguno',
+      montoPrestamo: 0,
+      plazoPrestamo: 2,
+      amortizacion: 0
+    },
+
+    // COMPATIBILIDAD TEMPORAL FINANZAS
+    tipoPrestamo: 'Ninguno',
+    montoPrestamo: 0,
+    plazoPrestamo: 2,
+    amortizacion: 0,
+
+    // Investigación
+    investigacion: {
+      tipoInvestigacion: 'No'
+    },
+
+    // COMPATIBILIDAD TEMPORAL INVESTIGACIÓN
     tipoInvestigacion: 'No',
+
+    // Estado inicial financiero
     vendedoresIniciales: p.vendedoresIniciales || 2,
     cajaInicial: p.cajaInicial || 50000,
     activosFijosIniciales: p.activosFijosIniciales || 80000,
@@ -240,7 +324,10 @@ function defaultDecision(equipoId, equipoNombre, params) {
     deudaInicial: p.deudaInicial || 0,
     inventarioInicial: p.inventarioInicialUnid || 0,
     resultadoAcumuladoAnterior: 0,
-    submitted: false, submittedAt: null
+
+    // Estado de entrega
+    submitted: false,
+    submittedAt: null
   };
 }
 
