@@ -1751,6 +1751,76 @@ async function enviarDecision() {
 
 let hojaRondaActual = 1;   // ronda que está mostrando el selector
 
+let hojaProductoActivo = 0;
+
+function normalizarDecisionMultiproducto(decision) {
+  decision = decision || {};
+
+  if (!Array.isArray(decision.productos) || decision.productos.length === 0) {
+    decision.productos = [{
+      productoId: 'prod_1',
+      activo: true,
+      producto: decision.producto || 'Básico',
+      segmentoObjetivo: decision.segmentoObjetivo || 'Masivo popular',
+      canalPrincipal: decision.canalPrincipal || 'Mercado',
+      canalSecundario: decision.canalSecundario || 'Ninguno',
+      calidad: decision.calidad ?? 5,
+      precioVenta: decision.precioVenta ?? 3.6,
+      produccion: decision.produccion ?? 18000,
+      publicidad: decision.publicidad ?? 3000,
+      promocion: decision.promocion ?? 2000,
+      eventos: decision.eventos ?? 1000,
+      marketingRedes: decision.marketingRedes ?? 1000,
+      relacionesPublicas: decision.relacionesPublicas ?? 1000,
+      innovacion: decision.innovacion ?? false,
+      tipoInnovacion: decision.tipoInnovacion || '',
+      montoInnovacion: decision.montoInnovacion ?? 0
+    }];
+  }
+
+  // Compatibilidad temporal: el primer producto sigue alimentando los campos antiguos
+  const p = decision.productos[0] || {};
+  decision.producto = p.producto;
+  decision.segmentoObjetivo = p.segmentoObjetivo;
+  decision.canalPrincipal = p.canalPrincipal;
+  decision.canalSecundario = p.canalSecundario;
+  decision.calidad = p.calidad;
+  decision.precioVenta = p.precioVenta;
+  decision.produccion = p.produccion;
+  decision.publicidad = p.publicidad;
+  decision.promocion = p.promocion;
+  decision.eventos = p.eventos;
+  decision.marketingRedes = p.marketingRedes;
+  decision.relacionesPublicas = p.relacionesPublicas;
+  decision.innovacion = p.innovacion;
+  decision.tipoInnovacion = p.tipoInnovacion;
+  decision.montoInnovacion = p.montoInnovacion;
+
+  return decision;
+}
+
+function crearProductoDefault(idx) {
+  return {
+    productoId: `prod_${idx + 1}`,
+    activo: true,
+    producto: 'Básico',
+    segmentoObjetivo: 'Masivo popular',
+    canalPrincipal: 'Mercado',
+    canalSecundario: 'Ninguno',
+    calidad: 5,
+    precioVenta: 3.6,
+    produccion: 18000,
+    publicidad: 3000,
+    promocion: 2000,
+    eventos: 1000,
+    marketingRedes: 1000,
+    relacionesPublicas: 1000,
+    innovacion: false,
+    tipoInnovacion: '',
+    montoInnovacion: 0
+  };
+}
+
 async function loadHojaDecision() {
   const cont = document.getElementById('hojaContent');
   const sel  = document.getElementById('hojaRondaSelector');
@@ -1821,6 +1891,8 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   const cont = document.getElementById('hojaContent');
   if (!cont) return;
   decision = decision || {};
+  decision = normalizarDecisionMultiproducto(decision);
+  state.decisiones = decision;
 
   if (roundState === 'pending') {
     cont.innerHTML = `

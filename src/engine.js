@@ -292,8 +292,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 // ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────
 function ejecutarSimulador(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
-  
-  decisiones = expandirDecisionesMultiproducto(decisiones);
+    decisiones = expandirDecisionesMultiproducto(decisiones);
+   
 
   // Calcular demanda formal de cada segmento
   const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos);
@@ -422,7 +422,7 @@ function ejecutarSimulador(decisiones, cfg) {
  * sin procesar estados financieros. Usado para notificar a los equipos
  * antes de que el profesor ejecute la simulación completa.
  */
-function calcularPreSimulacion(decisiones, cfg) {
+  function calcularPreSimulacion(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
   
   decisiones = expandirDecisionesMultiproducto(decisiones);
