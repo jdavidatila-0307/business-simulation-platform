@@ -2142,11 +2142,11 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
               <td></td></tr>
           <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
-              <td>${inp('precioVenta',decision.precioVenta,'number','min="0.1" step="0.1"')}</td>
+              <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
               <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
           <tr><td class="hoja-label">🏭 Producción (unidades)</td>
-              <td>${inp('produccion',decision.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
+              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
               <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||20000)} unid</td>
               <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
@@ -2281,8 +2281,31 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
                 : el.type==='number'   ? +el.value
                 : el.tagName==='SELECT'? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/,'').trim()
                 : el.value;
-        decision[el.dataset.hojaField] = v;
-        if (state.decisiones) state.decisiones[el.dataset.hojaField] = v;
+        const productFields = [
+          'producto','segmentoObjetivo','canalPrincipal','canalSecundario',
+          'calidad','precioVenta','produccion',
+          'publicidad','promocion','eventos','marketingRedes','relacionesPublicas',
+          'innovacion','tipoInnovacion','montoInnovacion'
+        ];
+
+        if (productFields.includes(el.dataset.hojaField)) {
+          if (!state.decisiones.productos) state.decisiones.productos = [];
+          if (!state.decisiones.productos[hojaProductoActivo]) {
+            state.decisiones.productos[hojaProductoActivo] = crearProductoDefault(hojaProductoActivo);
+          }
+
+           state.decisiones.productos[hojaProductoActivo][el.dataset.hojaField] = v;
+
+          // Compatibilidad temporal SOLO con producto activo
+          if (hojaProductoActivo === 0) {
+          state.decisiones[el.dataset.hojaField] = v;
+        }
+
+decision = state.decisiones;
+          } else {
+            decision[el.dataset.hojaField] = v;
+            if (state.decisiones) state.decisiones[el.dataset.hojaField] = v;
+          }
         const r = document.getElementById('hojaResumen');
         if (r) r.innerHTML = hojaResumenV2(decision);
       });
