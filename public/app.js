@@ -2012,6 +2012,38 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   }
 
   const j = decision.justificaciones || {};
+
+    const productos = decision.productos || [];
+    const productoActivo = productos[hojaProductoActivo] || productos[0];
+
+    if (hojaProductoActivo >= productos.length) {
+      hojaProductoActivo = 0;
+    }
+
+    window.hojaSeleccionarProducto = (idx) => {
+      hojaProductoActivo = idx;
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
+    window.hojaAgregarProducto = () => {
+      if (!Array.isArray(state.decisiones.productos)) {
+        state.decisiones.productos = [];
+      }
+
+      if (state.decisiones.productos.length >= 5) {
+        toast('Máximo 5 productos por empresa', 'info');
+        return;
+      }
+
+      state.decisiones.productos.push(
+        crearProductoDefault(state.decisiones.productos.length)
+      );
+
+      hojaProductoActivo = state.decisiones.productos.length - 1;
+
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
   const isEditable = roundState === 'open' && !decision.submitted;
   const isLocked   = roundState === 'locked';
 
@@ -2055,6 +2087,28 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
 
   cont.innerHTML = `
   <div class="hoja-wrap">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+  ${productos.map((p, idx) => `
+    <button
+      type="button"
+      class="btn ${idx === hojaProductoActivo ? 'btn-success' : 'btn-ghost'} btn-sm"
+      onclick="hojaSeleccionarProducto(${idx})"
+    >
+      📦 Producto ${idx + 1}
+    </button>
+  `).join('')}
+
+  ${isEditable ? `
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm"
+      onclick="hojaAgregarProducto()"
+    >
+      ➕ Agregar Producto
+    </button>
+  ` : ''}
+</div>
+
     <div class="hoja-team-header">
       <span class="hoja-team-nombre">📋 ${state.me?.nombre||''}</span>
       <span class="hoja-team-ronda">Trimestre ${n} / 20</span>
