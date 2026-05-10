@@ -8,6 +8,61 @@
 function avg(a, b) { return (a + b) / 2; }
 function roundBs(x) { return Math.round(x * 100) / 100; }
 
+   // ══ BLOQUE A — va al ámbito del módulo, antes de calcularMercadoSegmentos() ══
+// (Elimina la copia que estaba anidada dentro de ejecutarSimulador)
+
+/**
+ * Expande un array de decisiones de empresa en decisiones individuales
+ * a nivel producto-equipo. Ej.: "EquipoA" con 3 productos → "EquipoA__prod_1",
+ * "EquipoA__prod_2", "EquipoA__prod_3".
+ *
+ * Si la decisión no tiene el array `productos` (formato legado monoproducto),
+ * la decisión se trata como si tuviera un único producto.
+ *
+ * @param {Array} decisiones  Array de decisiones de empresa
+ * @returns {Array}           Array expandido de decisiones producto-equipo
+ */
+function expandirDecisionesMultiproducto(decisiones) {
+  const expandidas = [];
+
+  (decisiones || []).forEach(decisionEmpresa => {
+    // Soporte tanto para formato nuevo (productos[]) como legado (campos planos)
+    const productos =
+      Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos.length
+        ? decisionEmpresa.productos.filter(p => p.activo !== false)
+        : [decisionEmpresa];   // legado: la propia decisión actúa como un solo producto
+
+    productos.forEach((producto, idx) => {
+      const productoId     = producto.productoId || `prod_${idx + 1}`;
+      const equipoOriginal = decisionEmpresa.equipo;
+      const equipoProductoId = `${equipoOriginal}__${productoId}`;
+
+      expandidas.push({
+        // Campos de empresa como base
+        ...decisionEmpresa,
+        // Campos del producto sobreescriben (precio, producción, canal, etc.)
+        ...producto,
+
+        // ID interno único para que el motor compita producto contra producto
+        equipo: equipoProductoId,
+
+        // Referencias a la empresa real (para consolidaciones posteriores)
+        equipoOriginal,
+        equipoProductoId,
+        equipoNombre: decisionEmpresa.equipoNombre,
+        productoId,
+
+        // Decisión completa original (para consolidarPorEmpresa y reportes)
+        empresaDecisionOriginal: decisionEmpresa,
+      });
+    });
+  });
+
+  return expandidas;
+}
+
+
+
 // Demanda formal = demandaBase × (1 - pctContrabando)
 function calcularMercadoSegmentos(params, segmentos) {
   return segmentos.map(seg => ({
@@ -308,42 +363,7 @@ function ejecutarSimulador(decisiones, cfg) {
   });
 
   // Pre-calcular vendedores y marketing por equipo (necesarios para atractivo)
-  function expandirDecisionesMultiproducto(decisiones) {
-  const expandidas = [];
-
-  (decisiones || []).forEach(decisionEmpresa => {
-    const productos = Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos.length
-      ? decisionEmpresa.productos.filter(p => p.activo !== false)
-      : [decisionEmpresa];
-
-    productos.forEach((producto, idx) => {
-      const productoId = producto.productoId || `prod_${idx + 1}`;
-      const equipoOriginal = decisionEmpresa.equipo;
-      const equipoProductoId = `${equipoOriginal}__${productoId}`;
-
-      expandidas.push({
-        ...decisionEmpresa,
-        ...producto,
-
-        // ID interno único para que el motor compita producto contra producto
-        equipo: equipoProductoId,
-
-        // Referencias reales de empresa
-        equipoOriginal,
-        equipoProductoId,
-        equipoNombre: decisionEmpresa.equipoNombre,
-        productoId,
-
-        // Decisión completa original para futuras consolidaciones
-        empresaDecisionOriginal: decisionEmpresa
-      });
-    });
-  });
-
-  return expandidas;
-}
-  
-    const vendedoresPorEquipo = {};
+ const vendedoresPorEquipo = {};
   const mktEfectivoPorEquipo = {};
   const costoVendedoresPorEquipo = {};
 
@@ -413,8 +433,24 @@ function ejecutarSimulador(decisiones, cfg) {
   const totalUtilidad = resultados.reduce((s,r) => s + r.utilidadNeta, 0);
   const totalCaja     = resultados.reduce((s,r) => s + r.cajaFinal,    0);
 
-  return { mercadoSegmentos, atractivoEquipos, sharesPorEquipo, resultados,
-    dashboard: { totalVentas, totalIngresos, totalUtilidad, totalCaja } };
+// ══ BLOQUE C — reemplaza el `return { ... }` al final de ejecutarSimulador ════
+//
+// BUSCA este bloque en ejecutarSimulador:
+//
+//   return { mercadoSegmentos, atractivoEquipos, sharesPorEquipo, resultados,
+//     dashboard: { totalVentas, totalIngresos, totalUtilidad, totalCaja } };
+//
+// Y REEMPLÁZALO con el siguiente:
+
+  return {
+    mercadoSegmentos,
+    atractivoEquipos,
+    sharesPorEquipo,
+    resultados,                              // por producto expandido (sin cambios)
+    empresas: consolidarPorEmpresa(resultados), // ← NUEVO: consolidado por empresa
+    dashboard: { totalVentas, totalIngresos, totalUtilidad, totalCaja },
+  };
+
 }
 
 /**
@@ -493,4 +529,109 @@ function ejecutarSimulador(decisiones, cfg) {
   return { mercadoSegmentos, resultado };
 }
 
-module.exports = { ejecutarSimulador, calcularMercadoSegmentos, calcularPreSimulacion };
+// ══ BLOQUE B — nueva función: consolidarPorEmpresa ════════════════════════════
+// Pégala antes del bloque `module.exports` al final de engine.js.
+
+/**
+ * Agrupa los resultados expandidos (nivel producto-equipo) por empresa original.
+ *
+ * Reglas de agregación:
+ *  - Campos financieros sumables: ventasReales, ventasNetas, costoVentas,
+ *    utilidadBruta, gastosOp, utilidadNeta.
+ *  - Campos financieros compartidos (de balance/flujo de caja): cajaFinal,
+ *    cxcFinal, totalActivos, deudaFinal, patrimonio.
+ *    → Se toman del PRIMER producto encontrado para esa empresa
+ *      (representan el estado de la empresa, no son por-producto).
+ *  - sharePromedio: promedio aritmético de shareReal de los productos.
+ *
+ * @param {Array} resultadosExpandidos  Array de resultados devueltos por ejecutarSimulador
+ * @returns {Array}                     Array de objetos empresa consolidados
+ */
+function consolidarPorEmpresa(resultadosExpandidos) {
+  /** @type {Map<string, Object>} */
+  const mapaEmpresas = new Map();
+
+  for (const r of resultadosExpandidos) {
+    const key = r.equipoOriginal || r.equipo; // fallback para formato legado
+
+    if (!mapaEmpresas.has(key)) {
+      // Primera vez que vemos esta empresa: inicializar con campos compartidos
+      mapaEmpresas.set(key, {
+        equipo:       key,
+        equipoNombre: r.equipoNombre,
+        productos: [],
+
+        // ── Campos sumables (se irán acumulando) ──
+        ventasReales:  0,
+        ventasNetas:   0,
+        costoVentas:   0,
+        utilidadBruta: 0,
+        gastosOp:      0,
+        utilidadNeta:  0,
+
+        // ── Campos compartidos de balance/caja (tomados del primer producto) ──
+        cajaFinal:    r.cajaFinal,
+        cxcFinal:     r.cxcFinal,
+        totalActivos: r.totalActivos,
+        deudaFinal:   r.deudaFinal,
+        patrimonio:   r.patrimonio,
+
+        // ── Derivados (se calculan al final) ──
+        sharePromedio: 0,
+        _sumShares:    0,
+        _countProductos: 0,
+      });
+    }
+
+    const empresa = mapaEmpresas.get(key);
+
+    // Acumular campos sumables
+    empresa.ventasReales  += r.ventasReales  || 0;
+    empresa.ventasNetas   += r.ventasNetas   || 0;
+    empresa.costoVentas   += r.costoVentas   || 0;
+    empresa.utilidadBruta += r.utilidadBruta || 0;
+    empresa.gastosOp      += r.gastosOp      || 0;
+    empresa.utilidadNeta  += r.utilidadNeta  || 0;
+
+    // Acumular para el promedio de share
+    empresa._sumShares      += r.shareReal || 0;
+    empresa._countProductos += 1;
+
+    // Resumen por producto para drilldown en el frontend
+    empresa.productos.push({
+      productoId:  r.productoId,
+      producto:    r.producto,
+      segmento:    r.segmento,
+      ventasReales: r.ventasReales,
+      ventasNetas:  r.ventasNetas,
+      utilidadNeta: r.utilidadNeta,
+      shareReal:    r.shareReal,
+      atractivo:    r.atractivo,
+    });
+  }
+
+  // Calcular sharePromedio y limpiar campos auxiliares
+  const resultado = [];
+  for (const empresa of mapaEmpresas.values()) {
+    empresa.sharePromedio = empresa._countProductos > 0
+      ? roundBs(empresa._sumShares / empresa._countProductos)
+      : 0;
+    empresa.alertaCaja = empresa.cajaFinal < 500 ? 'ALERTA' : 'OK';
+    delete empresa._sumShares;
+    delete empresa._countProductos;
+    resultado.push(empresa);
+  }
+
+  return resultado;
+}
+
+
+// ══ BLOQUE D — reemplaza module.exports al final del archivo ═════════════════
+
+module.exports = {
+  ejecutarSimulador,
+  calcularMercadoSegmentos,
+  calcularPreSimulacion,
+  expandirDecisionesMultiproducto, // exportada para tests y uso externo
+  consolidarPorEmpresa,            // exportada para uso en server.js/reports.js
+};
