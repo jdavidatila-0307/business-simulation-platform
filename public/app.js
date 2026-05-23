@@ -4077,14 +4077,6 @@ async function doLogout() {
 //  INIT — check existing session
 // ═══════════════════════════════════════════════════════════
 async function init() {
-  // ── Overlay oscuro que cubre todo mientras verificamos la sesión ──
-  // El color del overlay coincide con el fondo de la app (#0B0E14)
-  // El usuario ve negro (mismo color que la app) en lugar del flash de login
-  const overlay = document.createElement('div');
-  overlay.id = 'session-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:#0B0E14;z-index:99999;';
-  document.body.appendChild(overlay);
-
   initLogin();
   try {
     const me = await api('GET', '/auth/me');
@@ -4096,9 +4088,6 @@ async function init() {
     }
   } catch {
     showScreen('screen-login');
-  } finally {
-    // Remover overlay — la pantalla correcta ya está lista debajo
-    overlay.remove();
   }
 }
 
