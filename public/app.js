@@ -3218,7 +3218,10 @@ window.mostrarKpiRonda = (n, historial) => {
   const utilPorUnid  = r.ventasReales>0 ? fmt.d((r.ventasNetas-r.costoVentas)/r.ventasReales,3) : '—';
   const liquidez  = r.deudaFinal>0 ? fmt.d((r.cajaFinal+r.cxcFinal+r.invFinalValorizado)/r.deudaFinal,2) : '∞';
 
-  const kpiRow = (label, value, color='') =>
+  const kpiSection = (title) =>
+    '<tr><td colspan="3" style="padding:6px 14px 2px;font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;border-top:1px solid var(--border)">' + title + '</td></tr>';
+
+  const kpiRow = (label, value, color='', hint='') =>
     `<tr><td style="padding:8px 14px;color:var(--text2);font-size:.82rem">${label}</td>
          <td style="padding:8px 14px;font-family:var(--font-mono);font-size:.82rem;text-align:right;color:${color||'var(--text)'}">${value}</td></tr>`;
 
@@ -3229,12 +3232,59 @@ window.mostrarKpiRonda = (n, historial) => {
       <div class="result-round-card">
         <div class="result-round-header"><h3>📣 Gerente de Marketing</h3></div>
         <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Market Share (seg. objetivo)',  fmt.pct(r.shareReal),                    r.shareReal>0.3?'var(--accent5)':'var(--accent3)')}
-          ${kpiRow('Brand Equity',                  (r.brandEquityFinal ?? 50).toFixed(1)+' pts', 'var(--accent3)')}
-          ${kpiRow('ROI Marketing',                 fmt.d(r.roiMarketing??0,2)+'x',          (r.roiMarketing??0)>=1?'var(--accent5)':'var(--accent4)')}
-          ${kpiRow('Ventas en unidades',            fmt.num(r.ventasReales))}
-          ${kpiRow('Precio de venta (Bs)',           fmt.d(r.precioVenta||0,2))}
-          ${kpiRow('Gasto publicidad (Bs)',          fmt.bs(r.publicidad??0))}
+
+          ${/* ─ Penetración y posicionamiento ─ */kpiSection('🎯 Penetración y Posicionamiento')}
+          ${kpiRow('Market Share real',
+              fmt.pct(r.shareReal),
+              r.shareReal>0.35?'var(--accent5)':r.shareReal>0.15?'var(--accent3)':'var(--accent4)',
+              r.shareReal>0.35?'Líder de mercado':r.shareReal>0.15?'Posición competitiva':'Posición débil')}
+          ${kpiRow('Demanda formal del segmento',   fmt.num(r.demandaFormal||0),     'var(--text2)')}
+          ${kpiRow('Demanda asignada a la empresa', fmt.num(r.demandaAsignada||0),   'var(--accent3)')}
+          ${kpiRow('Unidades vendidas',             fmt.num(r.ventasReales||0),      r.ventasReales>0?'var(--accent5)':'var(--accent4)')}
+          ${kpiRow('% Demanda capturada',
+              r.demandaFormal>0 ? fmt.pct((r.ventasReales||0)/(r.demandaFormal)) : '—',
+              'var(--text2)')}
+
+          ${kpiSection('💰 Rentabilidad Comercial')}
+          ${kpiRow('Ventas brutas (Bs)',            fmt.bs(r.ventasBrutas||0),       'var(--text2)')}
+          ${kpiRow('Ventas netas (Bs)',             fmt.bs(r.ventasNetas||0),        'var(--accent3)')}
+          ${kpiRow('Margen bruto (%)',
+              r.ventasNetas>0 ? ((r.utilidadBruta||0)/r.ventasNetas*100).toFixed(1)+'%' : '—',
+              (r.utilidadBruta||0)>=0?'var(--accent5)':'var(--accent4)',
+              (r.utilidadBruta||0)>=0?'Margen positivo':'Margen negativo')}
+          ${kpiRow('Precio de venta (Bs)',
+              fmt.bs(r.precioVenta||0),
+              'var(--text2)')}
+          ${kpiRow('Costo unitario (Bs)',
+              fmt.bs(r.costoUnitario||0),
+              'var(--text2)')}
+          ${kpiRow('Margen unitario (Bs)',
+              fmt.bs((r.precioVenta||0)-(r.costoUnitario||0)),
+              (r.precioVenta||0)>(r.costoUnitario||0)?'var(--accent5)':'var(--accent4)')}
+
+          ${kpiSection('📢 Inversión y Eficiencia de Marketing')}
+          ${kpiRow('Gasto publicidad (Bs)',         fmt.bs(r.publicidad||0),         'var(--text2)')}
+          ${kpiRow('Gasto total marketing (Bs)',    fmt.bs(r.pagoMktTotal||0),       'var(--text2)')}
+          ${kpiRow('ROI Marketing',
+              fmt.d(r.roiMarketing??0,2)+'x',
+              (r.roiMarketing??0)>=2?'var(--accent5)':(r.roiMarketing??0)>=1?'var(--accent3)':'var(--accent4)',
+              (r.roiMarketing??0)>=2?'Excelente':(r.roiMarketing??0)>=1?'Aceptable':'Bajo')}
+          ${kpiRow('Costo por unidad vendida (Mkt)',
+              r.ventasReales>0 ? fmt.bs((r.pagoMktTotal||0)/(r.ventasReales)) : '—',
+              'var(--text2)')}
+          ${kpiRow('Ingresos por Bs 1 de publicidad',
+              r.publicidad>0 ? fmt.d((r.ventasNetas||0)/(r.publicidad),1)+'x' : '—',
+              (r.publicidad||0)>0&&(r.ventasNetas||0)/(r.publicidad)>3?'var(--accent5)':'var(--text2)')}
+
+          ${kpiSection('⭐ Marca y Fidelización')}
+          ${kpiRow('Brand Equity',
+              (r.brandEquityFinal ?? 50).toFixed(1)+' pts',
+              (r.brandEquityFinal||50)>70?'var(--accent5)':(r.brandEquityFinal||50)>50?'var(--accent3)':'var(--accent4)',
+              (r.brandEquityFinal||50)>70?'Marca fuerte':(r.brandEquityFinal||50)>50?'En construcción':'Marca débil')}
+          ${kpiRow('Atractivo competitivo',
+              fmt.d(r.atractivo||0,2)+' pts',
+              (r.atractivo||0)>10?'var(--accent5)':(r.atractivo||0)>5?'var(--accent3)':'var(--accent4)')}
+
         </table>
       </div>
 
@@ -3339,6 +3389,57 @@ window.mostrarFinanciero = (n) => {
         <button class="btn btn-ghost btn-sm no-print" style="font-size:.72rem;padding:3px 10px" onclick="printFinancieroCompleto((state.me&&state.me.nombre)||'',${n})">🖨️ Imprimir completo</button>
       </div>
       <div style="padding:16px 20px">
+
+        ${/* Tabla desglose por producto */
+          (r.productos && r.productos.length > 1) ? (() => {
+            const filas = r.productos.map((p,i) => {
+              const mb     = p.utilidadBruta || 0;
+              const mbPct  = (p.ventasNetas||0) > 0 ? (mb/(p.ventasNetas)*100).toFixed(1) + '%' : '—';
+              const color  = mb >= 0 ? 'var(--accent2)' : 'var(--accent4)';
+              return '<tr style="border-bottom:1px solid var(--border)">'
+                + '<td style="padding:5px 10px;font-weight:600;white-space:nowrap">' + (p.producto||'—') + '</td>'
+                + '<td style="padding:5px 10px;font-size:.74rem;color:var(--text3)">' + (p.segmento||'—').substring(0,22) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.num(p.ventasReales||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.precioVenta||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoUnitario||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.ventasNetas||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoVentas||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+color+'">' + fmt.bs(mb) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);color:'+color+'">' + mbPct + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.pct(p.shareReal||0) + '</td>'
+                + '</tr>';
+            }).join('');
+            const colorTot = r.utilidadBruta>=0?'var(--accent2)':'var(--accent4)';
+            const mbPctTot = (r.ventasNetas||0)>0 ? (r.utilidadBruta/r.ventasNetas*100).toFixed(1)+'%' : '—';
+            return '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 6px 0;border-bottom:1px solid var(--border);margin-bottom:8px">📦 Desglose por Producto</div>'
+              + '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:.79rem">'
+              + '<thead><tr style="background:rgba(255,255,255,.04)">'
+              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Producto</th>'
+              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Segmento</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>unid</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Precio<br>venta</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>unitario</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>netas</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>ventas</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--accent2);text-transform:uppercase">Margen<br>bruto</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Margen<br>%</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Market<br>share</th>'
+              + '</tr></thead>'
+              + '<tbody>' + filas + '</tbody>'
+              + '<tfoot><tr style="background:rgba(6,255,165,.06);border-top:2px solid var(--border2)">'
+              + '<td colspan="2" style="padding:5px 10px;font-weight:700;font-size:.78rem">TOTAL EMPRESA</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.num(r.ventasReales||0) + '</td>'
+              + '<td></td><td></td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.ventasNetas||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.costoVentas||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + fmt.bs(r.utilidadBruta||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + mbPctTot + '</td>'
+              + '<td></td></tr></tfoot>'
+              + '</table></div>'
+              + '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px">📊 Estado de Resultados Consolidado</div>';
+          })() : ''
+        }
+
         ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
         ${finRow('(−) Comisiones canal',       -r.comisiones,          false, 'neg')}
         ${finRowSub('= Ventas netas',          r.ventasNetas,          true)}

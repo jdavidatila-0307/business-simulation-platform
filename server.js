@@ -1237,13 +1237,44 @@ async function route(req, res, body) {
     for (let i = 1; i <= sim.config.currentRound; i++) {
       const r = await storage.getRonda(sim.id, i);
       if (!r || !['simulated','calculada'].includes(r.estado)) continue;
-      // P3 FIX: r.resultados is keyed by EXPANDED ID (eq_xxx__prod_1).
-      // equipoId is the BASE ID. Find the result matching equipoOriginal.
-      const resultado = r.resultados[equipoId]
-        || Object.values(r.resultados).find(res =>
-            (res.equipoOriginal || res.equipo) === equipoId
-           );
-      if (!resultado) continue;
+      // FIX multiproducto: retornar TODOS los productos del equipo
+      const todosProductos = Object.values(r.resultados).filter(res =>
+        res.equipoOriginal === equipoId
+        || res.equipo === equipoId
+        || (res.equipo || '').startsWith(equipoId)
+      );
+      if (!todosProductos.length) continue;
+
+      // Si hay 1 producto: compatibilidad legado (resultado = objeto)
+      // Si hay N productos: resultado = array + consolidado
+      let resultado;
+      if (todosProductos.length === 1) {
+        resultado = todosProductos[0];
+      } else {
+        // Construir consolidado sumando campos numéricos de todos los productos
+        const consolidado = { ...todosProductos[0] };
+        const sumar = ['ventasBrutas','ventasNetas','ventasReales','costoVentas',
+          'utilidadBruta','gastosOp','utilidadNeta','ebit',
+          'ivaAPagar','impuestoIT','impuestoIUE','totalImpuestos',
+          'pagoProduccion','pagoMktTotal','totalPagos',
+          'cobrosContado','cxcFinal','invFinalValorizado','inventarioFinal',
+          'ingresoPrestamo','publicidad','comisiones','roiMarketing'];
+        sumar.forEach(k => {
+          consolidado[k] = todosProductos.reduce((s,p) => s + (p[k]||0), 0);
+        });
+        // Campos de empresa (tomar del primer producto)
+        consolidado.cajaFinal      = todosProductos[0].cajaFinal;
+        consolidado.deudaFinal     = todosProductos[0].deudaFinal;
+        consolidado.patrimonio     = todosProductos[0].patrimonio;
+        consolidado.totalActivos   = todosProductos[0].totalActivos;
+        consolidado.capitalContable= todosProductos[0].capitalContable;
+        consolidado.afNetos        = todosProductos[0].afNetos;
+        consolidado.brandEquityFinal = todosProductos[0].brandEquityFinal;
+        consolidado.sobregiro      = todosProductos[0].sobregiro;
+        consolidado.producto       = 'Multiproducto (' + todosProductos.length + ')';
+        consolidado.productos      = todosProductos; // array completo para el desglose
+        resultado = consolidado;
+      }
       historial.push({ ronda:i, ejecutadaAt:r.ejecutadaAt, resultado,
         decision: r.decisiones?.[equipoId]||null, reportes: r.reportes?.[equipoId]||{} });
     }
