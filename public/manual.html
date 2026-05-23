@@ -1309,10 +1309,10 @@
           </div>
           <p class="insight">Los operarios determinan la <strong>capacidad efectiva de producción</strong>. Sin suficientes operarios, la producción queda limitada aunque haya materia prima disponible.</p>
           <ul class="decision-list">
-            <li><strong>Contratar operarios:</strong> Costo Bs 800/operario + sueldo Bs 3.200/trim.</li>
+            <li><strong>Contratar operarios:</strong> Costo Bs 2,400/operario + sueldo Bs 9,600/trim.</li>
             <li><strong>Despedir operarios:</strong> Costo Bs 1.200/operario.</li>
             <li><strong>Capacitación (opcional):</strong> +5% productividad por cada Bs 10.000 invertidos.</li>
-            <li>Cap. efectiva = operarios × 440 pares/trim × (1 + factor capacitación).</li>
+            <li>Cap. efectiva = operarios × 440 pares/trim × (1 + factor capacitación). Máx: 1,500 pares/trim.</li>
             <li>Producción real = mín(decisión, cap.efectiva, stockMP, cap.máx.planta).</li>
           </ul>
         </div>
@@ -1963,6 +1963,22 @@
           </div>
         </div>
 
+        <p class="step-badge">E.7 · Operarios de producción</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th></tr></thead>
+            <tbody>
+              <tr><td>Operarios iniciales</td><td class="mono">4</td><td>Todos los equipos comienzan con 4 operarios activos.</td></tr>
+              <tr><td>Sueldo trimestral/operario</td><td class="mono">Bs 9,600</td><td>Se paga a todos los operarios finales del trimestre (Bs 3,200/mes × 3).</td></tr>
+              <tr><td>Costo de contratación</td><td class="mono">Bs 2,400 por operario</td><td>Costo único al contratar en ese trimestre. Se suma al sueldo.</td></tr>
+              <tr><td>Costo de despido</td><td class="mono">Bs 3,600 por operario</td><td>Indemnización pagada en el trimestre en que se despide.</td></tr>
+              <tr><td>Productividad base</td><td class="mono">440 pares/operario/trim</td><td>Capacidad de producción por operario sin capacitación adicional.</td></tr>
+              <tr><td>Capacidad efectiva</td><td class="mono">Op. × 440 × (1 + factor cap.)</td><td>Límite real de producción. Máximo: 1,500 pares/trimestre.</td></tr>
+              <tr><td>Factor capacitación</td><td class="mono">0.05 por Bs 1,000 invertidos</td><td>Incrementa la productividad. Efecto acumulable entre rondas.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <p class="step-badge">G.1 · Estado de Resultados (P&L)</p>
         <div class="anx-table-wrap">
           <table class="anx-table">
@@ -1978,7 +1994,7 @@
               <tr><td>(−) Gasto administrativo fijo</td><td>Costo fijo de administración y gestión</td><td class="mono">Bs 165,000 / trimestre</td></tr>
               <tr><td>(−) Gasto fijo de planta</td><td>Costo fijo de operación de la planta productiva</td><td class="mono">Bs 45,000 / trimestre</td></tr>
               <tr><td>(−) Depreciación</td><td>Reducción del valor contable de activos fijos. NO sale de caja.</td><td class="mono">Bs 2,500 / trimestre</td></tr>
-              <tr><td>(−) Operarios de producción</td><td>Costo de operarios activos (sueldo + contratación + despido)</td><td class="mono">Op.finales×3,200 + contrat.×800 + desp.×1,200</td></tr>
+              <tr><td>(−) Operarios de producción</td><td>Costo de operarios activos (sueldo + contratación + despido)</td><td class="mono">Op.finales×9,600 + contrat.×2,400 + desp.×3,600</td></tr>
               <tr><td>(−) Almacenamiento inventario</td><td>Costo de mantener el inventario no vendido</td><td class="mono">Inventario final (unid) × Bs 0.10</td></tr>
               <tr><td>(−) Inversión en innovación</td><td>Gasto de innovación del trimestre (si eligió innovar)</td><td class="mono">Monto elegido en decisiones</td></tr>
               <tr><td>(−) Interés préstamo</td><td>Costo financiero de los préstamos vigentes</td><td class="mono">Monto préstamo × Tasa trimestral</td></tr>
