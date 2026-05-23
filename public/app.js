@@ -906,633 +906,273 @@ async function loadAdminDashboard() {
 
 function buildAdminResultsHTML(rd) {
   if (!rd.resultados?.length) return '';
-  const rows = rd.resultados.map(r => `
-    <tr>
-      <td><strong>${r.equipoNombre}</strong></td>
-      <td>${r.segmento}</td>
-      <td class="num">${fmt.num(r.ventasReales)}</td>
-      <td class="num">${fmt.pct(r.shareReal)}</td>
-      <td class="num ${r.ebit>=0?'pos':'neg'}">${fmt.bs(r.ebit)}</td>
-      <td class="num ${r.utilidadNeta>=0?'pos':'neg'}">${fmt.bs(r.utilidadNeta)}</td>
-      <td class="num ${r.cajaFinal>=0?'pos':'neg'}">${fmt.bs(r.cajaFinal)}
-        <span class="badge ${r.alertaCaja==='ALERTA'?'badge-alert':'badge-ok'}">${r.alertaCaja}</span>
-      </td>
-      <td class="num">${fmt.d(r.roiMarketing,2)}x</td>
-    </tr>`).join('');
 
-  // Etapa 3.5: tabla fiscal por equipo
-  const df = rd.dashboardFiscal;
-  let fiscalHTML = '';
-  if (df) {
-    const fRows = (df.porEquipo || []).map(e => `
-      <tr>
-        <td><strong>${e.equipoNombre}</strong></td>
-        <td class="num neg">${fmt.bs(e.impuestoIT)}</td>
-        <td class="num neg">${fmt.bs(e.ivaAPagar)}</td>
-        <td class="num neg">${fmt.bs(e.impuestoIUE)}</td>
-        <td class="num neg"><strong>${fmt.bs(e.totalImpuestos)}</strong></td>
-      </tr>`).join('');
-    fiscalHTML = `
-    <div style="margin-top:20px">
-      <h4 style="color:var(--text2);font-size:.82rem;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">
-        🧾 Dashboard Fiscal — Etapa 3.5
-      </h4>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <div class="kpi-card" style="flex:1;min-width:130px">
-          <div class="kpi-label">IT Total (3%)</div>
-          <div class="kpi-value neg">${fmt.bs(df.totalIT)}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;min-width:130px">
-          <div class="kpi-label">IVA neto Total</div>
-          <div class="kpi-value neg">${fmt.bs(df.totalIVA)}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;min-width:130px">
-          <div class="kpi-label">IUE Total (25%)</div>
-          <div class="kpi-value neg">${fmt.bs(df.totalIUE)}</div>
-        </div>
-        <div class="kpi-card" style="flex:1;min-width:130px;border-color:var(--accent4)">
-          <div class="kpi-label">Total impuestos</div>
-          <div class="kpi-value neg"><strong>${fmt.bs(df.totalImpuestos)}</strong></div>
-        </div>
-        <div class="kpi-card" style="flex:1;min-width:130px">
-          <div class="kpi-label">Presión fiscal promedio</div>
-          <div class="kpi-value ${df.presionFiscalPct>30?'neg':df.presionFiscalPct>20?'warn':''}">${df.presionFiscalPct.toFixed(1)}% s/ut.bruta</div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Equipo</th><th>IT</th><th>IVA neto</th><th>IUE</th><th>Total</th></tr></thead>
-          <tbody>${fRows}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }
+  // ── Paleta de colores por empresa ─────────────────────────
+  const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6',
+                   '#EC4899','#06FFA5','#84CC16','#F97316'];
+  const tc = i => PALETTE[i % PALETTE.length];
 
-  const summaryTable = '<div class="table-wrap" style="margin-top:4px"><table>'
-    + '<thead><tr><th>Equipo</th><th style="font-size:.72rem">Segmento</th>'
-    + '<th class="num">Ventas<br>unid</th><th class="num">Market<br>Share</th>'
-    + '<th class="num">Ventas<br>brutas</th><th class="num">Ventas<br>netas</th>'
-    + '<th class="num">Utilidad<br>bruta</th><th class="num">EBIT</th>'
-    + '<th class="num">Util.<br>neta</th><th class="num">Margen<br>bruto%</th>'
-    + '</tr></thead><tbody>' + summaryRows + '</tbody></table></div>';
+  // ── Formato boliviano ─────────────────────────────────────
+  // Positivo: Bs. 1.234.567   Negativo: (Bs. 1.234.567)   Cero: Bs. 0
+  const bsBO = v => {
+    if (v === null || v === undefined || isNaN(v)) return '<span style="color:var(--text3)">—</span>';
+    const n = Math.round(Math.abs(v));
+    const s = n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if (v < 0)  return '<span style="color:#EF4444">(Bs. ' + s + ')</span>';
+    if (v === 0) return '<span style="color:var(--text3)">Bs. 0</span>';
+    return '<span style="color:#10B981">Bs. ' + s + '</span>';
+  };
+  const numBO = v => {
+    if (!v && v !== 0) return '—';
+    return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  const pctBO = v => v != null ? (v*100).toFixed(1)+'%' : '—';
 
-  // Tabs para EF
-  const tabsHTML = '<div style="margin:16px 0 10px;display:flex;flex-wrap:wrap;gap:6px">'
-    + '<button class="btn btn-primary btn-sm" id="btnAdminEFTab1" onclick="adminShowEFTab(1)">📋 Estado de Resultados</button>'
-    + '<button class="btn btn-ghost btn-sm" id="btnAdminEFTab2" onclick="adminShowEFTab(2)">🏦 Balance General</button>'
-    + '<button class="btn btn-ghost btn-sm" id="btnAdminEFTab3" onclick="adminShowEFTab(3)">💧 Flujo de Efectivo</button>'
-    + '<div style="flex:1"></div>'
-    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminEFContent\',\'Estados Financieros Comparativos\',\'Ronda ' + (rd.ronda||'N') + '\')" title="Imprimir">🖨️ Imprimir</button>'
-    + '</div>';
+  // Equipos ordenados por utilidad neta desc (para Dashboard ranking)
+  const equipos = [...rd.resultados].sort((a,b) => (b.utilidadNeta||0)-(a.utilidadNeta||0));
+  // Mantener orden original para columnas de tabla
+  const eqs = rd.resultados;
+  const N   = eqs.length;
 
-  const efContent = '<div id="adminEFContent">'
-    + '<div id="adminEF1"><div class="table-wrap"><table>' + plHTML + '</table></div></div>'
-    + '<div id="adminEF2" style="display:none"><div class="table-wrap"><table>' + bgHTML + '</table></div></div>'
-    + '<div id="adminEF3" style="display:none"><div class="table-wrap"><table>' + feHTML + '</table></div></div>'
-    + '</div>';
+  // ── Helpers de filas de tabla ─────────────────────────────
+  const thStyle = (i) =>
+    'padding:8px 12px;text-align:right;font-size:.72rem;white-space:nowrap;'
+    +'border-bottom:2px solid var(--border2);background:var(--bg2);';
+  const thFirst =
+    'padding:8px 14px;text-align:left;font-size:.72rem;position:sticky;left:0;'
+    +'background:var(--bg2);z-index:2;min-width:220px;border-bottom:2px solid var(--border2);';
 
-  return summaryTable + tabsHTML + efContent + fiscalHTML;
-}
+  const hdr = () => {
+    const cols = eqs.map((r,i) =>
+      '<th style="'+thStyle(i)+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(i)+';margin-right:5px;vertical-align:middle"></span>'
+      + r.equipoNombre + '</th>'
+    ).join('');
+    return '<tr><th style="'+thFirst+'">Partida</th>'+cols+'</tr>';
+  };
 
-window.adminShowEFTab = (n) => {
-  [1,2,3].forEach(i => {
-    const el = document.getElementById('adminEF' + i);
-    const btn = document.getElementById('btnAdminEFTab' + i);
-    if (el)  el.style.display  = i === n ? '' : 'none';
-    if (btn) {
-      btn.className = i === n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-    }
-  });
-};
+  // Tipo 1: sección
+  const sec = (label) =>
+    '<tr style="background:rgba(255,255,255,.04)">'
+    +'<td style="padding:5px 14px;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1;font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px" colspan="'+(N+1)+'">'+label+'</td>'
+    +'</tr>';
 
-async function doPreSimular() {
-  const ronda = await api('GET', '/admin/ronda');
-  if (!confirm(`¿Ejecutar pre-simulación para la Ronda ${ronda.currentRound}?\n\nEl simulador calculará la demanda estimada de cada equipo y se la notificará para que confirmen. Luego podrás ejecutar la simulación final.`)) return;
-  try {
-    const res = await api('POST', '/admin/ronda/pre-simular');
-    toast(`📊 Pre-simulación ejecutada — ${res.equiposCalculados} equipos notificados`, 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-}
+  // Tipo 2: partida normal
+  const row = (label, fn, indent=false) => {
+    const vals = eqs.map(r => '<td style="padding:5px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)">'+bsBO(fn(r))+'</td>').join('');
+    const lStyle = 'padding:5px 14px;font-size:.78rem;color:var(--text2);border-bottom:1px solid rgba(255,255,255,.04);position:sticky;left:0;background:var(--bg);z-index:1;'+(indent?'padding-left:26px;':'');
+    return '<tr><td style="'+lStyle+'">'+(indent?'<span style="color:var(--text3);margin-right:4px">(−)</span>':'')+label+'</td>'+vals+'</tr>';
+  };
 
-async function doForzarTodos() {
-  if (!confirm('¿Forzar la confirmación de todos los equipos pendientes?\n\nSe marcará como confirmado por el administrador.')) return;
-  try {
-    await api('POST', '/admin/presim/forzar-todos');
-    toast('⏩ Todas las confirmaciones forzadas', 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-}
+  // Tipo 3: subtotal / total
+  const tot = (label, fn, highlight=false) => {
+    const bg = highlight ? 'rgba(6,255,165,.07)' : 'rgba(255,255,255,.04)';
+    const border = highlight ? '2px solid rgba(6,255,165,.3)' : '1px solid var(--border2)';
+    const vals = eqs.map(r => {
+      const v = fn(r);
+      return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;border-top:'+border+';background:'+bg+'">'+bsBO(v)+'</td>';
+    }).join('');
+    return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;border-top:'+border+';background:'+bg+';position:sticky;left:0;z-index:1">'+label+'</td>'+vals+'</tr>';
+  };
 
-window.forzarConfirmacion = async (equipoId) => {
-  try {
-    await api('POST', `/admin/presim/forzar/${equipoId}`);
-    toast('✓ Confirmación forzada', 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-};
+  // ── PESTAÑA 1: DASHBOARD ──────────────────────────────────
+  const semaforo = r => {
+    const u = r.utilidadNeta||0;
+    if (u > 0)         return '🟢';
+    if (u > -50000)    return '🟡';
+    return '🔴';
+  };
 
-async function doActivarRonda() {
-  const ronda = await api('GET', '/admin/ronda');
-  if (!confirm(`¿Activar la Hoja de Decisiones para la Ronda ${ronda.currentRound}?
-
-Los equipos podrán ver y completar sus decisiones.`)) return;
-  try {
-    await api('POST', '/admin/ronda/activar');
-    toast(`✓ Ronda ${ronda.currentRound} activada — los equipos ya pueden ingresar decisiones`, 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function doCerrarRonda() {
-  if (!confirm('¿Cerrar el envío de decisiones?\n\nLos equipos ya no podrán enviar ni modificar. Podrás ejecutar la simulación.')) return;
-  try {
-    await api('POST', '/admin/ronda/cerrar');
-    toast('🔒 Envío de decisiones cerrado', 'info');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function doSimular(n) {
-  if (!confirm(`¿Ejecutar simulación de la Ronda ${n}?
-
-Los equipos que no enviaron sus decisiones serán incluidos con los valores actuales.`)) return;
-  try {
-    const r = await api('POST','/admin/simular');
-    toast(`✓ Ronda ${n} simulada — ${r.equiposSimulados} equipos`, 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function doSiguienteRonda() {
-  const ronda = await api('GET','/admin/ronda');
-  if (!confirm(`¿Abrir Ronda ${ronda.currentRound+1}?
-
-Las decisiones de la ronda anterior se pre-cargarán para cada equipo.`)) return;
-  try {
-    await api('POST','/admin/ronda/siguiente');
-    toast('✓ Nueva ronda abierta', 'success');
-    await loadAdminDashboard();
-  } catch(e) { toast(e.message,'error'); }
-}
-
-// ── Admin Equipos ──────────────────────────────────────────
-async function loadAdminEquipos() {
-  if (!requireSimSelected('equiposContent')) return;
-  const equipos = await api('GET','/admin/equipos');
-
-    const rows = equipos.filter(eq => !eq.isBot).map(eq => {
-    const miembros = (eq.miembros || []);
-    const miembrosHTML = miembros.length
-      ? miembros.map(m => `
-          <div class="miembro-chip">
-            <span class="miembro-nombre"><strong>${m.apellidoPaterno} ${m.apellidoMaterno}</strong>, ${m.nombres}</span>
-            <span class="miembro-meta">📋 ${m.nroRegistro}${m.telefono ? ' · 📞 ' + m.telefono : ''}</span>
-          </div>`).join('')
-      : '<span style="color:var(--text3);font-size:.78rem">Sin integrantes</span>';
-
-    const pwId  = `pw_${eq.id.replace(/[^a-z0-9]/gi,'_')}`;
-    const pass  = eq.passwordPlain;
-    const pwCell = pass
-      ? `<div class="pw-cell">
-           <span class="pw-dots" id="${pwId}_dots">••••••••</span>
-           <span class="pw-plain hidden" id="${pwId}_plain" style="font-family:var(--font-mono);font-size:.82rem;color:var(--accent3)">${pass}</span>
-           <button class="btn-eye" title="Mostrar/ocultar" onclick="togglePw('${pwId}')">👁</button>
-         </div>`
-      : `<span style="font-size:.76rem;color:var(--text3)">— usa 🔑 para asignar —</span>`;
-
-    return `
-      <tr>
-        <td>
-          <div style="font-weight:700;margin-bottom:2px">${eq.nombre}</div>
-          <div style="font-family:var(--font-mono);font-size:.68rem;color:var(--text3);user-select:all">${eq.id}</div>
-        </td>
-        <td>${pwCell}</td>
-        <td><div class="miembros-list">${miembrosHTML}</div></td>
-        <td style="text-align:center">${miembros.length}</td>
-        <td><span class="badge ${eq.submitted?'badge-sent':'badge-pending'}">${eq.submitted?'✓ Enviado':'⏳ Pendiente'}</span></td>
-        <td style="font-size:.78rem;color:var(--text3)">${fmt.dt(eq.registradoAt)}</td>
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick="cambiarPassword('${eq.id}','${eq.nombre}')">🔑 Clave</button>
-          ${eq.submitted ? `<button class="btn btn-ghost btn-sm" onclick="resetEnvio('${eq.id}','${eq.nombre}')" title="Permite al equipo modificar sus decisiones">↺ Resetear</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="eliminarEquipo('${eq.id}','${eq.nombre}')">✕</button>
-        </td>
-      </tr>`;
+  const dashRows = equipos.map((r,rank) => {
+    const origIdx = eqs.findIndex(e => e.equipoNombre === r.equipoNombre);
+    const hl = rank === 0 ? 'background:rgba(6,255,165,.07);font-weight:700;' : '';
+    return '<tr style="'+hl+'border-bottom:1px solid var(--border)">'
+      + '<td style="padding:7px 12px;text-align:center;font-weight:700;color:'+tc(origIdx)+'">'+( rank+1)+'</td>'
+      + '<td style="padding:7px 12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(origIdx)+';margin-right:6px;vertical-align:middle"></span>'+r.equipoNombre+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+numBO(r.ventasReales)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+bsBO(r.ebit||0)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)"><strong>'+bsBO(r.utilidadNeta||0)+'</strong></td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+bsBO(r.cajaFinal||0)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+(r.roiMarketing!=null?Math.round(r.roiMarketing*100)/100+'x':'—')+'</td>'
+      + '<td style="padding:7px 12px;text-align:center;font-size:1rem">'+semaforo(r)+'</td>'
+      + '</tr>';
   }).join('');
 
+  const dashHTML = '<div class="table-wrap">'
+    + '<table><thead><tr>'
+    + '<th style="padding:7px 12px;text-align:center">#</th>'
+    + '<th style="padding:7px 12px">Empresa</th>'
+    + '<th style="padding:7px 12px;text-align:right">Ventas<br>unid.</th>'
+    + '<th style="padding:7px 12px;text-align:right">EBIT</th>'
+    + '<th style="padding:7px 12px;text-align:right">Utilidad<br>Neta</th>'
+    + '<th style="padding:7px 12px;text-align:right">Caja<br>Final</th>'
+    + '<th style="padding:7px 12px;text-align:right">ROI<br>Mkt</th>'
+    + '<th style="padding:7px 12px;text-align:center">Estado</th>'
+    + '</tr></thead><tbody>'+dashRows+'</tbody></table>'
+    + '</div>'
+    + '<div class="charts-row" style="margin-top:14px">'
+    + '<div class="chart-card" style="flex:2"><h4>EBIT vs Utilidad Neta por Empresa</h4><div class="chart-wrap" style="height:220px"><canvas id="chartAdminDash_'+( rd.ronda||0)+'"></canvas></div></div>'
+    + '<div class="chart-card"><h4>Market Share (%)</h4><div class="chart-wrap" style="height:220px"><canvas id="chartAdminShare_'+( rd.ronda||0)+'"></canvas></div></div>'
+    + '</div>';
 
-  document.getElementById('equiposTableWrap').innerHTML = `
-    <div id="botsSection"></div>
-    <table>
-      <thead>
-        <tr>
-          <th>Equipo / ID de acceso</th>
-          <th>Contraseña</th>
-          <th>Integrantes</th>
-          <th style="text-align:center">#</th>
-          <th>Estado ronda</th>
-          <th>Registrado</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>${rows.length ? rows : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px">Sin equipos registrados</td></tr>'}</tbody>
-    </table>`;
+  // ── PESTAÑA 2: ESTADO DE RESULTADOS ──────────────────────
+  const plHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('Ingresos')
+    + row('(+) Ingresos por ventas',      r => r.ventasBrutas||0)
+    + row('Costo de ventas',              r => r.costoVentas||0, true)
+    + tot('Utilidad bruta',               r => r.utilidadBruta||0)
+    + row('Gasto de marketing',           r => r.pagoMktTotal||0, true)
+    + row('Gasto administrativo',         r => (r.gastoAdminFijo||0)+(r.gastoFijoPlanta||0)+(r.costoVendedores||0)+(r.costoOperarios||0)+(r.costoAlmacenamiento||0)+(r.gastoInnovacion||0), true)
+    + row('Depreciación',                 r => r.depreciacion||0, true)
+    + tot('EBIT',                         r => r.ebit||0, true)
+    + row('Gasto financiero',             r => (r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0), true)
+    + row('Impuestos (IVA+IT+IUE)',       r => (r.ivaAPagar||0)+(r.impuestoIT||0)+(r.impuestoIUE||0), true)
+    + tot('UTILIDAD NETA',                r => r.utilidadNeta||0, true)
+    + '</table></div>';
 
-  document.getElementById('btnExportarEquipos')?.addEventListener('click', () => exportarEquipos(equipos));
-  await renderBotsSection();
+  // ── PESTAÑA 3: BALANCE GENERAL ────────────────────────────
+  const bgHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('A · Activo Corriente')
+    + row('Caja y equivalentes',          r => r.cajaFinal||0)
+    + row('Cuentas por cobrar (CxC)',     r => r.cxcFinal||0)
+    + row('Inventarios (valorizado)',     r => r.invFinalValorizado||0)
+    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0))
+    + sec('A · Activo No Corriente')
+    + row('Activos fijos brutos',         r => (r.afNetos||0)+(r.depreciacion||0))
+    + row('Depreciación acumulada',       r => r.depreciacion||0, true)
+    + tot('Activos fijos netos',          r => r.afNetos||0)
+    + tot('TOTAL ACTIVO',                 r => r.totalActivos||0, true)
+    + sec('B · Pasivo')
+    + row('Deuda total (préstamos)',      r => r.deudaFinal||0)
+    + tot('TOTAL PASIVO',                 r => r.deudaFinal||0, true)
+    + sec('C · Patrimonio')
+    + row('Capital contable',             r => r.capitalContable||0)
+    + row('Resultado acumulado',          r => r.resultadoAcumulado||0)
+    + tot('TOTAL PATRIMONIO',             r => r.patrimonio||0)
+    + (() => {
+        const checks = eqs.map(r => {
+          const pp = (r.deudaFinal||0)+(r.patrimonio||0);
+          const ta = r.totalActivos||0;
+          const ok = Math.abs(pp-ta) < 2;
+          return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(pp)+(ok?'':' ⚠')+'</td>';
+        }).join('');
+        return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">TOTAL PASIVO + PATRIMONIO</td>'+checks+'</tr>';
+      })()
+    + '</table></div>';
+
+  // ── PESTAÑA 4: FLUJO DE EFECTIVO ──────────────────────────
+  const feHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('A · Actividades Operativas')
+    + row('Utilidad neta',                r => r.utilidadNeta||0)
+    + row('(+) Depreciación',             r => r.depreciacion||0)
+    + row('(+/−) Variación CxC',          r => -(r.cxcFinal||0)+(r.cxcInicial||0))
+    + row('(+/−) Variación inventarios',  r => -(r.invFinalValorizado||0)+(r.inventarioInicial||0)*(r.costoUnitario||0))
+    + tot('Flujo operacional neto',       r => {
+        const dep  = r.depreciacion||0;
+        const dCxC = -(r.cxcFinal||0)+(r.cxcInicial||0);
+        const dInv = -(r.invFinalValorizado||0)+(r.inventarioInicial||0)*(r.costoUnitario||0);
+        return (r.utilidadNeta||0)+dep+dCxC+dInv;
+      }, true)
+    + sec('B · Actividades de Inversión')
+    + row('(−) Adquisición activos fijos', r => 0)
+    + tot('Flujo de inversión',            r => 0)
+    + sec('C · Actividades de Financiamiento')
+    + row('(+) Nuevos préstamos',          r => r.ingresoPrestamo||0)
+    + tot('Flujo de financiamiento',       r => r.ingresoPrestamo||0)
+    + sec('D · Posición de Caja')
+    + row('Saldo inicial de caja',         r => r.cajaInicial||0)
+    + (() => {
+        const checks = eqs.map(r => {
+          const cf = r.cajaFinal||0;
+          const ok = cf >= 0;
+          return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(cf)+(cf<0?' ⚠':'')+'</td>';
+        }).join('');
+        return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">Saldo final de caja</td>'+checks+'</tr>';
+      })()
+    + '</table></div>';
+
+  // ── Encabezado y tabs ─────────────────────────────────────
+  const encabezado = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">SimNego · UAGRM &nbsp;·&nbsp; Ronda '+(rd.ronda||'N')+'</div>'
+    + '<div style="font-size:.75rem;color:var(--text3);margin-top:2px">Cifras en Bs. bolivianos &nbsp;·&nbsp; Negativos en (paréntesis)</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminEFContent\',\'Estados Financieros · Ronda '+(rd.ronda||'N')+' · UAGRM\',\'Cifras en Bs. · Negativos en paréntesis\')">🖨️ Imprimir</button>'
+    + '</div>'
+    + '</div>';
+
+  const tabs = '<div id="adminEFTabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="btnEFT1" onclick="adminEFTab(1)">📊 Dashboard</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT2" onclick="adminEFTab(2)">📋 Estado de Resultados</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT3" onclick="adminEFTab(3)">🏦 Balance General</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT4" onclick="adminEFTab(4)">💧 Flujo de Efectivo</button>'
+    + '</div>';
+
+  return '<div id="adminEFContent">'
+    + encabezado + tabs
+    + '<div id="adminEFPane1">' + dashHTML + '</div>'
+    + '<div id="adminEFPane2" style="display:none">' + plHTML + '</div>'
+    + '<div id="adminEFPane3" style="display:none">' + bgHTML + '</div>'
+    + '<div id="adminEFPane4" style="display:none">' + feHTML + '</div>'
+    + '</div>';
 }
 
-window.togglePw = (pwId) => {
-  const dots  = document.getElementById(pwId + '_dots');
-  const plain = document.getElementById(pwId + '_plain');
-  if (!dots || !plain) return;
-  const showing = !plain.classList.contains('hidden');
-  dots.classList.toggle('hidden', !showing);
-  plain.classList.toggle('hidden', showing);
-};
-
-function exportarEquipos(equipos) {
-  const lines = ['Equipo,Contraseña,Apellido Paterno,Apellido Materno,Nombres,Teléfono,Nro. Registro,ID Acceso'];
-  equipos.forEach(eq => {
-    const pass = eq.passwordPlain || '';
-    if (!eq.miembros?.length) {
-      lines.push(`"${eq.nombre}","${pass}",,,,,,"${eq.id}"`);
-    } else {
-      eq.miembros.forEach(m => {
-        lines.push(`"${eq.nombre}","${pass}","${m.apellidoPaterno}","${m.apellidoMaterno}","${m.nombres}","${m.telefono||''}","${m.nroRegistro}","${eq.id}"`);
-      });
-    }
+window.adminEFTab = (n) => {
+  [1,2,3,4].forEach(i => {
+    const pane = document.getElementById('adminEFPane'+i);
+    const btn  = document.getElementById('btnEFT'+i);
+    if (pane) pane.style.display = i===n ? '' : 'none';
+    if (btn)  btn.className = i===n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
   });
-  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'equipos_simulador.csv';
-  a.click(); URL.revokeObjectURL(url);
-  toast('CSV descargado con contraseñas', 'success');
-}
-
-document.getElementById('btnNuevoEquipo')?.addEventListener('click', () => {
-  document.getElementById('modalNuevoEquipo').classList.remove('hidden');
-});
-document.getElementById('btnCancelarEquipo')?.addEventListener('click', () => {
-  document.getElementById('modalNuevoEquipo').classList.add('hidden');
-});
-document.getElementById('btnGuardarEquipo')?.addEventListener('click', async () => {
-  const nombre   = document.getElementById('nuevoNombre').value.trim();
-  const miembros = document.getElementById('nuevoMiembros').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const password = document.getElementById('nuevoPassword').value;
-  if (!nombre || !password) return toast('Completa nombre y contraseña','error');
-  if (password.length < 4) return toast('Contraseña muy corta (mín 4 chars)','error');
-  try {
-    const r = await api('POST','/admin/equipos',{nombre,miembros,password});
-    toast(`✓ Equipo "${nombre}" creado · ID: ${r.id}`,'success');
-    document.getElementById('modalNuevoEquipo').classList.add('hidden');
-    ['nuevoNombre','nuevoMiembros','nuevoPassword'].forEach(id => document.getElementById(id).value = '');
-    await loadAdminEquipos();
-  } catch(e) { toast(e.message,'error'); }
-});
-
-window.resetEnvio = async (id, nombre) => {
-  if (!confirm(`¿Resetear el envío de "${nombre}"?\n\nEl equipo podrá modificar y volver a enviar sus decisiones.`)) return;
-  try {
-    await api('POST', `/admin/equipos/${id}/reset-envio`);
-    toast(`✓ Envío de "${nombre}" reseteado`, 'success');
-    await loadAdminEquipos();
-  } catch(e) { toast(e.message, 'error'); }
 };
-
-window.eliminarEquipo = async (id, nombre) => {
-  if (!confirm(`¿Eliminar equipo "${nombre}"? Esta acción no se puede deshacer.`)) return;
-  try {
-    await api('DELETE',`/admin/equipos/${id}`);
-    toast(`Equipo eliminado`,'info');
-    await loadAdminEquipos();
-  } catch(e) { toast(e.message,'error'); }
-};
-
-// ── Emojis de perfil para bots ─────────────────────────────────────────────
-const PERFILES_BOT_EMOJI = {
-  Agresivo:    '⚡',
-  Premium:     '💎',
-  Equilibrado: '⚖️',
-  Innovador:   '🚀',
-};
-
-
-window.cambiarPassword = async (id, nombre) => {
-  const p = prompt(`Nueva contraseña para "${nombre}":`);
-  if (!p || p.length < 4) return;
-  try {
-    await api('PUT',`/admin/equipos/${id}/password`,{password:p});
-    toast('✓ Contraseña actualizada','success');
-  } catch(e) { toast(e.message,'error'); }
-};
-
-// ══ BLOQUE F — funciones de gestión de bots ══════════════════════════════════
-// Añadir DESPUÉS de window.cambiarPassword en app.js:
-
-window.agregarBot = async () => {
-  const nombre = (document.getElementById('botNombre').value || '').trim();
-  const perfil = document.getElementById('botPerfil').value;
-  if (!perfil) return toast('Selecciona un perfil de bot', 'error');
-  try {
-    const r = await api('POST', '/admin/bots', { nombre: nombre || `Bot ${perfil}`, perfil });
-    toast(`✓ Bot "${r.nombre}" (${r.perfil}) agregado`, 'success');
-    document.getElementById('botNombre').value = '';
-    await renderBotsSection();
-  } catch(e) { toast(e.message, 'error'); }
-};
-
-window.eliminarBot = async (id, nombre) => {
-  if (!confirm(`¿Eliminar el bot "${nombre}"?\n\nNo participará en las próximas rondas.`)) return;
-  try {
-    await api('DELETE', `/admin/bots/${id}`);
-    toast(`Bot "${nombre}" eliminado`, 'info');
-    await renderBotsSection();
-  } catch(e) { toast(e.message, 'error'); }
-};
-
-
-
-// ══ BLOQUE E — sección de Bots en loadAdminEquipos() ════════════════════════
-// BUSCA en loadAdminEquipos() la línea:
-//   document.getElementById('btnExportarEquipos')?.addEventListener(...)
-// AÑADE justo DESPUÉS (al final del try{} de loadAdminEquipos):
-
-async function renderBotsSection() {
-  const botsWrap = document.getElementById('botsSection');
-  if (!botsWrap) return;
-
-  let botsData;
-  try {
-    botsData = await api('GET', '/admin/bots');
-  } catch (e) {
-    botsWrap.innerHTML = `<p style="color:var(--accent4);font-size:.82rem">${e.message}</p>`;
-    return;
-  }
-
-  const { bots = [], perfiles = [] } = botsData;
-
-  const perfilOpts = perfiles
-    .map(p => `<option value="${p.id}">${p.emoji || ''} ${p.id}</option>`)
-    .join('');
-
-  const botRows = bots.length
-    ? bots.map(b => `
-        <tr>
-          <td>
-            <span style="font-family:var(--font-mono);font-size:.82rem">🤖 ${b.nombre}</span>
-          </td>
-          <td>
-            <span class="badge badge-ok" style="font-size:.72rem">${PERFILES_BOT_EMOJI[b.perfil] || '🤖'} ${b.perfil}</span>
-          </td>
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="eliminarBot('${b.id}','${b.nombre}')">✕ Eliminar</button>
-          </td>
-        </tr>
-      `).join('')
-    : `<tr><td colspan="3" style="color:var(--text3);font-size:.82rem;padding:12px 0">
-         Sin bots configurados. Los bots compiten automáticamente en cada ronda.
-       </td></tr>`;
-
-  botsWrap.innerHTML = `
-    <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
-      <h3 style="margin:0 0 4px">🤖 Competidores IA (Bots)</h3>
-      <p style="color:var(--text3);font-size:.8rem;margin:0 0 16px">
-        Los bots generan sus decisiones automáticamente antes de ejecutar cada ronda.
-        No aparecen en el panel de equipos estudiantiles.
-      </p>
-
-      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
-        <div>
-          <label class="form-label" style="font-size:.75rem">Nombre del bot</label>
-          <input class="form-input" id="botNombre" placeholder="Ej: CompetidorA" style="width:160px">
-        </div>
-        <div>
-          <label class="form-label" style="font-size:.75rem">Perfil estratégico</label>
-          <select class="form-input" id="botPerfil" style="width:160px">${perfilOpts}</select>
-        </div>
-        <button class="btn btn-success" onclick="agregarBot()">+ Agregar Bot</button>
-      </div>
-
-      <table style="width:100%;font-size:.82rem">
-        <thead>
-          <tr>
-            <th style="text-align:left;padding:6px 0">Bot</th>
-            <th style="text-align:left;padding:6px 0">Perfil</th>
-            <th style="text-align:left;padding:6px 0">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>${botRows}</tbody>
-      </table>
-
-      <div style="margin-top:12px;padding:10px;background:var(--bg2);border-radius:8px;font-size:.76rem;color:var(--text3)">
-        <strong>Perfiles disponibles:</strong>
-        ${perfiles.map(p => `<span style="margin-right:12px">${p.emoji || '🤖'} <strong>${p.id}</strong></span>`).join('')}
-      </div>
-    </div>
-  `;
-}
-
-
-// INSTRUCCIÓN: añadir <div id="botsSection"></div> al HTML de la vista
-// admin-equipos, DESPUÉS del div equiposTableWrap.
-// También añadir esta línea al final de loadAdminEquipos():
-//   await renderBotsSection();
-
-
-
-
-
-// ── Admin Rondas ───────────────────────────────────────────
-async function loadAdminRondas() {
-  if (!requireSimSelected('rondasContent')) return;
-  const ronda = await api('GET','/admin/ronda');
-  const hist  = await api('GET','/admin/historial');
-  document.getElementById('adminRoundBadge').textContent = `Ronda ${ronda.currentRound}/${ronda.totalRounds}`;
-
-  const estadoActualBadge =
-    ronda.roundState === 'simulated' ? '<span class="badge badge-simulated">✅ Simulada</span>' :
-    ronda.roundState === 'pre-sim'   ? '<span class="badge badge-presim">📊 Pre-simulación</span>' :
-    ronda.roundState === 'locked'    ? '<span class="badge badge-alert">🔒 Cerrada</span>' :
-    ronda.roundState === 'open'      ? '<span class="badge badge-open">🟢 Abierta</span>' :
-    '<span class="badge badge-pending">⏸ Pendiente</span>';
-
-  const histRows = hist.map(h => {
-    const estadoBadge = ['simulated','calculada'].includes(h.estado)
-      ? '<span class="badge badge-simulated">✅ Simulada</span>'
-      : '<span class="badge badge-open">🟢 Activa</span>';
-    return `
-      <tr>
-        <td><strong>Ronda ${h.ronda}</strong></td>
-        <td>${estadoBadge}</td>
-        <td>${h.enviados}/${h.total}</td>
-        <td>${fmt.dt(h.ejecutadaAt)}</td>
-        <td>${['simulated','calculada'].includes(h.estado)
-          ? `<button class="btn btn-ghost btn-sm" onclick="verResultadosRonda(${h.ronda})">Ver →</button>`
-          : '—'}</td>
-      </tr>`;
-  }).join('');
-
-  const botonesControl = ronda.roundState === 'pending'
-    ? `<button class="btn btn-success" id="btnActivarRonda">▶ Activar Hoja de Decisiones — Ronda ${ronda.currentRound}</button>`
-    : ronda.roundState === 'open'
-    ? `<button class="btn btn-warning"  id="btnPreSimRonda">📊 Pre-simular (notificar demanda a equipos)</button>
-       <button class="btn btn-ghost"    id="btnCerrarRonda">🔒 Cerrar envíos</button>`
-    : ronda.roundState === 'locked'
-    ? `<button class="btn btn-warning"  id="btnPreSimRonda">📊 Pre-simular (notificar demanda a equipos)</button>
-       <button class="btn btn-primary"  id="btnSimularRonda">⚡ Ejecutar Simulación (sin pre-sim)</button>`
-    : ronda.roundState === 'pre-sim'
-    ? `<button class="btn btn-primary"  id="btnSimularRonda">⚡ Ejecutar Simulación Final — Ronda ${ronda.currentRound}</button>
-       <button class="btn btn-ghost"    id="btnForzarTodosRonda">⏩ Forzar confirmaciones pendientes</button>`
-    : ronda.roundState === 'simulated'
-    ? `<button class="btn btn-success"  id="btnNextRonda">→ Abrir Ronda ${ronda.currentRound + 1}</button>`
-    : '';
-
-  // Bloque de progreso pre-sim (solo visible en estado pre-sim)
-  let preSimBlock = '';
-  if (ronda.roundState === 'pre-sim') {
-    try {
-      const ps = await api('GET', '/api/presim');
-      const pct = ps.total > 0 ? Math.round(ps.confirmados/ps.total*100) : 0;
-      preSimBlock = `
-        <div class="progress-wrap" style="margin-bottom:16px">
-          <div class="progress-label">
-            <span>📊 Equipos que confirmaron su demanda estimada</span>
-            <strong>${ps.confirmados} de ${ps.total}</strong>
-          </div>
-          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;background:var(--accent3)"></div></div>
-        </div>
-        <div class="table-wrap" style="margin-bottom:20px">
-          <table>
-            <thead><tr>
-              <th>Equipo</th><th>Segmento</th>
-              <th style="text-align:right">Demanda asignada</th>
-              <th style="text-align:right">Ventas estimadas</th>
-              <th style="text-align:right">Share</th>
-              <th style="text-align:center">Confirmación</th>
-              <th></th>
-            </tr></thead>
-            <tbody>
-              ${ps.detalle.map(r => `
-                <tr>
-                  <td><strong>${r.equipoNombre||r.equipo}</strong></td>
-                  <td style="font-size:.78rem">${r.segmento}</td>
-                  <td class="num">${fmt.num(r.demandaAsignada)}</td>
-                  <td class="num">${fmt.num(r.ventasEstimadas)}</td>
-                  <td class="num">${fmt.pct(r.shareEstimado)}</td>
-                  <td style="text-align:center">
-                    ${r.confirmado
-                      ? `<span class="badge badge-ok">✓ ${r.forzadoPor==='admin'?'Forzado':'Confirmado'}</span>`
-                      : '<span class="badge badge-pending">⏳ Pendiente</span>'}
-                  </td>
-                  <td>${!r.confirmado
-                    ? `<button class="btn btn-ghost btn-sm" onclick="forzarConfirmacion('${r.equipo}')">Forzar</button>`
-                    : ''}</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>`;
-    } catch {}
-  }
-
-  document.getElementById('rondasContent').innerHTML = `
-    <div class="stat-grid" style="margin-bottom:20px">
-      <div class="stat-card">
-        <div class="stat-label">Ronda actual</div>
-        <div class="stat-value">${ronda.currentRound}</div>
-        <div class="stat-sub">${estadoActualBadge}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Entregas</div>
-        <div class="stat-value">${ronda.enviados}/${ronda.total}</div>
-        <div class="stat-sub">decisiones enviadas</div>
-      </div>
-    </div>
-
-    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-      ${botonesControl}
-    </div>
-
-    ${preSimBlock}
-
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Ronda</th><th>Estado</th><th>Entregas</th><th>Ejecutada</th><th></th></tr></thead>
-        <tbody>${histRows || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Sin historial</td></tr>'}</tbody>
-      </table>
-    </div>`;
-
-  document.getElementById('btnActivarRonda')?.addEventListener('click', doActivarRonda);
-  document.getElementById('btnPreSimRonda')?.addEventListener('click', doPreSimular);
-  document.getElementById('btnSimularRonda')?.addEventListener('click', () => doSimular(ronda.currentRound));
-  document.getElementById('btnCerrarRonda')?.addEventListener('click', doCerrarRonda);
-  document.getElementById('btnForzarTodosRonda')?.addEventListener('click', doForzarTodos);
-  document.getElementById('btnNextRonda')?.addEventListener('click', doSiguienteRonda);
-}
-
-window.verResultadosRonda = async (n) => {
-  document.querySelector('[data-view="admin-resultados"]').click();
-  await loadAdminResultados(n);
-};
-
-// ── Admin Resultados ───────────────────────────────────────
-async function loadAdminResultados(rondaNum) {
-  if (!requireSimSelected('adminResultadosContent')) return;
-  const ronda = await api('GET','/admin/ronda');
-  const n = rondaNum || (ronda.roundState === 'simulated' ? ronda.currentRound : ronda.currentRound - 1);
-
-  // Build round selector
-  const hist = await api('GET','/admin/historial');
-  const simuladas = hist.filter(h => ['simulated','calculada'].includes(h.estado));
-  if (!simuladas.length) {
-    document.getElementById('adminResultadosContent').innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>No hay rondas simuladas aún</p></div>`;
-    return;
-  }
-
-  const selectorHTML = `<div class="ronda-selector">
-    ${simuladas.map(h => `<button class="ronda-btn simulated ${h.ronda===n?'active':''}" onclick="loadAdminResultados(${h.ronda})">Ronda ${h.ronda}</button>`).join('')}
-  </div>`;
-
-  let content = selectorHTML;
-  if (n && n > 0) {
-    try {
-      const rd = await api('GET',`/admin/resultados/${n}`);
-      content += buildAdminResultsHTML(rd);
-      content += buildAdminChartsHTML(rd, n);
-    } catch { content += `<p style="color:var(--text3)">Sin datos para ronda ${n}</p>`; }
-  }
-  document.getElementById('adminResultadosContent').innerHTML = content;
-  renderAdminCharts();
-}
-
-window.loadAdminResultados = loadAdminResultados;
 
 function buildAdminChartsHTML(rd, n) {
-  return `
-    <div class="charts-row">
-      <div class="chart-card"><h4>EBIT por Equipo (Bs)</h4><div class="chart-wrap"><canvas id="chartAdminEBIT_${n}"></canvas></div></div>
-      <div class="chart-card"><h4>Market Share (%)</h4><div class="chart-wrap"><canvas id="chartAdminShare_${n}"></canvas></div></div>
-    </div>`;
+  return '';  // Gráficos ahora dentro del Dashboard del buildAdminResultsHTML
 }
 
 function renderAdminCharts() {
-  document.querySelectorAll('[id^="chartAdmin"]').forEach(canvas => {
-    const id = canvas.id;
-    const n = parseInt(id.split('_')[1]);
+  document.querySelectorAll('[id^="chartAdminDash_"]').forEach(canvas => {
+    const n = parseInt(canvas.id.split('_')[1]);
     if (!n) return;
     api('GET',`/admin/resultados/${n}`).then(rd => {
+      if (!rd.resultados?.length) return;
       const labels = rd.resultados.map(r => r.equipoNombre);
-      const colors = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
-      const defOpts = { responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}},y:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}}} };
-      if (id.includes('EBIT')) {
-        new Chart(canvas, { type:'bar', data:{ labels, datasets:[{data:rd.resultados.map(r=>r.ebit), backgroundColor:rd.resultados.map(r=>r.ebit>=0?'#06FFA5':'#FF6B6B'), borderRadius:4}]}, options:{...defOpts} });
-      } else {
-        new Chart(canvas, { type:'bar', data:{ labels, datasets:[{data:rd.resultados.map(r=>+(r.shareReal*100).toFixed(2)), backgroundColor:colors.slice(0,labels.length), borderRadius:4}]}, options:{...defOpts} });
-      }
+      const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+      const defOpts = { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } } } },
+        scales:{ x:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } },
+                 y:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } } } };
+      new Chart(canvas, { type:'bar', data:{
+        labels,
+        datasets:[
+          { label:'EBIT',          data: rd.resultados.map(r=>r.ebit||0),          backgroundColor: labels.map((_,i)=>palette[i%palette.length]+'CC'), borderRadius:3 },
+          { label:'Utilidad Neta', data: rd.resultados.map(r=>r.utilidadNeta||0),  backgroundColor: labels.map((_,i)=>palette[i%palette.length]+'66'), borderRadius:3, borderWidth:1, borderColor: labels.map((_,i)=>palette[i%palette.length]) },
+        ]
+      }, options:{ ...defOpts } });
+    }).catch(()=>{});
+  });
+  document.querySelectorAll('[id^="chartAdminShare_"]').forEach(canvas => {
+    const n = parseInt(canvas.id.split('_')[1]);
+    if (!n) return;
+    api('GET',`/admin/resultados/${n}`).then(rd => {
+      if (!rd.resultados?.length) return;
+      const labels = rd.resultados.map(r => r.equipoNombre);
+      const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+      const defOpts = { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ x:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } },
+                 y:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 }, callback: v => v+'%' }, grid:{ color:'#2A2F45' }, max:100 } } };
+      new Chart(canvas, { type:'bar', data:{
+        labels,
+        datasets:[{ data: rd.resultados.map(r=>+(r.shareReal*100).toFixed(2)), backgroundColor: labels.map((_,i)=>palette[i%palette.length]), borderRadius:4 }]
+      }, options:{ ...defOpts } });
     }).catch(()=>{});
   });
 }
+
 
 // ── Admin Mercado ──────────────────────────────────────────
 async function loadAdminMercado() {
