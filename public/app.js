@@ -3247,6 +3247,14 @@ window.mostrarFinanciero = (n) => {
         ${finRow('Intereses préstamo',         -r.interesesPrestamo,   false,'neg')}
         ${r.interesSobregiro>0 ? finRow('Intereses sobregiro',-(r.interesSobregiro), false,'neg') : ''}
         ${finRow('Comisión apertura préstamo', -r.comisionApertura,    false,'neg')}
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${finRowSub('= EBIT (Resultado operativo antes de impuestos)', r.ebit??0, true)}
+        ${finRowSub('= EBITDA (EBIT + Depreciación)', (r.ebit??0)+(r.depreciacion??0), true, 'var(--accent3)')}
+        <div style="height:6px"></div>
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Impuestos</div>
+        ${finRow('IVA a pagar',                -r.ivaAPagar,           false,'neg')}
+        ${finRow('IT (3% ventas brutas)',       -r.impuestoIT,          false,'neg')}
+        ${r.impuestoIUE>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE), false,'neg') : ''}
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
         ${finRowSub('= Utilidad neta',         r.utilidadNeta,         true)}
       </div>
