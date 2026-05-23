@@ -1875,9 +1875,9 @@
           <table class="anx-table">
             <thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th></tr></thead>
             <tbody>
-              <tr><td>Capital inicial total</td><td class="mono val-gold">Bs 680,000</td><td>Patrimonio total con el que inicia cada empresa (caja Bs 96,000 + activos fijos Bs 360,000).</td></tr>
-              <tr><td>Caja inicial (T1)</td><td class="mono val-gold">Bs 50,000</td><td>Efectivo disponible al inicio del Trimestre 1.</td></tr>
-              <tr><td>Activos fijos iniciales</td><td class="mono">Bs 80,000</td><td>Valor contable de planta y equipo. Se deprecia Bs 2,000 por trimestre.</td></tr>
+              <tr><td>Capital inicial total</td><td class="mono val-gold">Bs 680,000</td><td>Patrimonio total con el que inicia cada empresa (caja Bs 600,000 + activos fijos Bs 80,000).</td></tr>
+              <tr><td>Caja inicial (T1)</td><td class="mono val-gold">Bs 600,000</td><td>Efectivo disponible al inicio del Trimestre 1.</td></tr>
+              <tr><td>Activos fijos iniciales</td><td class="mono">Bs 80,000</td><td>Valor contable de planta y equipo. Se deprecia Bs 27,000 por trimestre.</td></tr>
               <tr><td>Inventario inicial</td><td class="mono">0 unidades</td><td>No hay stock inicial. El primer trimestre parte desde cero.</td></tr>
               <tr><td>CxC inicial</td><td class="mono">Bs 0</td><td>Sin cuentas por cobrar al inicio.</td></tr>
               <tr><td>Deuda inicial</td><td class="mono">Bs 0</td><td>Sin deudas al comenzar.</td></tr>
@@ -1892,8 +1892,8 @@
             <thead><tr><th>Parámetro</th><th>Valor</th><th>Naturaleza</th></tr></thead>
             <tbody>
               <tr><td>Gasto administrativo fijo</td><td class="mono">Bs 8,000</td><td>Salida de caja. Aparece en el P&L como gasto operativo.</td></tr>
-              <tr><td>Gasto fijo de planta</td><td class="mono">Bs 5,000</td><td>Salida de caja. Aparece en el P&L como gasto operativo.</td></tr>
-              <tr><td>Depreciación trimestral</td><td class="mono">Bs 2,000</td><td><strong style="color:#F39C12">NO es salida de caja.</strong> Reduce el valor de activos fijos y aparece en el P&L.</td></tr>
+              <tr><td>Gasto fijo de planta</td><td class="mono">Bs 45,000</td><td>Salida de caja. Aparece en el P&L como gasto operativo.</td></tr>
+              <tr><td>Depreciación trimestral</td><td class="mono">Bs 27,000</td><td><strong style="color:#F39C12">NO es salida de caja.</strong> Reduce el valor de activos fijos y aparece en el P&L.</td></tr>
               <tr><td>Costo almacenamiento/unidad</td><td class="mono">Bs 0.10/unid</td><td>Se cobra por cada unidad en inventario FINAL del trimestre. Salida de caja.</td></tr>
             </tbody>
           </table>
@@ -2001,7 +2001,7 @@
               <tr><td>Caja y equivalentes</td><td>Efectivo disponible al cierre del trimestre</td><td class="mono">Resultado del Paso 9 del motor</td></tr>
               <tr><td>Cuentas por cobrar (CxC)</td><td>15% de las ventas netas del trimestre, que se cobran el siguiente</td><td class="mono">Ventas netas × 15%</td></tr>
               <tr><td>Inventarios (valorizado)</td><td>Inventario final en unidades × costo unitario del trimestre</td><td class="mono">Inv. final (unid) × CU</td></tr>
-              <tr><td>Activos fijos netos</td><td>Valor contable de planta y equipo después de depreciación</td><td class="mono">AF iniciales − Bs 2,000 × N trimestres</td></tr>
+              <tr><td>Activos fijos netos</td><td>Valor contable de planta y equipo después de depreciación</td><td class="mono">AF iniciales − Bs 27,000 × N trimestres</td></tr>
               <tr><td colspan="3" style="background:rgba(192,57,43,0.06);color:#EF9A9A;font-weight:600;font-size:.78rem;letter-spacing:1px;padding:8px 14px;">PASIVOS</td></tr>
               <tr><td>Deuda de préstamos</td><td>Saldo pendiente de todos los préstamos tomados</td><td class="mono">Deuda inicial + Ingreso − Cuotas pagadas</td></tr>
               <tr><td>Sobregiro bancario</td><td>Deuda automática generada por caja negativa (si aplica)</td><td class="mono">Igual al monto del sobregiro activado</td></tr>
@@ -2149,7 +2149,7 @@
               <tr><td>Deuda inicial</td><td class="mono">Saldo de préstamos pendientes + sobregiro acumulado de T</td><td>Afecta el cálculo de cuotas a pagar en T+1</td><td class="center">Sí</td></tr>
               <tr><td>Inventario inicial (unid)</td><td class="mono">Unidades no vendidas en T — se suman a la producción de T+1</td><td>Inventario disponible = Inv.ini T+1 + Producción T+1</td><td class="center">Sí</td></tr>
               <tr><td>Vendedores iniciales</td><td class="mono">Número de vendedores al cierre de T</td><td>Campo visible en la hoja de decisiones</td><td class="center">No</td></tr>
-              <tr><td>Activos fijos iniciales</td><td class="mono">Activos fijos T − Bs 2,000 (depreciación del trimestre T)</td><td>Aparece en el Balance General de T+1</td><td class="center">No</td></tr>
+              <tr><td>Activos fijos iniciales</td><td class="mono">Activos fijos T − Bs 27,000 (depreciación del trimestre T)</td><td>Aparece en el Balance General de T+1</td><td class="center">No</td></tr>
               <tr><td>Resultado acumulado</td><td class="mono">Resultado acum. T = Resultado acum. T-1 + Utilidad neta T</td><td>Componente del Patrimonio en el Balance</td><td class="center">No*</td></tr>
             </tbody>
           </table>
