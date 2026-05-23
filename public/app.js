@@ -2568,6 +2568,19 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       hojaRenderRonda(n, state.decisiones, roundState, resultado);
     };
 
+    window.hojaEliminarProducto = (idx) => {
+      if (!Array.isArray(state.decisiones.productos) || state.decisiones.productos.length <= 1) {
+        toast('No se puede eliminar el único producto', 'info');
+        return;
+      }
+      state.decisiones.productos.splice(idx, 1);
+      // Ajustar índice activo si es necesario
+      if (hojaProductoActivo >= state.decisiones.productos.length) {
+        hojaProductoActivo = state.decisiones.productos.length - 1;
+      }
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
   const isEditable = roundState === 'open' && !decision.submitted;
   const isLocked   = roundState === 'locked';
 
@@ -2620,8 +2633,14 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       type="button"
       class="btn ${idx === hojaProductoActivo ? 'btn-success' : 'btn-ghost'} btn-sm"
       onclick="hojaSeleccionarProducto(${idx})"
+      style="padding-right: ${isEditable && idx > 0 ? '4px' : ''}"
     >
       📦 Producto ${idx + 1}
+      ${isEditable && idx > 0 ? `<span
+        onclick="event.stopPropagation(); hojaEliminarProducto(${idx})"
+        style="margin-left:6px;color:#e74c3c;font-weight:bold;font-size:.85rem;cursor:pointer"
+        title="Eliminar Producto ${idx + 1}"
+      >✕</span>` : ''}
     </button>
   `).join('')}
 
