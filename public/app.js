@@ -1920,11 +1920,20 @@ let competenciaLocal = [];
 async function loadAdminCompetencia() {
   if (!requireSimSelected('competenciaContent')) return;
   competenciaLocal = await api('GET','/admin/competencia');
+  // Leer segmentos reales de la industria activa
+  try {
+    const cfg = state.ref || await api('GET','/admin/config');
+    state.ref = cfg;
+    state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(s => s.nombre);
+  } catch { state.segNombresIndustria = []; }
   renderCompetenciaEditor();
 }
 
 function renderCompetenciaEditor() {
-  const segNombres = ['Masivo popular','Masivo aspiracional','Funcional familiar','Cosmético','Dermatológico','Natural','Institucional'];
+  // Usar segmentos reales de la industria; fallback a jaboncillos si no hay
+  const segNombres = (state.segNombresIndustria && state.segNombresIndustria.length)
+    ? state.segNombresIndustria
+    : ['Masivo popular','Masivo aspiracional','Funcional familiar','Cosmético','Dermatológico','Natural','Institucional'];
 
   const rows = competenciaLocal.map((c,i) => `
     <tr>
@@ -1969,7 +1978,8 @@ function renderCompetenciaEditor() {
   });
 
   document.getElementById('btnAddComp').addEventListener('click', () => {
-    competenciaLocal.push({ segmento:'Masivo popular', nombre:'Nuevo competidor', precio:3.00, calidad:5, marketing:0, participacionRef:0.10 });
+    const segDefault = (state.segNombresIndustria && state.segNombresIndustria[0]) || 'Masivo popular';
+    competenciaLocal.push({ segmento: segDefault, nombre:'Nuevo competidor', precio: 150, calidad:5, marketing:0, participacionRef:0.10 });
     renderCompetenciaEditor();
   });
 
