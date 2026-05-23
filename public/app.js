@@ -2823,10 +2823,10 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
           <tr><td class="hoja-label">➕ Contratar vendedores</td>
-              <td>${inp('contratarVendedores',productoActivo.contratarVendedores,'number','min="0" max="10" step="1"')}</td>
+              <td>${inp('contratarVendedores',decision.contratarVendedores??0,'number','min="0" max="10" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
           <tr><td class="hoja-label">➖ Despedir vendedores</td>
-              <td>${inp('despedirVendedores',productoActivo.despedirVendedores,'number','min="0" step="1"')}</td>
+              <td>${inp('despedirVendedores',decision.despedirVendedores??0,'number','min="0" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
         </tbody>
       </table>
@@ -3057,18 +3057,27 @@ if (isEditable) {
               crearProductoDefault(hojaProductoActivo);
           }
 
-          const prod =
-            state.decisiones.productos[hojaProductoActivo];
+          // Campos de EMPRESA: se guardan en state.decisiones raíz (no en el producto)
+          const camposEmpresa = [
+            'contratarVendedores','despedirVendedores',
+            'contratarOperarios','despedirOperarios','montoCapacitacion',
+            'tipoPrestamo','montoPrestamo','plazoPrestamo','amortizacion',
+            'tipoInvestigacion',
+          ];
 
-          prod[field] = v;
-
-          if (productoActivo) {
-            productoActivo[field] = v;
-          }
-
-          // Compatibilidad temporal con producto 1
-          if (hojaProductoActivo === 0) {
+          if (camposEmpresa.includes(field)) {
+            // Campo de empresa: guardar en raíz y sincronizar en todos los productos
             state.decisiones[field] = v;
+            if (Array.isArray(state.decisiones.productos)) {
+              state.decisiones.productos.forEach(p => { p[field] = v; });
+            }
+          } else {
+            // Campo de producto: guardar solo en el producto activo
+            const prod = state.decisiones.productos[hojaProductoActivo];
+            if (prod) prod[field] = v;
+            if (productoActivo) productoActivo[field] = v;
+            // Compatibilidad con producto 1
+            if (hojaProductoActivo === 0) state.decisiones[field] = v;
           }
 
           decision = state.decisiones;
