@@ -537,6 +537,46 @@ async function loadAdminEquipos() {
   } catch(e) { el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>'; }
 }
 
+async function loadAdminRondas() {
+  const el = document.getElementById('admin-rondas-content');
+  if (!el) return;
+  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  try {
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando historial de rondas...</p>';
+    const hist = await api('GET', '/admin/historial');
+    if (!hist?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>'; return; }
+    const rows = hist.map(h => `
+      <tr>
+        <td style="text-align:center;font-weight:700">Ronda ${h.ronda}</td>
+        <td style="text-align:center">
+          <span class="badge ${h.estado === 'calculada' || h.estado === 'simulated' ? 'badge-ok' : 'badge-warn'}">
+            ${h.estado}
+          </span>
+        </td>
+        <td style="text-align:center">${h.enviados} / ${h.total}</td>
+        <td style="text-align:center;font-size:.78rem;color:var(--text3)">${h.ejecutadaAt ? new Date(h.ejecutadaAt).toLocaleString('es-BO') : '—'}</td>
+      </tr>`).join('');
+    el.innerHTML = '<div class="table-wrap"><table>'
+      + '<thead><tr><th style="text-align:center">Ronda</th><th style="text-align:center">Estado</th><th style="text-align:center">Decisiones enviadas</th><th style="text-align:center">Ejecutada</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>';
+  } catch(e) { el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>'; }
+}
+
+async function loadAdminResultados() {
+  const el = document.getElementById('admin-resultados-content');
+  if (!el) return;
+  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  try {
+    const sim = await api('GET', '/admin/config');
+    const n = sim?.config?.currentRound || sim?.currentRound || 1;
+    if (!n) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>'; return; }
+    const rd = await api('GET', '/admin/resultados/' + n);
+    if (!rd?.resultados?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para la ronda ' + n + '.</p>'; return; }
+    el.innerHTML = buildAdminResultsHTML(rd);
+    if (typeof renderAdminCharts === 'function') setTimeout(renderAdminCharts, 100);
+  } catch(e) { el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>'; }
+}
+
 async function loadAdminSimulaciones() {
 
   let plantillasDisponibles = [];
