@@ -2332,7 +2332,8 @@ async function guardarDecision() {
 async function enviarDecision() {
   if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
   try {
-    await api('POST','/api/decisiones/enviar',{ decision: state.decisiones });
+    const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));
+    await api('POST','/api/decisiones/enviar',{ decision: _d1 });
     toast('✅ Decisiones enviadas correctamente','success');
     await loadDecisionForm();
   } catch(e) { toast(e.message,'error'); }
@@ -3109,7 +3110,8 @@ if (isEditable) {
     document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
       if (!confirm('¿Enviar decisiones?\n\nEl profesor ejecutará la simulación cuando todos los equipos hayan enviado.')) return;
       try {
-        await api('POST','/api/decisiones/enviar',{decision});
+        const _d3 = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
+        await api('POST','/api/decisiones/enviar',{decision: _d3});
         toast('✅ Enviado','success');
         await loadHojaDecision();
       } catch(e) { toast(e.message,'error'); }

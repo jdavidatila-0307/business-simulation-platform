@@ -52,7 +52,16 @@ setInterval(() => {
 function readBody(req) {
   return new Promise((res,rej) => {
     let b = '';
-    req.on('data', c => b += c);
+    let size = 0;
+    const MAX = 5 * 1024 * 1024; // 5MB — suficiente para 5 productos con justificaciones
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX) {
+        req.destroy();
+        return rej(new Error('Payload demasiado grande (máx 5MB)'));
+      }
+      b += c;
+    });
     req.on('end', () => { try { res(b ? JSON.parse(b) : {}); } catch { res({}); } });
     req.on('error', rej);
   });
