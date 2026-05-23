@@ -968,15 +968,42 @@ function buildAdminResultsHTML(rd) {
     </div>`;
   }
 
-  return `
-    <div class="table-wrap" style="margin-top:4px">
-      <table>
-        <thead><tr><th>Equipo</th><th>Segmento</th><th>Ventas (unid)</th><th>Market Share</th><th>EBIT</th><th>Utilidad neta</th><th>Caja final</th><th>ROI Mkt</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    ${fiscalHTML}`;
+  const summaryTable = '<div class="table-wrap" style="margin-top:4px"><table>'
+    + '<thead><tr><th>Equipo</th><th style="font-size:.72rem">Segmento</th>'
+    + '<th class="num">Ventas<br>unid</th><th class="num">Market<br>Share</th>'
+    + '<th class="num">Ventas<br>brutas</th><th class="num">Ventas<br>netas</th>'
+    + '<th class="num">Utilidad<br>bruta</th><th class="num">EBIT</th>'
+    + '<th class="num">Util.<br>neta</th><th class="num">Margen<br>bruto%</th>'
+    + '</tr></thead><tbody>' + summaryRows + '</tbody></table></div>';
+
+  // Tabs para EF
+  const tabsHTML = '<div style="margin:16px 0 10px;display:flex;flex-wrap:wrap;gap:6px">'
+    + '<button class="btn btn-primary btn-sm" id="btnAdminEFTab1" onclick="adminShowEFTab(1)">📋 Estado de Resultados</button>'
+    + '<button class="btn btn-ghost btn-sm" id="btnAdminEFTab2" onclick="adminShowEFTab(2)">🏦 Balance General</button>'
+    + '<button class="btn btn-ghost btn-sm" id="btnAdminEFTab3" onclick="adminShowEFTab(3)">💧 Flujo de Efectivo</button>'
+    + '<div style="flex:1"></div>'
+    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminEFContent\',\'Estados Financieros Comparativos\',\'Ronda ' + (rd.ronda||'N') + '\')" title="Imprimir">🖨️ Imprimir</button>'
+    + '</div>';
+
+  const efContent = '<div id="adminEFContent">'
+    + '<div id="adminEF1"><div class="table-wrap"><table>' + plHTML + '</table></div></div>'
+    + '<div id="adminEF2" style="display:none"><div class="table-wrap"><table>' + bgHTML + '</table></div></div>'
+    + '<div id="adminEF3" style="display:none"><div class="table-wrap"><table>' + feHTML + '</table></div></div>'
+    + '</div>';
+
+  return summaryTable + tabsHTML + efContent + fiscalHTML;
 }
+
+window.adminShowEFTab = (n) => {
+  [1,2,3].forEach(i => {
+    const el = document.getElementById('adminEF' + i);
+    const btn = document.getElementById('btnAdminEFTab' + i);
+    if (el)  el.style.display  = i === n ? '' : 'none';
+    if (btn) {
+      btn.className = i === n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+    }
+  });
+};
 
 async function doPreSimular() {
   const ronda = await api('GET', '/admin/ronda');
