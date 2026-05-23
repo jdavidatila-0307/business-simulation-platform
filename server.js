@@ -682,8 +682,11 @@ async function route(req, res, body) {
       return send(res, 200, { roundState: sim.config.roundState, total: detalle.length,
         confirmados: detalle.filter(r=>r.confirmado).length, detalle, mercadoSegmentos: ronda.preSimMercado||[] });
     } else {
+      // Buscar por equipoOriginal (formato expandido) o por ID base (startsWith)
       const miDato = Object.values(ronda.preSimulacion || {}).find(
         p => p.equipoOriginal === s.userId
+          || p.equipo === s.userId
+          || p.equipo?.startsWith(s.userId)
       );
       if (!miDato) return send(res, 404, { error: 'Sin datos para tu equipo' });
       return send(res, 200, { roundState: sim.config.roundState, presim: miDato, mercadoSegmentos: ronda.preSimMercado||[] });
@@ -696,9 +699,13 @@ async function route(req, res, body) {
     const ronda = await storage.getRonda(sim.id, sim.config.currentRound);
     if (!ronda?.preSimulacion) return send(res, 400, { error: 'Sin pre-simulación activa' });
     if (sim.config.roundState !== 'pre-sim') return send(res, 400, { error: 'No hay pre-simulación activa' });
-    if (!ronda.preSimulacion[s.userId]) return send(res, 404, { error: 'Sin datos para tu equipo' });
-    ronda.preSimulacion[s.userId].confirmado = true;
-    ronda.preSimulacion[s.userId].confirmadoAt = new Date().toISOString();
+    // Buscar la clave correcta (puede ser ID expandido eq_xxx__prod_1)
+    const psKey = Object.keys(ronda.preSimulacion).find(
+      k => k === s.userId || ronda.preSimulacion[k].equipoOriginal === s.userId || k.startsWith(s.userId)
+    );
+    if (!psKey) return send(res, 404, { error: 'Sin datos para tu equipo' });
+    ronda.preSimulacion[psKey].confirmado = true;
+    ronda.preSimulacion[psKey].confirmadoAt = new Date().toISOString();
     await storage.updateRonda(sim.id, sim.config.currentRound, { preSimulacion: ronda.preSimulacion });
     return send(res, 200, { ok: true });
   }
