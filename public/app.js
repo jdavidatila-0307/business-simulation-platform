@@ -3224,7 +3224,10 @@ window.mostrarFinanciero = (n) => {
   <!-- Estado de Resultados -->
   <div id="finPL">
     <div class="result-round-card">
-      <div class="result-round-header"><h3>Estado de Resultados — Ronda ${n}</h3></div>
+      <div class="result-round-header" style="display:flex;align-items:center;justify-content:space-between">
+        <h3>Estado de Resultados — Ronda ${n}</h3>
+        <button class="btn btn-ghost btn-sm no-print" style="font-size:.72rem;padding:3px 10px" onclick="printPanel('eq-financiero-content','Estados Financieros — '+((state.me&&state.me.nombre)||''),'Ronda '+${n}+' / 20')">🖨️ Imprimir</button>
+      </div>
       <div style="padding:16px 20px">
         ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
         ${finRow('(−) Comisiones canal',       -r.comisiones,          false, 'neg')}
@@ -3910,37 +3913,80 @@ function buildManual() {
   window.open('/manual.html', '_blank');
 }
 
+
+// ── Función genérica de impresión / PDF ─────────────────────
+function printPanel(contentId, titulo, subtitulo) {
+  const content = document.getElementById(contentId);
+  if (!content) { toast('Sin contenido para imprimir', 'info'); return; }
+  const css = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:20px}',
+    'h1{font-size:15px;margin-bottom:4px;color:#2a2f45}',
+    '.sub{font-size:10px;color:#666;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #2a2f45}',
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10.5px}',
+    'th{background:#2a2f45;color:#fff;padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase}',
+    'td{padding:5px 10px;border:1px solid #ddd;vertical-align:top}',
+    'tr:nth-child(even) td{background:#f8f9ff}',
+    '.result-round-card{border:1px solid #ddd;border-radius:6px;margin-bottom:14px;overflow:hidden}',
+    '.result-round-header{background:#2a2f45;color:#fff;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase}',
+    '.fin-row{display:flex;justify-content:space-between;padding:4px 14px;border-bottom:1px solid #f0f0f0;font-size:10.5px}',
+    '.fin-row.sub{background:#f0f4ff;font-weight:700}',
+    '.pos,.up{color:#27ae60}.neg,.down{color:#e74c3c}',
+    '.num{text-align:right}',
+    'button,canvas,.no-print{display:none!important}',
+    '@media print{body{padding:8px}@page{margin:1cm;size:A4}}'
+  ].join('');
+  const win = window.open('', '_blank', 'width=1100,height=900');
+  const parts = [
+    '<!DOCTYPE html><html lang="es"><head>',
+    '<meta charset="UTF-8"/>',
+    '<title>' + titulo + '</title>',
+    '<style>' + css + '</style>',
+    '</head><body>',
+    '<h1>' + titulo + '</h1>',
+    '<div class="sub">' + (subtitulo||'') + ' | SimNego COM540 UAGRM</div>',
+    content.innerHTML,
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
+  win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 600);
+}
+
 // ── Imprimir Hoja de Decisión ──────────────────────────────
 function printHoja() {
   const content = document.getElementById('hojaContent');
   if (!content) return;
-
   const win = window.open('', '_blank', 'width=1100,height=800');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head>
-    <meta charset="UTF-8"/>
-    <title>Hoja de Decisión — ${state.me?.nombre} — Ronda ${hojaRondaActual}</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:'Segoe UI',sans-serif;font-size:11px;color:#111;background:#fff;padding:16px}
-      h1{font-size:15px;margin-bottom:4px}
-      .sub{font-size:10px;color:#666;margin-bottom:14px}
-      table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10.5px}
-      th{background:#2a2f45;color:#fff;padding:5px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.8px}
-      td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}
-      tr:nth-child(even) td{background:#f9f9ff}
-      .sec-title{background:#4a4080;color:#fff;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:10px 0 0}
-      .readonly{color:#666;font-style:italic}
-      textarea,select,input{border:none;background:transparent;font-family:inherit;font-size:inherit;width:100%;padding:0}
-      @media print{body{padding:0}button{display:none!important}}
-    </style>
-  </head><body>
-    <h1>📋 Hoja de Decisión — ${state.me?.nombre}</h1>
-    <div class="sub">Trimestre ${hojaRondaActual} / 20 &nbsp;·&nbsp; Simulador de Negocios &nbsp;·&nbsp; Juego de Negocios</div>
-    ${content.innerHTML}
-    <script>setTimeout(()=>window.print(),400)<\/script>
-  </body></html>`);
+  const css = '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:16px}'
+    + 'h1{font-size:15px;margin-bottom:4px}.sub{font-size:10px;color:#666;margin-bottom:14px}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10.5px}'
+    + 'th{background:#2a2f45;color:#fff;padding:5px 8px;text-align:left;font-size:9px;text-transform:uppercase}'
+    + 'td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}'
+    + 'tr:nth-child(even) td{background:#f9f9ff}'
+    + '.sec-title{background:#4a4080;color:#fff;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;margin:10px 0 0}'
+    + '.readonly{color:#666;font-style:italic}'
+    + 'textarea,select,input{border:none;background:transparent;font-family:inherit;font-size:inherit;width:100%;padding:0}'
+    + '@media print{body{padding:0}button{display:none!important}}';
+  const nombre = (state.me && state.me.nombre) || '';
+  const ronda  = hojaRondaActual || 1;
+  const parts  = [
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>',
+    '<title>Hoja de Decisión — ' + nombre + ' — Ronda ' + ronda + '</title>',
+    '<style>' + css + '</style></head><body>',
+    '<h1>Hoja de Decisión — ' + nombre + '</h1>',
+    '<div class="sub">Trimestre ' + ronda + ' / 20 | Simulador de Negocios | Juego de Negocios</div>',
+    content.innerHTML,
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
   win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 500);
 }
+
 
 // ============================
 // ADMIN - Gestión de Profesores
