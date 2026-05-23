@@ -934,11 +934,45 @@ async function route(req, res, body) {
     const equipos = await storage.getEquipos(sim.id);
     const eqMap = {};
     equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
-    const resultados = Object.values(ronda.resultados).map(r => ({
+    // Consolidar por empresa (equipoOriginal) — multiproducto puede tener N resultados por equipo
+    const rawResultados = Object.values(ronda.resultados);
+    const porEmpresa = {};
+    rawResultados.forEach(r => {
+      const eqId = r.equipoOriginal || r.equipo;
+      if (!porEmpresa[eqId]) {
+        // Primera vez: inicializar con los datos de empresa
+        porEmpresa[eqId] = { ...r, productos: [r] };
+      } else {
+        // Acumular campos variables (ventas, costos, márgenes)
+        const sumar = ['ventasBrutas','ventasNetas','ventasReales','costoVentas',
+          'utilidadBruta','gastosOp','utilidadNeta','ebit',
+          'ivaAPagar','impuestoIT','impuestoIUE','totalImpuestos',
+          'pagoProduccion','pagoMktTotal','totalPagos','cobrosContado',
+          'cxcFinal','invFinalValorizado','inventarioFinal','ingresoPrestamo',
+          'publicidad','comisiones','roiMarketing','demandaAsignada','demandaFormal'];
+        sumar.forEach(k => {
+          porEmpresa[eqId][k] = (porEmpresa[eqId][k] || 0) + (r[k] || 0);
+        });
+        // Campos de empresa: tomar del primer producto (son únicos por empresa)
+        // cajaFinal, deudaFinal, patrimonio, totalActivos ya están en el primero
+        porEmpresa[eqId].productos.push(r);
+      }
+    });
+
+    // Calcular shareReal total por empresa (suma de shares de todos sus productos)
+    Object.values(porEmpresa).forEach(e => {
+      if (e.productos.length > 1) {
+        e.shareReal = e.productos.reduce((s,p) => s + (p.shareReal||0), 0);
+        e.producto  = 'Multiproducto (' + e.productos.length + ')';
+        e.segmento  = [...new Set(e.productos.map(p => p.segmento||'—'))].join(', ');
+      }
+    });
+
+    const resultados = Object.values(porEmpresa).map(r => ({
       ...r,
       equipoNombre: resolveNombre(r, eqMap),
       alertaCaja:   (r.cajaFinal ?? 0) < 0 ? 'ALERTA' : 'OK',
-      segmento:     r.segmentoObjetivo || r.segmento || '—',
+      segmento:     r.segmento || r.segmentoObjetivo || '—',
     }));
 
     // Etapa 3.5: resumen fiscal agregado del período
@@ -954,11 +988,12 @@ async function route(req, res, body) {
         return ub > 0 ? Math.round(ti / ub * 10000) / 100 : 0;
       })(),
       porEquipo: resultados.map(r => ({
-        equipoNombre: r.equipoNombre,
-        impuestoIT:   r.impuestoIT  ?? 0,
-        ivaAPagar:    r.ivaAPagar   ?? 0,
-        impuestoIUE:  r.impuestoIUE ?? 0,
-        totalImpuestos: r.totalImpuestos ?? ((r.ivaAPagar ?? 0) + (r.impuestoIT ?? 0) + (r.impuestoIUE ?? 0)),
+        equipoNombre:   r.equipoNombre,
+        impuestoIT:     r.impuestoIT     ?? 0,
+        ivaAPagar:      r.ivaAPagar      ?? 0,
+        impuestoIUE:    r.impuestoIUE    ?? 0,
+        totalImpuestos: r.totalImpuestos ?? ((r.ivaAPagar??0)+(r.impuestoIT??0)+(r.impuestoIUE??0)),
+        nProductos:     r.productos?.length ?? 1,
       })),
     };
 
