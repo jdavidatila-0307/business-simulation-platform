@@ -2000,6 +2000,97 @@ window.eliminarCompetidor = (i) => {
 // ═══════════════════════════════════════════════════════════
 //  EQUIPO
 // ═══════════════════════════════════════════════════════════
+// ── Imprimir panel activo del equipo ─────────────────────────
+function printPanelActivo() {
+  const views = ['eq-financiero-content','equipoResultadosContent',
+                 'eq-creditos-content','reportesContent','hojaContent'];
+  const labels = {
+    'eq-financiero-content':   'Estados Financieros',
+    'equipoResultadosContent': 'KPIs y Resultados',
+    'eq-creditos-content':     'Créditos y Financiamiento',
+    'reportesContent':         'Investigación de Mercado',
+    'hojaContent':             'Hoja de Decisión',
+  };
+  const nombre  = (state.me && state.me.nombre) || '';
+  const ronda   = hojaRondaActual || 1;
+
+  // Encontrar el contenedor activo con contenido
+  for (const id of views) {
+    const el = document.getElementById(id);
+    if (el && el.innerHTML.trim().length > 50) {
+      // Para Estados Financieros imprimir TODO (PL + BG + FC juntos)
+      if (id === 'eq-financiero-content') {
+        printFinancieroCompleto(nombre, ronda);
+        return;
+      }
+      printPanel(id, labels[id] + ' — ' + nombre, 'Trimestre ' + ronda + ' / 20');
+      return;
+    }
+  }
+  toast('Navega a un panel primero', 'info');
+}
+
+// ── Imprimir Estados Financieros completos (P&L + BG + FC) ────
+function printFinancieroCompleto(nombre, ronda) {
+  const plEl = document.getElementById('finPL');
+  const bgEl = document.getElementById('finBG');
+  const fcEl = document.getElementById('finFC');
+
+  // Mostrar todos temporalmente para capturar el HTML
+  const prevPL = plEl ? plEl.style.display : '';
+  const prevBG = bgEl ? bgEl.style.display : '';
+  const prevFC = fcEl ? fcEl.style.display : '';
+  if (bgEl) bgEl.style.display = '';
+  if (fcEl) fcEl.style.display = '';
+
+  const html = (plEl ? plEl.innerHTML : '')
+             + (bgEl ? bgEl.innerHTML : '')
+             + (fcEl ? fcEl.innerHTML : '');
+
+  // Restaurar estado de display
+  if (bgEl) bgEl.style.display = prevBG;
+  if (fcEl) fcEl.style.display = prevFC;
+
+  const css = '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:16px}'
+    + 'h1{font-size:14px;margin-bottom:4px;color:#2a2f45}'
+    + '.sub{font-size:9px;color:#666;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #2a2f45}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px}'
+    + 'th{background:#2a2f45;color:#fff;padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase}'
+    + 'td{padding:4px 8px;border:1px solid #ddd;vertical-align:top}'
+    + 'tr:nth-child(even) td{background:#f8f9ff}'
+    + '.result-round-card{border:1px solid #ddd;border-radius:5px;margin-bottom:12px;overflow:hidden;break-inside:avoid}'
+    + '.result-round-header{background:#2a2f45;color:#fff;padding:6px 12px;font-size:9.5px;font-weight:700;text-transform:uppercase}'
+    + '.fin-row{display:flex;justify-content:space-between;padding:3px 12px;border-bottom:1px solid #f0f0f0;font-size:10px}'
+    + '.fin-row.sub{background:#f0f4ff;font-weight:700}'
+    + '.pos,.up{color:#27ae60}.neg,.down{color:#e74c3c}'
+    + '.num{text-align:right}'
+    + 'button,.no-print{display:none!important}'
+    + '@media print{@page{margin:1cm;size:A4}body{padding:8px}}';
+
+  const win = window.open('', '_blank', 'width=1100,height=900');
+  const parts = [
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>',
+    '<title>Estados Financieros — ' + nombre + ' — Ronda ' + ronda + '</title>',
+    '<style>' + css + '</style></head><body>',
+    '<h1>Estados Financieros — ' + nombre + '</h1>',
+    '<div class="sub">Trimestre ' + ronda + ' / 20 | SimNego COM540 UAGRM</div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Estado de Resultados</h2>',
+    (plEl ? plEl.innerHTML : ''),
+    '<div style="margin-top:14px"></div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Balance General</h2>',
+    (bgEl ? bgEl.innerHTML : ''),
+    '<div style="margin-top:14px"></div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Flujo de Efectivo</h2>',
+    (fcEl ? fcEl.innerHTML : ''),
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
+  win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 600);
+}
+
 async function initEquipo() {
   showScreen('screen-equipo');
   setupNav('screen-equipo');
@@ -3226,7 +3317,7 @@ window.mostrarFinanciero = (n) => {
     <div class="result-round-card">
       <div class="result-round-header" style="display:flex;align-items:center;justify-content:space-between">
         <h3>Estado de Resultados — Ronda ${n}</h3>
-        <button class="btn btn-ghost btn-sm no-print" style="font-size:.72rem;padding:3px 10px" onclick="printPanel('eq-financiero-content','Estados Financieros — '+((state.me&&state.me.nombre)||''),'Ronda '+${n}+' / 20')">🖨️ Imprimir</button>
+        <button class="btn btn-ghost btn-sm no-print" style="font-size:.72rem;padding:3px 10px" onclick="printFinancieroCompleto((state.me&&state.me.nombre)||'',${n})">🖨️ Imprimir completo</button>
       </div>
       <div style="padding:16px 20px">
         ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
