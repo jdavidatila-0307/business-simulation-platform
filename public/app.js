@@ -4077,6 +4077,10 @@ async function doLogout() {
 //  INIT — check existing session
 // ═══════════════════════════════════════════════════════════
 async function init() {
+  // ── Ocultar TODAS las pantallas mientras verificamos la sesión ──────
+  // Evita el flash de login que ocurre durante el await de /auth/me
+  document.querySelectorAll('.screen').forEach(s => s.style.visibility = 'hidden');
+
   initLogin();
   try {
     const me = await api('GET', '/auth/me');
@@ -4090,7 +4094,12 @@ async function init() {
       await initEquipo();
     }
   } catch {
+    // Sin sesión válida → mostrar login
+    document.querySelectorAll('.screen').forEach(s => s.style.visibility = '');
     showScreen('screen-login');
+  } finally {
+    // Restaurar visibilidad en todos los casos (sesión válida o no)
+    document.querySelectorAll('.screen').forEach(s => s.style.visibility = '');
   }
 }
 
