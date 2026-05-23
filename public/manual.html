@@ -1683,8 +1683,8 @@
         </div>
         <div class="formula-box">
           <span class="f-label">Fórmula de costo parcial</span>
-          Costo unitario = Costo base + (0.20 × Calidad) + Costo MP del proveedor
-          <br><span style="color:var(--muted);font-size:.73rem;">Costo base = costo de fabricación (sin MP). Con Proveedor Nacional +Bs 12, con Importado +Bs 7. Así el costo total coincide con el diseñado por cada equipo.</span>
+          Costo unitario = Costo base + (0.20 × Calidad) + Costo MP + Costo canal
+          <br><span style="color:var(--muted);font-size:.73rem;">Costo base = fabricación sin MP. MP Nacional +Bs 12 | Importado +Bs 7. Canal: Tienda Propia +Bs 18 | Venta Digital +Bs 15 | Ferias +Bs 10 | Distribuidores +Bs 22. El total base+MP coincide con el costo diseñado por cada equipo.</span>
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
@@ -1764,12 +1764,12 @@
           <table class="anx-table">
             <thead><tr><th>Segmento</th><th>Demanda base</th><th>% Contrabando</th><th>Demanda formal</th><th>Tendencia</th></tr></thead>
             <tbody>
-              <tr><td>Padres y familias con niños (0-10 años)</td><td class="mono">7,000</td><td class="mono ">18%</td><td class="mono val-gold">5,740</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
-              <tr><td>Personas con condición postural</td><td class="mono">5,500</td><td class="mono ">12%</td><td class="mono val-gold">4,840</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
+              <tr><td>Padres y familias con niños (0-10 años)</td><td class="mono">7,420</td><td class="mono ">18%</td><td class="mono val-gold">6,084</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
+              <tr><td>Personas con condición postural</td><td class="mono">5,830</td><td class="mono ">12%</td><td class="mono val-gold">5,130</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
               <tr><td>Personas con fascitis y dolor plantar</td><td class="mono">3,000</td><td class="mono ">10%</td><td class="mono val-gold">2,700</td><td>Estable</td></tr>
-              <tr><td>Comerciantes y trabajadores de mercado</td><td class="mono">8,000</td><td class="mono ">18%</td><td class="mono val-gold">6,560</td><td>Creciente</td></tr>
-              <tr><td>Jóvenes urbanos / lifestyle boliviano</td><td class="mono">4,500</td><td class="mono val-neg">45%</td><td class="mono val-gold">2,475</td><td>Creciente</td></tr>
-              <tr><td>Personal de salud y bienestar</td><td class="mono">5,000</td><td class="mono ">10%</td><td class="mono val-gold">4,500</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
+              <tr><td>Comerciantes y trabajadores de mercado</td><td class="mono">8,240</td><td class="mono ">18%</td><td class="mono val-gold">6,757</td><td>Creciente</td></tr>
+              <tr><td>Jóvenes urbanos / lifestyle boliviano</td><td class="mono">4,635</td><td class="mono val-neg">45%</td><td class="mono val-gold">2,549</td><td>Creciente</td></tr>
+              <tr><td>Personal de salud y bienestar</td><td class="mono">5,300</td><td class="mono ">10%</td><td class="mono val-gold">4,770</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
             </tbody>
           </table>
         </div>
@@ -1974,16 +1974,20 @@
               <tr><td>(−) Costo de ventas</td><td>Costo de producir y distribuir las unidades vendidas</td><td class="mono">Ventas reales × Costo unitario</td></tr>
               <tr><td>= Utilidad bruta</td><td>Primer margen: diferencia entre ingresos y costos directos</td><td class="mono">Ventas netas − Costo de ventas</td></tr>
               <tr><td>(−) Publicidad / Promoción / Eventos / Redes / RRPP</td><td>Gastos en marketing decididos por el equipo</td><td class="mono">Datos de la hoja de decisiones</td></tr>
-              <tr><td>(−) Fuerza de ventas</td><td>Costo total de vendedores (sueldo + contratación + despido)</td><td class="mono">Vend.finales×2,400 + contrat.×500 + desp.×800</td></tr>
-              <tr><td>(−) Gasto administrativo fijo</td><td>Costo fijo de administración y gestión</td><td class="mono">Bs 8,000 / trimestre</td></tr>
-              <tr><td>(−) Gasto fijo de planta</td><td>Costo fijo de operación de la planta productiva</td><td class="mono">Bs 5,000 / trimestre</td></tr>
-              <tr><td>(−) Depreciación</td><td>Reducción del valor contable de activos fijos. NO sale de caja.</td><td class="mono">Bs 2,000 / trimestre</td></tr>
+              <tr><td>(−) Fuerza de ventas</td><td>Costo total de vendedores (sueldo + contratación + despido)</td><td class="mono">Vend.finales×5,000 + contrat.×2,000 + desp.×3,000</td></tr>
+              <tr><td>(−) Gasto administrativo fijo</td><td>Costo fijo de administración y gestión</td><td class="mono">Bs 55,000 / trimestre</td></tr>
+              <tr><td>(−) Gasto fijo de planta</td><td>Costo fijo de operación de la planta productiva</td><td class="mono">Bs 15,000 / trimestre</td></tr>
+              <tr><td>(−) Depreciación</td><td>Reducción del valor contable de activos fijos. NO sale de caja.</td><td class="mono">Bs 9,000 / trimestre</td></tr>
+              <tr><td>(−) Operarios de producción</td><td>Costo de operarios activos (sueldo + contratación + despido)</td><td class="mono">Op.finales×3,200 + contrat.×800 + desp.×1,200</td></tr>
               <tr><td>(−) Almacenamiento inventario</td><td>Costo de mantener el inventario no vendido</td><td class="mono">Inventario final (unid) × Bs 0.10</td></tr>
               <tr><td>(−) Inversión en innovación</td><td>Gasto de innovación del trimestre (si eligió innovar)</td><td class="mono">Monto elegido en decisiones</td></tr>
               <tr><td>(−) Interés préstamo</td><td>Costo financiero de los préstamos vigentes</td><td class="mono">Monto préstamo × Tasa trimestral</td></tr>
               <tr><td>(−) Interés sobregiro</td><td>Costo financiero del sobregiro automático (si aplica)</td><td class="mono">Sobregiro × 6%</td></tr>
               <tr><td>(−) Comisión apertura préstamo</td><td>Costo único al tomar el préstamo</td><td class="mono">Monto préstamo × 1%</td></tr>
-              <tr><td>= UTILIDAD NETA</td><td>Resultado final del trimestre después de todos los costos</td><td class="mono">Utilidad bruta − suma de todos los gastos</td></tr>
+              <tr><td>(−) IVA a pagar</td><td>Débito fiscal − Crédito fiscal. Sale de caja y reduce utilidad.</td><td class="mono">IVA ventas netas (13%) − IVA costos (13%)</td></tr>
+              <tr><td>(−) Impuesto a las Transacciones (IT)</td><td>3% sobre ventas brutas. Pago trimestral.</td><td class="mono">Ventas brutas × 3%</td></tr>
+              <tr><td>(−) IUE (provisión)</td><td>25% sobre utilidad gravable. Se paga cada 4 trimestres.</td><td class="mono">Utilidad gravable × 25% ÷ 4 (provisión)</td></tr>
+              <tr><td>= UTILIDAD NETA</td><td>Resultado final después de todos los costos e impuestos</td><td class="mono">Utilidad operativa − IVA − IT − IUE</td></tr>
             </tbody>
           </table>
         </div>
@@ -1995,14 +1999,14 @@
             <tbody>
               <tr><td colspan="3" style="background:rgba(158,216,48,0.07);color:#9ED830;font-weight:600;font-size:.78rem;letter-spacing:1px;padding:8px 14px;">ACTIVOS</td></tr>
               <tr><td>Caja y equivalentes</td><td>Efectivo disponible al cierre del trimestre</td><td class="mono">Resultado del Paso 9 del motor</td></tr>
-              <tr><td>Cuentas por cobrar (CxC)</td><td>30% de las ventas netas del trimestre, que se cobran el siguiente</td><td class="mono">Ventas netas × 30%</td></tr>
+              <tr><td>Cuentas por cobrar (CxC)</td><td>15% de las ventas netas del trimestre, que se cobran el siguiente</td><td class="mono">Ventas netas × 15%</td></tr>
               <tr><td>Inventarios (valorizado)</td><td>Inventario final en unidades × costo unitario del trimestre</td><td class="mono">Inv. final (unid) × CU</td></tr>
               <tr><td>Activos fijos netos</td><td>Valor contable de planta y equipo después de depreciación</td><td class="mono">AF iniciales − Bs 2,000 × N trimestres</td></tr>
               <tr><td colspan="3" style="background:rgba(192,57,43,0.06);color:#EF9A9A;font-weight:600;font-size:.78rem;letter-spacing:1px;padding:8px 14px;">PASIVOS</td></tr>
               <tr><td>Deuda de préstamos</td><td>Saldo pendiente de todos los préstamos tomados</td><td class="mono">Deuda inicial + Ingreso − Cuotas pagadas</td></tr>
               <tr><td>Sobregiro bancario</td><td>Deuda automática generada por caja negativa (si aplica)</td><td class="mono">Igual al monto del sobregiro activado</td></tr>
               <tr><td colspan="3" style="background:rgba(46,139,87,0.06);color:#81C784;font-weight:600;font-size:.78rem;letter-spacing:1px;padding:8px 14px;">PATRIMONIO</td></tr>
-              <tr><td>Capital contable</td><td>Capital original. No varía con los resultados.</td><td class="mono">Bs 130,000 (caja inicial + AF iniciales)</td></tr>
+              <tr><td>Capital contable</td><td>Capital original. No varía con los resultados.</td><td class="mono">Bs 456,000 (caja inicial Bs 96,000 + AF Bs 360,000)</td></tr>
               <tr><td>Resultado acumulado</td><td>Suma de todas las utilidades netas desde el inicio (puede ser negativo)</td><td class="mono">Resultado acum. anterior + Utilidad neta T</td></tr>
             </tbody>
           </table>
