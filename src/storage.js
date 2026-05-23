@@ -580,21 +580,39 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             nuevaDec.tipoPrestamo = 'Ninguno'; nuevaDec.montoPrestamo = 0; nuevaDec.amortizacion = 0;
             nuevaDec.innovacion = false; nuevaDec.tipoInnovacion = ''; nuevaDec.montoInnovacion = 0;
             nuevaDec.tipoInvestigacion = 'No';
-            const resPrev = prevRonda.resultados[eq.id];
+            // FIX multiproducto: buscar resultado por ID base O por equipoOriginal
+            const resPrev = prevRonda.resultados[eq.id]
+              || Object.values(prevRonda.resultados || {}).find(r =>
+                   r.equipoOriginal === eq.id
+                   || (r.equipo||'').startsWith(eq.id)
+                 );
+
             if (resPrev) {
+              // Para multiproducto: tomar caja/deuda/CxC del primer producto (son de empresa)
+              // Los campos de empresa son iguales en todos los productos del mismo equipo
               nuevaDec.cajaInicial          = Math.max(0, resPrev.cajaFinal);
               nuevaDec.cxcInicial           = Math.max(0, resPrev.cxcFinal);
               nuevaDec.deudaInicial         = Math.max(0, resPrev.deudaFinal);
-              nuevaDec.inventarioInicial    = Math.max(0, resPrev.inventarioFinal);
-              nuevaDec.vendedoresIniciales  = Math.max(1, resPrev.vendedoresFinales);
-              nuevaDec.activosFijosIniciales= Math.max(0, resPrev.activosFijosNetos || 78000);
+              nuevaDec.activosFijosIniciales= Math.max(0, resPrev.activosFijosNetos || resPrev.afNetos || 78000);
               nuevaDec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado;
               nuevaDec.brandEquityInicial   = resPrev.brandEquityFinal ?? 50;
               // Etapa 3.1: propagar stock de MP y pedidos pendientes
               nuevaDec.stockMPInicial      = Math.max(0, resPrev.stockMPFinal ?? 0);
               nuevaDec.pedidosPendientes   = resPrev.pedidosPendientesResta ?? [];
-              // Etapa 3.2: propagar operarios
+              // Etapa 3.2: propagar operarios (campo de empresa)
               nuevaDec.operariosIniciales  = Math.max(1, resPrev.operariosFinales ?? 4);
+              // Etapa 3.2: propagar vendedores (campo de empresa)
+              nuevaDec.vendedoresIniciales = Math.max(1, resPrev.vendedoresFinales ?? 2);
+
+              // Para multiproducto: sumar inventario de todos los productos de la empresa
+              const todosResultados = Object.values(prevRonda.resultados || {}).filter(r =>
+                r.equipoOriginal === eq.id || (r.equipo||'').startsWith(eq.id)
+              );
+              if (todosResultados.length > 1) {
+                nuevaDec.inventarioInicial = todosResultados.reduce((s,r) => s + Math.max(0, r.inventarioFinal||0), 0);
+              } else {
+                nuevaDec.inventarioInicial = Math.max(0, resPrev.inventarioFinal || 0);
+              }
             }
             rondaBase.decisiones[eq.id] = nuevaDec;
           } else {
