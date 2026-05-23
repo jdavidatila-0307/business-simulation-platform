@@ -268,7 +268,10 @@ function setupNav(screenId) {
       if (btn.dataset.view === 'admin-competencia') loadAdminCompetencia();
       if (btn.dataset.view === 'admin-creditos') loadAdminCreditos();
       if (btn.dataset.view === 'admin-dashboard') loadAdminDashboard();
-      if (btn.dataset.view === 'admin-equipos') loadAdminEquipos();
+      if (btn.dataset.view === 'admin-equipos') {
+        if (typeof loadAdminEquipos === 'function') loadAdminEquipos();
+        else loadAdminSimulaciones(); // fallback
+      }
       if (btn.dataset.view === 'admin-rondas') loadAdminRondas();
       if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
       if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
@@ -518,6 +521,22 @@ async function initAdmin() {
 }
 
 // ── Admin Simulaciones ─────────────────────────────────────
+async function loadAdminEquipos() {
+  const el = document.getElementById('admin-equipos-content');
+  if (!el) return;
+  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  try {
+    const equipos = await api('GET', '/admin/equipos');
+    if (!equipos?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin equipos registrados.</p>'; return; }
+    const rows = equipos.map((eq,i) => `
+      <tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'][i%9]};margin-right:6px"></span>${eq.nombre}</td>
+        <td class="num">${eq.id}</td>
+      </tr>`).join('');
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Equipo</th><th>ID</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  } catch(e) { el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>'; }
+}
+
 async function loadAdminSimulaciones() {
 
   let plantillasDisponibles = [];
@@ -898,7 +917,13 @@ async function loadAdminDashboard() {
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
   document.getElementById('btnCerrarDash')?.addEventListener('click',  doCerrarRonda);
   document.getElementById('btnForzarTodosDash')?.addEventListener('click', doForzarTodos);
-  document.getElementById('btnSiguienteDash')?.addEventListener('click', doSiguienteRonda);
+  document.getElementById('btnSiguienteDash')?.addEventListener('click', async () => {
+    try {
+      await api('POST', '/admin/siguiente-ronda');
+      toast('✅ Ronda siguiente abierta', 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  });
   document.getElementById('btnRefreshDash')?.addEventListener('click', loadAdminDashboard);
 
   if (ronda.roundState === 'simulated') renderAdminCharts();
