@@ -2002,32 +2002,37 @@ window.eliminarCompetidor = (i) => {
 // ═══════════════════════════════════════════════════════════
 // ── Imprimir panel activo del equipo ─────────────────────────
 function printPanelActivo() {
-  const views = ['eq-financiero-content','equipoResultadosContent',
-                 'eq-creditos-content','reportesContent','hojaContent'];
-  const labels = {
-    'eq-financiero-content':   'Estados Financieros',
-    'equipoResultadosContent': 'KPIs y Resultados',
-    'eq-creditos-content':     'Créditos y Financiamiento',
-    'reportesContent':         'Investigación de Mercado',
-    'hojaContent':             'Hoja de Decisión',
-  };
-  const nombre  = (state.me && state.me.nombre) || '';
-  const ronda   = hojaRondaActual || 1;
+  const nombre = (state.me && state.me.nombre) || '';
+  const ronda  = hojaRondaActual || 1;
+  const sub    = 'Trimestre ' + ronda + ' / 20';
 
-  // Encontrar el contenedor activo con contenido
-  for (const id of views) {
-    const el = document.getElementById(id);
-    if (el && el.innerHTML.trim().length > 50) {
-      // Para Estados Financieros imprimir TODO (PL + BG + FC juntos)
-      if (id === 'eq-financiero-content') {
-        printFinancieroCompleto(nombre, ronda);
-        return;
-      }
-      printPanel(id, labels[id] + ' — ' + nombre, 'Trimestre ' + ronda + ' / 20');
-      return;
-    }
+  // Detectar la VIEW activa por clase CSS 'active'
+  const activeView = document.querySelector('#screen-equipo .view.active');
+  if (!activeView) { toast('Navega a un panel primero', 'info'); return; }
+
+  const viewId = activeView.id;
+
+  if (viewId === 'eq-financiero') {
+    printFinancieroCompleto(nombre, ronda);
+    return;
   }
-  toast('Navega a un panel primero', 'info');
+  if (viewId === 'eq-resultados') {
+    printPanel('equipoResultadosContent', 'KPIs y Resultados — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-creditos') {
+    printPanel('eq-creditos-content', 'Créditos y Financiamiento — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-reportes') {
+    printPanel('reportesContent', 'Investigación de Mercado — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-hoja') {
+    printHoja();
+    return;
+  }
+  toast('Este panel no tiene versión imprimible', 'info');
 }
 
 // ── Imprimir Estados Financieros completos (P&L + BG + FC) ────
