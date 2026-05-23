@@ -1344,7 +1344,7 @@
             <div class="dc-icon dc-red">🏦</div>
             <h4>3.10 Financiamiento</h4>
           </div>
-          <p class="insight">Préstamos operativos (4% trimestral) o de inversión (3% trimestral), más comisión de apertura del 1%. El sobregiro automático cuesta 6% — evítalo planificando el flujo de caja.</p>
+          <p class="insight">Préstamos operativos (3.5% trimestral) o de inversión (2.5% trimestral), más comisión de apertura del 1.5%. El sobregiro automático cuesta 5.5%. Evítalo planificando el flujo de caja con anticipación.</p>
           <div class="tip">Endeúdate para crecer, no para cubrir pérdidas recurrentes. Controla el ratio Deuda/Activos &lt; 0.6.</div>
           <p class="dc-refs">Altman (1968) · Graham & Leary (2011)</p>
         </div>
@@ -1359,12 +1359,74 @@
           <p class="dc-refs">Henderson & Clark (1990) · Danneels (2002) · Teece (2018)</p>
         </div>
 
+        <div class="decision-card" data-num="11">
+          <div class="dc-top">
+            <div class="dc-icon dc-gold">📦</div>
+            <h4>3.13 Estrategia Multiproducto</h4>
+          </div>
+          <p class="insight">Cada empresa puede lanzar hasta <strong>5 productos simultáneos</strong>. Cada producto compite de forma independiente en el mercado con su propio precio, segmento y canal. Los gastos fijos (admin, planta, operarios) se pagan una sola vez por empresa.</p>
+
+          <div style="margin:12px 0;background:var(--bg2);border-radius:var(--r);padding:14px 18px">
+            <div style="font-family:var(--font-mono);font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Lógica del simulador para productos adicionales</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.82rem">
+              <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+                <div style="font-weight:700;color:var(--accent3);margin-bottom:4px">1 · Expansión independiente</div>
+                <p style="color:var(--text2)">El motor convierte cada producto en una <strong>decisión independiente</strong>. Cada uno calcula su propio atractivo, share de mercado y resultado financiero.</p>
+              </div>
+              <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+                <div style="font-weight:700;color:var(--accent3);margin-bottom:4px">2 · Competencia en el Logit</div>
+                <p style="color:var(--text2)">Cada producto compite contra <strong>todos los productos del mercado</strong> en su segmento usando el modelo Logit. El share depende del atractivo relativo frente a los rivales.</p>
+              </div>
+              <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+                <div style="font-weight:700;color:var(--accent4);margin-bottom:4px">3 · Canibalización (−15%)</div>
+                <p style="color:var(--text2)">Si dos productos del mismo equipo compiten en el <strong>mismo segmento</strong>, se aplica un factor de canibalización del 15% por cada producto propio adicional — se roban ventas entre sí.</p>
+              </div>
+              <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+                <div style="font-weight:700;color:var(--accent3);margin-bottom:4px">4 · Consolidación financiera</div>
+                <p style="color:var(--text2)">Las ventas y costos variables se suman. Los <strong>gastos fijos se cargan una sola vez</strong> por empresa (no se multiplican por el número de productos). La caja es única para toda la empresa.</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin:10px 0;overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Estrategia</th>
+                  <th>Ventaja</th>
+                  <th>Riesgo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>5 productos en 5 segmentos distintos</strong></td>
+                  <td>Diversificación · Más mercado total</td>
+                  <td>Publicidad diluida · Brand Equity fragmentado</td>
+                </tr>
+                <tr>
+                  <td><strong>5 productos en 1 segmento</strong></td>
+                  <td>Domina el segmento</td>
+                  <td class="val-neg">Canibalización del 60% del share propio</td>
+                </tr>
+                <tr>
+                  <td><strong>2–3 productos complementarios</strong></td>
+                  <td>Balance óptimo · Cubre distintos precios</td>
+                  <td>Requiere gestión más compleja</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tip">⚠ Lanzar 5 productos no garantiza más ganancias. Con 30 productos en el mercado (6 equipos × 5), el share se fragmenta. El éxito depende de la <strong>afinidad producto-segmento</strong> y la inversión en publicidad por producto.</div>
+          <p class="dc-refs">Quelch & Kenny (1994) · Moorthy (1984) · Keller (2013)</p>
+        </div>
+
         <div class="decision-card" data-num="10">
           <div class="dc-top">
             <div class="dc-icon dc-blue">🔍</div>
             <h4>3.12 Investigación de Mercado</h4>
           </div>
-          <p class="insight">Básica (Bs 4.000): tamaño de mercado, precios observados y alertas. Premium (Bs 7.500): añade participación por segmento, sensibilidad del consumidor y recomendaciones genéricas.</p>
+          <p class="insight">Básica (Bs 5.000): tamaño de mercado, precios observados y alertas. Premium (Bs 12.000): añade participación por segmento, sensibilidad del consumidor y recomendaciones genéricas.</p>
           <div class="tip">La información reduce asimetría (Akerlof, 1970). Invierte en premium cuando la incertidumbre es alta o el mercado cambia rápidamente.</div>
           <p class="dc-refs">Akerlof (1970) · Simchi-Levi et al. (2014)</p>
         </div>
