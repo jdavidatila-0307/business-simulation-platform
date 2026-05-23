@@ -26,7 +26,7 @@
     "capacidadMaxProduccion": 1500,
     "gastoAdminFijo": 165000,
     "gastoFijoPlanta": 45000,
-    "depreciacionTrimestral": 27000,
+    "depreciacionTrimestral": 2500,
     "costoAlmacenamientoUnidad": 5,
     "pctVentasContado": 0.85,
     "pctVentasCredito": 0.15,
