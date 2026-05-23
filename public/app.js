@@ -4077,29 +4077,24 @@ async function doLogout() {
 //  INIT — check existing session
 // ═══════════════════════════════════════════════════════════
 async function init() {
-  // ── Ocultar TODAS las pantallas mientras verificamos la sesión ──────
-  // Evita el flash de login que ocurre durante el await de /auth/me
-  document.querySelectorAll('.screen').forEach(s => s.style.visibility = 'hidden');
+  // ── Bloquear render hasta confirmar sesión ───────────────────────
+  // Usamos display:none en body para evitar cualquier flash de login
+  document.body.style.display = 'none';
 
   initLogin();
   try {
     const me = await api('GET', '/auth/me');
     state.me = me;
-    // ── BUG CRÍTICO CORREGIDO: 'admin' solo era el único rol aceptado.
-    //    'superadmin' y 'profesor' caían a initEquipo() causando 400 en
-    //    /api/decisiones → excepción → vuelta al login en cada recarga.
     if (me.rol === 'admin' || me.rol === 'superadmin' || me.rol === 'profesor') {
       await initAdmin();
     } else {
       await initEquipo();
     }
   } catch {
-    // Sin sesión válida → mostrar login
-    document.querySelectorAll('.screen').forEach(s => s.style.visibility = '');
     showScreen('screen-login');
   } finally {
-    // Restaurar visibilidad en todos los casos (sesión válida o no)
-    document.querySelectorAll('.screen').forEach(s => s.style.visibility = '');
+    // Mostrar la UI ya con la pantalla correcta — sin flash
+    document.body.style.display = '';
   }
 }
 
