@@ -2492,12 +2492,19 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-label">👥 Vendedores actuales</td>
             <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
+          ${hojaProductoActivo === 0 ? `
           <tr><td class="hoja-label">➕ Contratar vendedores</td>
               <td>${inp('contratarVendedores',decision.contratarVendedores??0,'number','min="0" max="10" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
           <tr><td class="hoja-label">➖ Despedir vendedores</td>
               <td>${inp('despedirVendedores',decision.despedirVendedores??0,'number','min="0" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
+          ` : `
+          <tr><td colspan="4" style="padding:6px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
+            ℹ️ Contratar/despedir vendedores se gestiona en <strong>Producto 1</strong> · Aplica a toda la empresa.
+            Valor actual: ➕ ${decision.contratarVendedores??0} · ➖ ${decision.despedirVendedores??0}
+          </td></tr>
+          `}
         </tbody>
       </table>
     </div>
@@ -2515,6 +2522,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-ref">Propagado de ronda anterior</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
           </tr>
+          ${hojaProductoActivo === 0 ? `
           <tr>
             <td class="hoja-label">➕ Contratar operarios</td>
             <td>${inp('contratarOperarios', decision.contratarOperarios ?? 0, 'number', 'min="0" max="20" step="1"')}</td>
@@ -2533,6 +2541,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-ref">+${fmt.pct(p.factorCapacitacion ?? 0.05)} productividad por cada Bs 10.000</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. = operarios × ${p.productividadBase ?? 440} × (1 + factor)</td>
           </tr>
+          ` : `
+          <tr><td colspan="4" style="padding:6px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
+            ℹ️ Contratar/despedir operarios y capacitación se gestionan en <strong>Producto 1</strong> · Aplica a toda la empresa.
+            Valor actual: ➕ ${decision.contratarOperarios??0} operarios · ➖ ${decision.despedirOperarios??0} · Capacitación Bs ${fmt.num(decision.montoCapacitacion??0)}
+          </td></tr>
+          `}
         </tbody>
       </table>
     </div>
