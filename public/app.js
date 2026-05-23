@@ -2533,81 +2533,84 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   if (roundState === 'pre-sim') {
     try {
       const psData = await api('GET', '/api/presim');
-      const ps = psData.presim;
-      const yaConfirmado = ps.confirmado;
+      // presim puede ser un objeto (1 producto) o array (múltiples productos)
+      const psRaw = psData.presim;
+      const psList = Array.isArray(psRaw) ? psRaw : [psRaw];
+      const yaConfirmado = psList.every(p => p.confirmado);
+
+      // Construir filas de tabla para cada producto
+      const filas = psList.map((ps, idx) => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 14px;font-weight:700;color:var(--accent3)">
+            Producto ${idx+1}
+          </td>
+          <td style="padding:10px 14px;font-size:.82rem">${ps.producto||'—'}</td>
+          <td style="padding:10px 14px;font-size:.82rem">${ps.segmento||'—'}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono)">${fmt.num(ps.demandaFormal)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">${fmt.pct(ps.shareEstimado)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent5);font-weight:700">${fmt.num(ps.demandaAsignada)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono)">${fmt.num(ps.produccion)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent5);font-weight:700">${fmt.num(ps.ventasEstimadas)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:${(ps.inventarioFinalEst||0)>0?'var(--accent4)':'var(--text)'}">${fmt.num(ps.inventarioFinalEst)}</td>
+        </tr>
+      `).join('');
+
+      const totalVentas     = psList.reduce((s,p) => s + (p.ventasEstimadas||0), 0);
+      const totalDemanda    = psList.reduce((s,p) => s + (p.demandaAsignada||0), 0);
+      const totalProduccion = psList.reduce((s,p) => s + (p.produccion||0), 0);
 
       cont.innerHTML = `
-        <div style="max-width:620px;margin:0 auto;padding:20px">
-          <div style="text-align:center;margin-bottom:24px">
-            <div style="font-size:2.5rem;margin-bottom:10px">📊</div>
-            <h3 style="font-size:1.05rem;font-weight:700;color:var(--accent3)">Ronda ${n} — Tu Demanda Estimada</h3>
-            <p style="color:var(--text2);font-size:.84rem;margin-top:6px">
-              El profesor ejecutó el cálculo de demanda. Revisa los datos y confirma que los recibiste.
+        <div style="max-width:860px;margin:0 auto;padding:20px">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:2rem;margin-bottom:8px">📊</div>
+            <h3 style="font-size:1.05rem;font-weight:700;color:var(--accent3)">Ronda ${n} — Demanda Estimada por Producto</h3>
+            <p style="color:var(--text2);font-size:.84rem;margin-top:4px">
+              El profesor ejecutó el cálculo de demanda para tus ${psList.length} producto(s). Revisa y confirma.
             </p>
           </div>
 
-          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:16px">
-            <div style="background:var(--bg3);padding:10px 18px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
+            <div style="background:var(--bg3);padding:8px 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">
               Resultados del cálculo de mercado
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-              <div style="padding:16px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Segmento objetivo</div>
-                <div style="font-weight:700;color:var(--text)">${ps.segmento}</div>
-              </div>
-              <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Producto</div>
-                <div style="font-weight:700;color:var(--text)">${ps.producto}</div>
-              </div>
-              <div style="padding:16px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Demanda formal del segmento</div>
-                <div style="font-family:var(--font-mono);font-size:1.2rem;font-weight:700;color:var(--accent2)">${fmt.num(ps.demandaFormal)} unid</div>
-              </div>
-              <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Tu market share estimado</div>
-                <div style="font-family:var(--font-mono);font-size:1.2rem;font-weight:700;color:var(--accent3)">${fmt.pct(ps.shareEstimado)}</div>
-              </div>
-              <div style="padding:16px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Demanda asignada a tu empresa</div>
-                <div style="font-family:var(--font-mono);font-size:1.4rem;font-weight:700;color:var(--accent5)">${fmt.num(ps.demandaAsignada)} unid</div>
-              </div>
-              <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Inventario disponible</div>
-                <div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--text)">${fmt.num(ps.inventarioDisponible)} unid</div>
-                <div style="font-size:.7rem;color:var(--text3)">Inventario inicial ${fmt.num(ps.inventarioInicial)} + Producción ${fmt.num(ps.produccion)}</div>
-              </div>
-              <div style="padding:16px 20px;border-right:1px solid var(--border)">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">✅ Ventas que se registrarán</div>
-                <div style="font-family:var(--font-mono);font-size:1.4rem;font-weight:700;color:var(--accent5)">${fmt.num(ps.ventasEstimadas)} unid</div>
-                <div style="font-size:.7rem;color:var(--text3)">= min(demanda asignada, inventario disponible)</div>
-              </div>
-              <div style="padding:16px 20px">
-                <div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Inventario final estimado</div>
-                <div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:${ps.inventarioFinalEst > ps.produccion*0.2 ? 'var(--accent4)' : 'var(--text)'}">${fmt.num(ps.inventarioFinalEst)} unid</div>
-                ${ps.inventarioFinalEst > ps.produccion*0.2 ? '<div style="font-size:.7rem;color:var(--accent4)">⚠ Exceso de inventario (&gt;20% de producción)</div>' : ''}
-              </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+                <thead>
+                  <tr style="background:rgba(255,255,255,.04)">
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">#</th>
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producto</th>
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Segmento</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Demanda formal</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Market share</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Demanda asignada</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producción</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Ventas estimadas</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Inv. final est.</th>
+                  </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+                <tfoot>
+                  <tr style="background:rgba(6,255,165,.06);border-top:2px solid var(--border2)">
+                    <td colspan="5" style="padding:8px 14px;font-weight:700;font-size:.82rem">TOTAL EMPRESA</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;color:var(--accent5)">${fmt.num(totalDemanda)}</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700">${fmt.num(totalProduccion)}</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;color:var(--accent5)">${fmt.num(totalVentas)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
 
-          <div style="background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:var(--text2)">
-            <strong style="color:var(--accent3)">ℹ️ ¿Qué significa esto?</strong><br>
-            Estos son los valores que el simulador usará cuando el profesor ejecute la simulación final. 
-            El cálculo considera tu atractivo competitivo frente a los demás equipos y la demanda real del segmento.
-            <strong>No puedes modificar estos valores</strong> — son el resultado de tus decisiones ya enviadas.
+          <div style="background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:.81rem;color:var(--text2)">
+            <strong style="color:var(--accent3)">ℹ️ ¿Qué significa esto?</strong> —
+            Valores que el simulador usará en la simulación final. Reflejan tu atractivo competitivo frente a todos los equipos.
+            <strong>No puedes modificarlos</strong> — son resultado de tus decisiones enviadas.
           </div>
 
           ${yaConfirmado
-            ? `<div style="text-align:center;padding:16px;background:rgba(6,255,165,.08);border:1px solid rgba(6,255,165,.3);border-radius:var(--r)">
-                <span style="font-size:1.5rem">✅</span>
-                <p style="color:var(--accent5);font-weight:700;margin-top:6px">Ya confirmaste la recepción de este dato</p>
-                <p style="color:var(--text2);font-size:.82rem;margin-top:4px">Espera a que el profesor ejecute la simulación final.</p>
-               </div>`
-            : `<button class="btn btn-success btn-full" style="padding:14px;font-size:.95rem" id="btnConfirmarPresim">
-                ✓ Confirmar — Recibí mi demanda estimada
-               </button>
-               <p style="text-align:center;font-size:.74rem;color:var(--text3);margin-top:8px">
-                 Al confirmar le indicas al profesor que viste estos datos y está listo para simular.
-               </p>`
+            ? '<div style="text-align:center;padding:14px;background:rgba(6,255,165,.08);border:1px solid rgba(6,255,165,.3);border-radius:var(--r)"><span style="font-size:1.4rem">✅</span><p style="color:var(--accent5);font-weight:700;margin-top:4px">Ya confirmaste la recepción de estos datos</p><p style="color:var(--text2);font-size:.82rem;margin-top:4px">Espera a que el profesor ejecute la simulación final.</p></div>'
+            : '<button class="btn btn-success btn-full" style="padding:12px;font-size:.95rem" id="btnConfirmarPresim">✓ Confirmar — Recibí mi demanda estimada</button><p style="text-align:center;font-size:.74rem;color:var(--text3);margin-top:6px">Al confirmar le indicas al profesor que viste estos datos.</p>'
           }
         </div>`;
 
