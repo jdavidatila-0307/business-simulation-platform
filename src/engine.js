@@ -26,6 +26,20 @@ function expandirDecisionesMultiproducto(decisiones) {
   const expandidas = [];
 
   (decisiones || []).forEach(decisionEmpresa => {
+    // FIX: garantizar que el campo canónico "producto" exista antes de expandir.
+    // El formulario legado puede haber guardado "tipoProducto" en lugar de "producto".
+    if (!decisionEmpresa.producto && decisionEmpresa.tipoProducto) {
+      decisionEmpresa = { ...decisionEmpresa, producto: decisionEmpresa.tipoProducto };
+    }
+    // Propagar también al array productos[0] si corresponde
+    if (Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos[0]
+        && !decisionEmpresa.productos[0].producto && decisionEmpresa.producto) {
+      decisionEmpresa.productos[0] = {
+        ...decisionEmpresa.productos[0],
+        producto: decisionEmpresa.producto
+      };
+    }
+
     // Soporte tanto para formato nuevo (productos[]) como legado (campos planos)
     const productos =
       Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos.length
@@ -37,11 +51,29 @@ function expandirDecisionesMultiproducto(decisiones) {
       const equipoOriginal = decisionEmpresa.equipo;
       const equipoProductoId = `${equipoOriginal}__${productoId}`;
 
+      // Campos de empresa que NO deben ser sobreescritos por el producto
+      const camposEmpresa = {
+        contratarVendedores:  decisionEmpresa.contratarVendedores  || 0,
+        despedirVendedores:   decisionEmpresa.despedirVendedores   || 0,
+        vendedoresIniciales:  decisionEmpresa.vendedoresIniciales,
+        tipoPrestamo:         decisionEmpresa.tipoPrestamo,
+        montoPrestamo:        decisionEmpresa.montoPrestamo,
+        plazoPrestamo:        decisionEmpresa.plazoPrestamo,
+        amortizacion:         decisionEmpresa.amortizacion,
+        cajaInicial:          decisionEmpresa.cajaInicial,
+        cxcInicial:           decisionEmpresa.cxcInicial,
+        deudaInicial:         decisionEmpresa.deudaInicial,
+        activosFijosIniciales:decisionEmpresa.activosFijosIniciales,
+        resultadoAcumuladoAnterior: decisionEmpresa.resultadoAcumuladoAnterior,
+      };
+
       expandidas.push({
         // Campos de empresa como base
         ...decisionEmpresa,
         // Campos del producto sobreescriben (precio, producción, canal, etc.)
         ...producto,
+        // Restaurar campos de empresa que no deben ser sobreescritos
+        ...camposEmpresa,
 
         // ID interno único para que el motor compita producto contra producto
         equipo: equipoProductoId,
@@ -63,17 +95,27 @@ function expandirDecisionesMultiproducto(decisiones) {
 
 
 
-// Demanda formal = demandaBase × (1 - pctContrabando)
-function calcularMercadoSegmentos(params, segmentos) {
-  return segmentos.map(seg => ({
-    nombre:          seg.nombre,
-    demandaBase:     seg.demandaBase,
-    pctContrabando:  seg.pctContrabando,
-    demandaFormal:   Math.round(seg.demandaBase * (1 - seg.pctContrabando)),
-    tendencia:       seg.tendencia,
-    descripcion:     seg.descripcion,
-    indiceExterno:   seg.indiceExterno,
-  }));
+// Demanda formal = demandaBase_T × (1 - pctContrabando)
+// demandaBaseAnteriorMap: { [nombreSegmento]: demandaBase de ronda anterior }
+// Si no existe (ronda 1), usa el valor estático del JSON.
+function calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap = {}) {
+  return segmentos.map(seg => {
+    // Etapa 2.2: aplicar crecimiento sobre la demanda de la ronda anterior
+    const baseAnterior = demandaBaseAnteriorMap[seg.nombre] ?? seg.demandaBase;
+    const tasa         = seg.tasaCrecimiento ?? 0;
+    const demandaBaseT = Math.round(baseAnterior * (1 + tasa));
+    return {
+      nombre:              seg.nombre,
+      demandaBase:         demandaBaseT,          // actualizada con crecimiento
+      demandaBaseOriginal: seg.demandaBase,        // valor estático del JSON
+      pctContrabando:      seg.pctContrabando,
+      demandaFormal:       Math.round(demandaBaseT * (1 - seg.pctContrabando)),
+      tendencia:           seg.tendencia,
+      tasaCrecimiento:     tasa,
+      descripcion:         seg.descripcion,
+      indiceExterno:       seg.indiceExterno,
+    };
+  });
 }
 
 // ── Paso 1: Fuerza de ventas ───────────────────────────────────
@@ -104,11 +146,93 @@ function calcularMarketing(d, costoVendedores) {
   return { mktEfectivo, gastoTotalMarketing };
 }
 
+// ── Etapa 3.2: Operarios — capacidad efectiva de producción ───
+function calcularOperarios(d, params) {
+  const operariosIniciales = d.operariosIniciales ?? params.operariosIniciales ?? 4;
+  const operariosFinales = Math.max(0,
+    operariosIniciales + (d.contratarOperarios || 0) - (d.despedirOperarios || 0)
+  );
+  const productividadBase = params.productividadBase ?? 440;
+  const factorCap = params.factorCapacitacion ?? 0.05;
+  const monto     = d.montoCapacitacion ?? 0;
+  // Capacidad efectiva = operarios × productividad × (1 + factor × monto/10000)
+  const capacidadEfectiva = Math.round(
+    operariosFinales * productividadBase * (1 + factorCap * monto / 10000)
+  );
+  const costoContratacion = (d.contratarOperarios || 0) * (params.costoContratacionOperario ?? 800);
+  const costoDespido      = (d.despedirOperarios  || 0) * (params.costoDespidoOperario     ?? 1200);
+  const costoOperarios    = roundBs(
+    operariosFinales * (params.costoOperario ?? 3200) + costoContratacion + costoDespido + monto
+  );
+  return { operariosFinales, capacidadEfectiva, costoOperarios };
+}
+
+// ── Etapa 3.1: Procesar pedidos de MP con lead time ───────────
+// Retorna { stockMPDisponible, pedidosPendientesResta, pagoMP }
+function procesarPedidosMP(d, rondaNumero, params) {
+  const pendientes   = Array.isArray(d.pedidosPendientes) ? d.pedidosPendientes : [];
+  const stockInicial = d.stockMPInicial ?? 0;
+  const costoMP      = 0;   // el costo ya fue pagado al hacer el pedido
+
+  // Pedidos que llegan esta ronda (rondaEntrega <= rondaNumero)
+  let stockRecibido = 0;
+  const pendientesResta = [];
+  for (const pedido of pendientes) {
+    if ((pedido.rondaEntrega ?? 0) <= rondaNumero) {
+      stockRecibido += pedido.cantidad;
+    } else {
+      pendientesResta.push(pedido);
+    }
+  }
+
+  // Nuevo pedido de esta ronda
+  const proveedor     = d.proveedorElegido || '';
+  const cantidadPedida = d.cantidadMPpedida ?? 0;
+  let pagoMP = 0;
+
+  if (cantidadPedida > 0 && proveedor) {
+    const provData = (params._proveedores || []).find(p => p.id === proveedor || p.nombre === proveedor);
+    const costoUnitMP = provData?.costoMP ?? 0;
+    const leadTime    = provData?.leadTime ?? 1;
+    pagoMP = roundBs(cantidadPedida * costoUnitMP);
+    if (leadTime === 0) {
+      stockRecibido += cantidadPedida;   // entrega inmediata
+    } else {
+      pendientesResta.push({ rondaEntrega: rondaNumero + leadTime, cantidad: cantidadPedida, costoMP: costoUnitMP });
+    }
+  }
+
+  const stockMPDisponible = stockInicial + stockRecibido;
+  return { stockMPDisponible, pedidosPendientesResta: pendientesResta, pagoMP };
+}
+
 // ── Paso 3: Costo unitario ─────────────────────────────────────
 // CU = costoBase + (0.20 × calidad) + costoCanal_prom + efecto_innovacion
 function calcularCostoUnitario(d, tiposProducto, canales, params) {
+  // FIX: recuperar producto del campo legado tipoProducto si el canónico está vacío
+  if (!d.producto && d.tipoProducto) {
+    d = { ...d, producto: d.tipoProducto };
+  }
+  // Intentar también desde productos[0] si está disponible
+  if (!d.producto && Array.isArray(d.productos) && d.productos[0]?.producto) {
+    d = { ...d, producto: d.productos[0].producto };
+  }
+
   const tp = tiposProducto[d.producto];
-  if (!tp) throw new Error(`Producto desconocido: ${d.producto}`);
+  if (!tp) {
+    console.error('[motor] calcularCostoUnitario — producto no encontrado', {
+      equipo:           d.equipo,
+      producto:         d.producto,
+      tipoProducto:     d.tipoProducto,
+      productosTipo:    typeof d.producto,
+      productosCero:    d.productos?.[0]?.producto,
+      tiposDisponibles: Object.keys(tiposProducto),
+    });
+    throw new Error(
+      `Producto desconocido: "${d.producto}". ` +
+      `Disponibles: ${Object.keys(tiposProducto).join(', ')}`
+    );
+  }
 
   const costoBase    = tp.costoBase;
   const costoCalidad = 0.20 * (d.calidad || 5);
@@ -132,9 +256,26 @@ function calcularCostoUnitario(d, tiposProducto, canales, params) {
   return roundBs(costoBase + costoCalidad + costoCanal + efInnovacion);
 }
 
+// ── Brand Equity: cálculo acumulativo por ronda ───────────────
+// BE crece con ventas y utilidad; decae si el equipo no vende.
+// brandEquityAnterior: valor propagado de la ronda anterior (default 50)
+// shareReal:           fracción de demanda capturada [0-1]
+// utilidadNeta:        resultado del período (puede ser negativo)
+// tasaDecaimiento:     parámetro del JSON (default 0.05)
+function calcularBrandEquity(brandEquityAnterior, shareReal, utilidadNeta, tasaDecaimiento) {
+  const bea = brandEquityAnterior ?? 50;
+  const td  = tasaDecaimiento ?? 0.05;
+  const vendio = shareReal > 0;
+  const bonusUtilidad = utilidadNeta > 0 ? 5 : 0;
+  const ganancia = shareReal * 100 + bonusUtilidad;
+  const factorDecaimiento = vendio ? (1 - td) : (1 - td * 2);
+  const nuevoBE = bea * factorDecaimiento + (vendio ? ganancia : 0);
+  return Math.max(0, Math.round(nuevoBE * 100) / 100);
+}
+
 // ── Paso 5: Atractivo competitivo ─────────────────────────────
 // A = afinidad + (0.8×calidad) + (0.0001×mktEfectivo) − (0.7×precio) + bonoCanal + impactoVendedores
-function calcularAtractivo(d, segmento, afinidadMatrix, canales, vendedoresFinales) {
+function calcularAtractivo(d, segmento, afinidadMatrix, canales, vendedoresFinales, params = {}) {
   const afinidad = (afinidadMatrix[d.producto]?.[segmento.idx] ?? 0);
 
   // Canal: promedio de bonos y factores si hay canal secundario
@@ -160,28 +301,63 @@ function calcularAtractivo(d, segmento, afinidadMatrix, canales, vendedoresFinal
   return afinidad
     + 0.8 * (d.calidad || 5)
     + 0.0001 * (d.gastoTotalMarketing || d.mktEfectivo || 0)  // usa gasto total incl. vendedores
-    - 0.7 * (d.precioVenta || 0)
+    + (params.coefPrecio ?? -0.7) * (d.precioVenta || 0)  // calibrado por industria
     + bonoCanal
     + impactoVendedores
-    + bonusInnovacionCanal;
+    + bonusInnovacionCanal
+    + 0.05 * (d.brandEquityInicial ?? 50);
 }
 
 // ── Paso 5b: Participación de mercado ─────────────────────────
-function calcularParticipacion(decision, equiposEnSegmento, segmentoData, afinidadMatrix, canales, vendedoresPorEquipo) {
-  // Calcular atractivo de todos los equipos en este segmento
+// Etapa 2.3: recibe params para leer factorCanibalizacion
+function calcularParticipacion(decision, equiposEnSegmento, segmentoData, afinidadMatrix, canales, vendedoresPorEquipo, params = {}) {
+  // Calcular atractivos brutos para cada equipo
   const atractivoPorEquipo = {};
-  let totalAtractivo = segmentoData.indiceExterno; // competencia externa
-
   equiposEnSegmento.forEach(d => {
-    const a = calcularAtractivo(d, segmentoData, afinidadMatrix, canales, vendedoresPorEquipo[d.equipo]);
-    atractivoPorEquipo[d.equipo] = a;
-    totalAtractivo += a;
+    atractivoPorEquipo[d.equipo] = calcularAtractivo(
+      d, segmentoData, afinidadMatrix, canales, vendedoresPorEquipo[d.equipo], params
+    );
   });
 
-  const miAtractivo = atractivoPorEquipo[decision.equipo] ?? 0;
-  const share = totalAtractivo > 0 ? miAtractivo / totalAtractivo : 0;
+  // Etapa 2.3: canibalización — penalizar atractivo si la misma empresa
+  // tiene N > 1 productos activos en este segmento.
+  const factorCanib = params.factorCanibalizacion ?? 0;
+  if (factorCanib > 0) {
+    const empresasEnSeg = {};
+    equiposEnSegmento.forEach(d => {
+      const orig = d.equipoOriginal || d.equipo;
+      empresasEnSeg[orig] = (empresasEnSeg[orig] || 0) + 1;
+    });
+    equiposEnSegmento.forEach(d => {
+      const orig = d.equipoOriginal || d.equipo;
+      const N = empresasEnSeg[orig] || 1;
+      if (N > 1) {
+        const penalizacion = Math.max(0, 1 - factorCanib * (N - 1));
+        atractivoPorEquipo[d.equipo] = atractivoPorEquipo[d.equipo] * penalizacion;
+      }
+    });
+  }
 
-  return { miAtractivo, atractivoPorEquipo, share };
+  const miAtractivoRaw = atractivoPorEquipo[decision.equipo] ?? 0;
+
+  // Etapa 2.4: parámetro de escala λ del Logit multinomial.
+  // λ = 1.0 → comportamiento neutro (igual al modelo anterior).
+  // λ > 1.0 → más sensibilidad al precio/calidad (mercado más diferenciado).
+  // λ < 1.0 → shares más uniformes (mercado más aleatorio).
+  // Rango válido: 0.1 – 3.0. Editable por el admin en params.
+  const lambda = Math.min(3.0, Math.max(0.1, params.lambdaLogit ?? 1.0));
+
+  // Transformación exponencial escalada: exp(λ × atractivo)
+  const expExterno = Math.exp(lambda * segmentoData.indiceExterno);
+  let sumaExponencial = expExterno;
+
+  for (const a of Object.values(atractivoPorEquipo)) {
+    sumaExponencial += Math.exp(lambda * a);
+  }
+
+  const share = sumaExponencial > 0 ? Math.exp(lambda * miAtractivoRaw) / sumaExponencial : 0;
+
+  return { miAtractivo: miAtractivoRaw, atractivoPorEquipo, share };
 }
 
 // ── Paso 6–7: Ventas, comisiones e inventario ─────────────────
@@ -240,6 +416,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     (d.marketingRedes     || 0) +
     (d.relacionesPublicas || 0) +
     (d.costoVendedores    || 0) +
+    (d.costoOperarios     || 0) +   // Etapa 3.2: costo de operarios
     params.gastoAdminFijo      +
     params.gastoFijoPlanta     +
     params.depreciacionTrimestral +
@@ -249,7 +426,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     comisionApertura
   );
 
-  let utilidadNeta = roundBs(utilidadBruta - gastosOp);
+  let utilidadNeta_operat = roundBs(utilidadBruta - gastosOp);
+  // Los impuestos reducen la utilidad neta (IS correcto):
+  // Se calculan más abajo (IVA, IT, IUE) y se descuentan aquí después
+  let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
 
   // Flujo de caja
   const cxcCobroEsta = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro)); // cobro cuota del CxC anterior
@@ -266,8 +446,42 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoIntereses  = interesesPrestamo;
   const pagoApertura   = comisionApertura;
 
+  // Etapa 3.3: IVA Bolivia (13%)
+  const tasaIVA   = params.tasaIVA ?? 0.13;
+  const ivaDebito  = roundBs(ventasNetas * tasaIVA);
+  const ivaCredito = roundBs(roundBs((d.produccion || 0) * costoUnitario) * tasaIVA);
+  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
+  const pagoIVA    = ivaAPagar;
+
+  // Etapa 3.4: IT (3% sobre ventas brutas) — pago trimestral
+  const tasaIT      = params.tasaIT ?? 0.03;
+  const impuestoIT  = roundBs(ventasBrutas * tasaIT);
+
+  // Etapa 3.4: IUE (25% sobre utilidad gravable) — pago anual (cada 4 trim.)
+  // Se provisiona trimestralmente; el pago real ocurre en el trimestre múltiplo de 4.
+  const tasaIUE       = params.tasaIUE ?? 0.25;
+  const periodosIUE   = params.periodosIUE ?? 4;
+  const rondaActual   = d.rondaNumero ?? 0;
+  const utilGravable  = Math.max(0, roundBs(utilidadNeta - ivaAPagar - impuestoIT));
+  const impuestoIUE   = (rondaActual > 0 && rondaActual % periodosIUE === 0)
+    ? roundBs(utilGravable * tasaIUE)
+    : 0;
+  const provisionIUE  = roundBs(utilGravable * tasaIUE / periodosIUE); // provisión trimestral
+  const pagoIT        = impuestoIT;
+  const pagoIUE       = impuestoIUE;
+
+  // Obligación fiscal total del trimestre (sale de caja Y del P&L)
+  const totalImpuestos = roundBs(ivaAPagar + impuestoIT + impuestoIUE);
+  // FIX balance: impuestos reducen utilidadNeta (correcto para P&L y Balance)
+  utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
+
+  const pagoOperarios  = d.costoOperarios || 0;  // FIX balance: costo operarios sale de caja
+  const pagoMP         = d.pagoMP         || 0;  // FIX balance: pago MP sale de caja
+
   const totalPagos = roundBs(pagoProduccion + pagoMktTotal + pagoAdmin + pagoPlanta +
-    pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura);
+    pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura
+    + pagoIVA + pagoIT + pagoIUE
+    + pagoOperarios + pagoMP);  // +operarios (3.2) +MP (3.1) +IVA (3.3) +IT+IUE (3.4)
 
   const cajaInicial   = d.cajaInicial || 0;
   const ingresoPrestamo = tipoP !== 'Ninguno' ? montoP : 0;
@@ -309,6 +523,16 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // totalPasivos = totalActivos - patrimonio (by definition, ensures balance)
   const totalPasivos    = deudaFinal;
 
+  // Brand Equity acumulativo — Etapa 2.1
+  const brandEquityFinal = calcularBrandEquity(
+    d.brandEquityInicial,
+    ventas.ventasReales > 0
+      ? (ventas.ventasReales / Math.max(1, ventas.demandaAsignada || 1))
+      : 0,
+    utilidadNeta,
+    params.tasaDecaimiento
+  );
+
   return {
     // Estado de Resultados
     ventasBrutas, comisiones, ventasNetas,
@@ -326,9 +550,14 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     interesesPrestamo, comisionApertura, interesSobregiro,
     gastosOp, utilidadNeta,
 
+    // KPIs calculados
+    ebit:         roundBs(utilidadNeta_operat),  // EBIT = resultado antes de impuestos
+    roiMarketing: pagoMktTotal > 0 ? roundBs(ventasNetas / pagoMktTotal) : 0,
+
     // Flujo de Efectivo
     cajaInicial, cobrosContado, ingresoPrestamo,
     pagoProduccion, pagoMktTotal, pagoAdmin, pagoPlanta,
+    pagoOperarios, pagoMP,
     pagoInnovacion, pagoAlmacen, pagoIntereses, pagoApertura,
     totalPagos, sobregiro, cajaFinal,
 
@@ -337,21 +566,37 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     totalActivos, deudaFinal, totalPasivos,
     capitalContable, resultadoAcumulado, patrimonio,
 
+    // Etapa 3.3: obligaciones fiscales IVA
+    ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
+
+    // Etapa 3.4: IT e IUE
+    impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
+
+    // Etapa 3.1: materia prima (stockMPFinal se calcula en ejecutarSimulador)
+    stockMPFinal:           d.stockMPFinal ?? null,
+    pedidosPendientesResta: d.pedidosPendientesResta ?? [],
+
+    // Etapa 3.2: operarios
+    operariosFinales:  d.operariosFinales  ?? d.operariosIniciales  ?? 4,
+    capacidadEfectiva: d.capacidadEfectiva ?? (params.productividadBase ?? 440) * (d.operariosIniciales ?? 4),
+    costoOperarios:    d.costoOperarios    ?? 0,
+
     // Para propagación
     inventarioFinal, vendedoresFinales: d.vendedoresFinales || d.vendedoresIniciales,
     activosFijosNetos: afNetos,
     costoUnitario, comisionPct,
+    brandEquityFinal,
   };
 }
 
 // ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────
 function ejecutarSimulador(decisiones, cfg) {
-  const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
-    decisiones = expandirDecisionesMultiproducto(decisiones);
-   
+  const { params, tiposProducto, canales, segmentos, afinidadMatrix,
+          demandaBaseAnteriorMap = {} } = cfg;           // Etapa 2.2
+  decisiones = expandirDecisionesMultiproducto(decisiones);
 
-  // Calcular demanda formal de cada segmento
-  const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos);
+  // Calcular demanda formal de cada segmento (con crecimiento acumulado)
+  const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap);
   const segmentoPorNombre = {};
   mercadoSegmentos.forEach((s, i) => { segmentoPorNombre[s.nombre] = { ...s, idx: i }; });
 
@@ -389,7 +634,7 @@ function ejecutarSimulador(decisiones, cfg) {
     if (!seg) return;
     const equiposEnSeg = equiposPorSegmento[d.segmentoObjetivo] || [];
     const { share, miAtractivo, atractivoPorEquipo } = calcularParticipacion(
-      d, equiposEnSeg, seg, afinidadMatrix, canales, vendedoresPorEquipo
+      d, equiposEnSeg, seg, afinidadMatrix, canales, vendedoresPorEquipo, params  // Etapa 2.3
     );
     atractivoEquipos[d.equipo] = miAtractivo;
     sharesPorEquipo[d.equipo]  = share;
@@ -397,14 +642,47 @@ function ejecutarSimulador(decisiones, cfg) {
     Object.assign(atractivoEquipos, atractivoPorEquipo);
   });
 
+  // Etapa 3.1: pasar proveedores en params para procesarPedidosMP
+  const paramsConProveedores = { ...params, _proveedores: cfg.proveedores || [] };
+
   // Calcular resultados financieros completos
   const resultados = decisiones.map(d => {
     const seg        = segmentoPorNombre[d.segmentoObjetivo];
-    const cu         = calcularCostoUnitario(d, tiposProducto, canales, params);
+    const rondaNum   = cfg.rondaNumero || 1;   // Etapa 3.1: número de ronda actual
+
+    // Etapa 3.1: procesar pedidos de MP y calcular stock disponible
+    // Etapa 3.2: calcular capacidad efectiva de operarios
+    const opData = calcularOperarios(d, paramsConProveedores);
+
+    const mpData = procesarPedidosMP(d, rondaNum, paramsConProveedores);
+    const unidMP = paramsConProveedores.unidadesMPporUnidad ?? 1;
+    const produccionMaxMP = mpData.stockMPDisponible > 0
+      ? Math.floor(mpData.stockMPDisponible / unidMP)
+      : Infinity;   // si no hay MP configurada, sin restricción (retrocompat.)
+    // Etapa 3.2: producción limitada por capacidad efectiva (operarios) y MP
+    const produccionReal = Math.min(
+      d.produccion || 0,
+      opData.capacidadEfectiva,        // límite operarios
+      produccionMaxMP,                 // límite MP
+      paramsConProveedores.capacidadMaxProduccion || Infinity  // límite planta
+    );
+    d = {
+      ...d,
+      rondaNumero:            rondaNum,    // Etapa 3.4: para cálculo IUE
+      produccion:             produccionReal,
+      operariosFinales:       opData.operariosFinales,
+      capacidadEfectiva:      opData.capacidadEfectiva,
+      costoOperarios:         opData.costoOperarios,
+      stockMPFinal:           Math.max(0, mpData.stockMPDisponible - produccionReal * unidMP),
+      pedidosPendientesResta: mpData.pedidosPendientesResta,
+      pagoMP:                 mpData.pagoMP,
+    };
+
+    const cu         = calcularCostoUnitario(d, tiposProducto, canales, paramsConProveedores);
     const share      = sharesPorEquipo[d.equipo] || 0;
     const demFormal  = seg?.demandaFormal || 0;
     const ventas     = calcularVentas(d, share, demFormal, cu);
-    const fin        = calcularResultadosFinancieros(d, ventas, cu, d.gastoTotalMarketing, params, canales);
+    const fin        = calcularResultadosFinancieros(d, ventas, cu, d.gastoTotalMarketing, paramsConProveedores, canales);
 
     return {
       equipo:          d.equipo,
@@ -496,7 +774,7 @@ function ejecutarSimulador(decisiones, cfg) {
 
     const equiposEnSeg = equiposPorSegmento[d.segmentoObjetivo] || [];
     const { share, miAtractivo } = calcularParticipacion(
-      d, equiposEnSeg, seg, afinidadMatrix, canales, vendedoresPorEquipo
+      d, equiposEnSeg, seg, afinidadMatrix, canales, vendedoresPorEquipo, params
     );
 
     const inventarioDisponible = (d.inventarioInicial || 0) + (d.produccion || 0);
@@ -511,6 +789,7 @@ function ejecutarSimulador(decisiones, cfg) {
       equipoNombre:        d.equipoNombre,
       segmento:            d.segmentoObjetivo,
       producto:            d.producto,
+      equipoOriginal:      d.equipoOriginal || d.equipo,   // ← agregar esta línea
       precioVenta:         d.precioVenta,
       shareEstimado:       share,
       atractivo:           miAtractivo,
@@ -625,13 +904,82 @@ function consolidarPorEmpresa(resultadosExpandidos) {
   return resultado;
 }
 
+/**
+ * Pre‑simulación consolidada.
+ * Filtra bots, expande decisiones, calcula y consolida por empresa.
+ */
+function calcularPreSimulacionConsolidada(decisiones, cfg) {
+  // Filtrar solo equipos humanos
+  const decisionesHumanos = (decisiones || []).filter(d => !d.isBot);
+  if (decisionesHumanos.length === 0) {
+    return { mercadoSegmentos: [], resultado: [] };
+  }
 
-// ══ BLOQUE D — reemplaza module.exports al final del archivo ═════════════════
+  // Expandir productos (cada decisión de empresa se convierte en una por producto)
+  const expandidas = expandirDecisionesMultiproducto(decisionesHumanos);
+
+  // Calcular la pre‑simulación normal (con equipos expandidos)
+  const preSim = calcularPreSimulacion(expandidas, cfg);
+
+  // Consolidar por empresa original
+  const consolidado = {};
+  preSim.resultado.forEach(r => {
+    const original = r.equipoOriginal || r.equipo;
+    if (!consolidado[original]) {
+      consolidado[original] = {
+        equipo: original,
+        equipoNombre: r.equipoNombre,
+        segmento: r.segmento,
+        producto: r.producto,
+        shareEstimado: 0,
+        atractivo: 0,
+        demandaFormal: r.demandaFormal,
+        demandaAsignada: 0,
+        ventasEstimadas: 0,
+        inventarioInicial: 0,
+        produccion: 0,
+        inventarioDisponible: 0,
+        inventarioFinalEst: 0,
+        costoUnitario: 0,
+        confirmado: false,
+      };
+    }
+    const c = consolidado[original];
+    c.demandaAsignada += r.demandaAsignada || 0;
+    c.ventasEstimadas += r.ventasEstimadas || 0;
+    c.inventarioDisponible += r.inventarioDisponible || 0;
+    c.inventarioFinalEst += r.inventarioFinalEst || 0;
+    c.produccion += r.produccion || 0;
+    c.inventarioInicial += r.inventarioInicial || 0;
+    // share y atractivo: se promedian al final
+    c.shareEstimado += r.shareEstimado || 0;
+    c.atractivo += r.atractivo || 0;
+    c.costoUnitario += r.costoUnitario || 0;
+    c._count = (c._count || 0) + 1;
+  });
+
+  // Calcular promedios
+  const resultado = Object.values(consolidado).map(c => {
+    const count = c._count || 1;
+    return {
+      ...c,
+      shareEstimado: c.shareEstimado / count,
+      atractivo: c.atractivo / count,
+      costoUnitario: c.costoUnitario / count,
+    };
+  });
+
+  return {
+    mercadoSegmentos: preSim.mercadoSegmentos,
+    resultado,
+  };
+}
 
 module.exports = {
   ejecutarSimulador,
   calcularMercadoSegmentos,
   calcularPreSimulacion,
-  expandirDecisionesMultiproducto, // exportada para tests y uso externo
-  consolidarPorEmpresa,            // exportada para uso en server.js/reports.js
+  calcularPreSimulacionConsolidada,
+  expandirDecisionesMultiproducto,
+  consolidarPorEmpresa,
 };

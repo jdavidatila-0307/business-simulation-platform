@@ -11,6 +11,14 @@ const crypto = require('crypto');
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const { hashPassword, verifyPassword } = require('./src/auth');
+
+const { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault } = require('./src/plantillas');
+const { generarDecisionBot, PERFILES_BOT } = require('./src/bot_service');
+const { initWebSocket, broadcast, clientesConectados } = require('./src/ws_service');
+
+inicializarPlantillaDefault();
+
+
 const storage  = require('./src/storage');
 const { ejecutarSimulador, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
@@ -71,6 +79,12 @@ function getSessionToken(req) {
   const raw = req.headers.cookie || '';
   const sid = raw.split(';').map(c => c.trim()).find(c => c.startsWith('sid='));
   return sid ? sid.split('=')[1] : null;
+}
+
+// P2 FIX: resolución robusta de nombre de equipo considerando IDs expandidos
+function resolveNombre(r, eqMap) {
+  return eqMap[r.equipoOriginal] ?? eqMap[r.equipo]
+      ?? r.equipoOriginal ?? r.equipo ?? '—';
 }
 
 // ── Función auxiliar para obtener la simulación actual ────────
@@ -281,40 +295,72 @@ async function route(req, res, body) {
     return send(res, 200, out);
   }
 
-  if (url === '/admin/simulaciones' && method === 'POST') {
-    if (needAdmin()) return;
-    const { nombre, descripcion, totalRounds, copyFromSimId } = body;
-    if (!nombre?.trim()) return send(res, 400, { error: 'Nombre de simulación requerido' });
-    const user = await storage.findUserById(s.userId);
-    if (!user) return send(res, 401, { error: 'Sesión inválida. Vuelve a iniciar sesión.' });
-    const ownerId = user.id;
-    const simId = storage.genSimId();
-    const codigoAcceso = storage.genCodigo();
-    let baseSim = null;
-    if (copyFromSimId) {
-      baseSim = await storage.getSimulacion(copyFromSimId, user.rol !== 'superadmin' ? ownerId : null);
-      if (!baseSim && user.rol === 'superadmin') baseSim = await storage.getSimulacion(copyFromSimId);
+  // ══ BLOQUE B — reemplaza la ruta POST /admin/simulaciones ════════════════════
+  // BUSCA: if (url === '/admin/simulaciones' && method === 'POST') { ... }
+  // REEMPLAZA todo el bloque if hasta su cierre con esto:
+  
+    if (url === '/admin/simulaciones' && method === 'POST') {
+      if (needAdmin()) return;
+      const { nombre, descripcion, totalRounds, copyFromSimId, industria } = body;
+      if (!nombre?.trim()) return send(res, 400, { error: 'Nombre de simulación requerido' });
+  
+      const user = await storage.findUserById(s.userId);
+      if (!user) return send(res, 401, { error: 'Sesión inválida. Vuelve a iniciar sesión.' });
+      const ownerId      = user.id;
+      const simId        = storage.genSimId();
+      const codigoAcceso = storage.genCodigo();
+  
+      // ── Cargar parámetros base ─────────────────────────────────────────────
+      let baseSim = null;
+      if (copyFromSimId) {
+        baseSim = await storage.getSimulacion(copyFromSimId, user.rol !== 'superadmin' ? ownerId : null);
+        if (!baseSim && user.rol === 'superadmin') baseSim = await storage.getSimulacion(copyFromSimId);
+      }
+  
+      // ── Cargar plantilla de industria ──────────────────────────────────────
+      // Orden de prioridad: 1) copyFrom, 2) plantilla por nombre, 3) jaboncillos
+      let plantillaCfg = null;
+      let industriaNombre = industria?.trim() || null;
+  
+      if (!baseSim && industriaNombre) {
+        try {
+          plantillaCfg = cargarPlantilla(industriaNombre);
+        } catch (errPlantilla) {
+          return send(res, 400, { error: errPlantilla.message });
+        }
+      }
+  
+      const simData = {
+        id:          simId,
+        nombre:      nombre.trim(),
+        descripcion: (descripcion || '').trim(),
+        codigoAcceso,
+        estado:      'activa',
+        creadaAt:    new Date().toISOString(),
+        config: {
+          currentRound: 1,
+          totalRounds:  totalRounds || 20,
+          roundState:   'pending',
+          industria:    industriaNombre || 'jaboncillos_v1',  // metadata para el frontend
+        },
+        // Prioridad: baseSim > plantilla > constants.js (jaboncillos)
+        parametros:       baseSim?.parametros        || plantillaCfg?.params             || require('./src/constants').PARAMS,
+        tiposProducto:    baseSim?.tipos_producto     || plantillaCfg?.tiposProducto      || require('./src/constants').TIPOS_PRODUCTO,
+        canales:          baseSim?.canales            || plantillaCfg?.canales            || require('./src/constants').CANALES,
+        segmentos:        baseSim?.segmentos          || plantillaCfg?.segmentos          || require('./src/constants').SEGMENTOS,
+        afinidadMatrix:   baseSim?.afinidad_matrix    || plantillaCfg?.afinidadMatrix     || require('./src/constants').AFINIDAD_MATRIX,
+        competenciaExterna: baseSim?.competencia_externa || plantillaCfg?.competenciaExterna || require('./src/constants').COMPETENCIA_EXTERNA,
+        // Etapa 3.1: catálogo de proveedores de la plantilla
+        proveedores: baseSim?.proveedores || plantillaCfg?.proveedores || [],
+        rondas: {},
+        users:  [],
+      };
+  
+      await storage.createSimulacion(ownerId, simData);
+      console.log(`[server] Simulación creada | id: ${simId} | industria: ${simData.config.industria}`);
+      return send(res, 200, { ok: true, simId, codigoAcceso, industria: simData.config.industria });
     }
-    const simData = {
-      id: simId,
-      nombre,
-      descripcion: descripcion || '',
-      codigoAcceso,
-      estado: 'activa',
-      creadaAt: new Date().toISOString(),
-      config: { currentRound: 1, totalRounds: totalRounds || 20, roundState: 'pending' },
-      parametros: baseSim?.parametros || require('./src/constants').PARAMS,
-      tiposProducto: baseSim?.tipos_producto || require('./src/constants').TIPOS_PRODUCTO,
-      canales: baseSim?.canales || require('./src/constants').CANALES,
-      segmentos: baseSim?.segmentos || require('./src/constants').SEGMENTOS,
-      afinidadMatrix: baseSim?.afinidad_matrix || require('./src/constants').AFINIDAD_MATRIX,
-      competenciaExterna: baseSim?.competencia_externa || require('./src/constants').COMPETENCIA_EXTERNA,
-      rondas: {},
-      users: [],
-    };
-    await storage.createSimulacion(ownerId, simData);
-    return send(res, 200, { ok: true, simId, codigoAcceso });
-  }
+  
 
   if (url.match(/^\/admin\/simulaciones\/[^/]+$/) && method === 'PUT') {
     if (needAdmin()) return;
@@ -408,6 +454,18 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true });
   }
 
+  if (url === '/admin/plantillas' && method === 'GET') {
+    if (needAdmin()) return;
+    try {
+      const plantillas = listarPlantillas();
+      return send(res, 200, { plantillas });
+    } catch (err) {
+      console.error('[server] Error listando plantillas:', err.message);
+      return send(res, 500, { error: 'No se pudieron cargar las plantillas.' });
+    }
+  }
+
+
   // ═══ Todas las rutas siguientes requieren contexto de simulación ═══
   const sim = await getCurrentSimulation(s);
   if (!sim && (s?.rol === 'superadmin' || s?.rol === 'profesor' || s?.rol === 'equipo')) {
@@ -442,6 +500,70 @@ async function route(req, res, body) {
       rol:'equipo', miembros: Array.isArray(miembros)?miembros:[] });
     return send(res, 200, { ok: true, id, nombre });
   }
+
+// ══ BLOQUE C — nueva ruta POST /admin/bots (añadir TRAS POST /admin/equipos) ═
+// BUSCA: if (url.match(/^\/admin\/equipos\/[^/]+\/reset-envio$/) && method === 'POST') {
+// AÑADE este bloque JUSTO ANTES de esa línea:
+
+  if (url === '/admin/bots' && method === 'GET') {
+    // Lista los perfiles disponibles y los bots ya registrados en la simulación
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const equipos   = await storage.getEquipos(sim.id);
+    const botsActuales = equipos.filter(eq => eq.isBot);
+    return send(res, 200, {
+      perfiles:     Object.entries(PERFILES_BOT).map(([k, v]) => ({ id: k, ...v })),
+      plantillas:   listarPlantillas(),
+      bots:         botsActuales,
+    });
+  }
+
+  if (url === '/admin/bots' && method === 'POST') {
+    // Agrega un bot a la simulación actual
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+
+    const { perfil, nombre } = body;
+    if (!perfil || !PERFILES_BOT[perfil]) {
+      return send(res, 400, {
+        error: `Perfil inválido. Disponibles: ${Object.keys(PERFILES_BOT).join(', ')}`,
+      });
+    }
+
+    const nombreBot    = (nombre || `Bot ${perfil}`).trim().slice(0, 40);
+    const baseNombre   = nombreBot.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const botId        = `bot_${Date.now().toString(36)}_${baseNombre}`;
+
+    const botEquipo = {
+      id:           botId,
+      nombre:       nombreBot,
+      rol:          'equipo',
+      isBot:        true,
+      perfil,
+      password:     hashPassword(botId),   // password = propio ID (los bots no inician sesión)
+      passwordPlain: '—',
+      miembros:     [],
+      registradoAt: new Date().toISOString(),
+    };
+
+    await storage.addEquipo(sim.id, botEquipo);
+    console.log(`[server] Bot agregado | id: ${botId} | perfil: ${perfil} | sim: ${sim.id}`);
+    return send(res, 200, { ok: true, id: botId, nombre: nombreBot, perfil });
+  }
+
+  if (url.match(/^\/admin\/bots\/[^/]+$/) && method === 'DELETE') {
+    // Elimina un bot de la simulación
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const botId  = url.split('/')[3];
+    const equipos = await storage.getEquipos(sim.id);
+    const bot     = equipos.find(eq => eq.id === botId && eq.isBot);
+    if (!bot) return send(res, 404, { error: 'Bot no encontrado' });
+    const restantes = equipos.filter(eq => eq.id !== botId);
+    await storage.updateSimulacion(sim.id, { users: restantes });
+    return send(res, 200, { ok: true });
+  }
+
 
   if (url.match(/^\/admin\/equipos\/[^/]+\/reset-envio$/) && method === 'POST') {
     if (needAdmin()) return;
@@ -523,7 +645,7 @@ async function route(req, res, body) {
     const ronda = await storage.getRonda(sim.id, n);
     if (!ronda) return send(res, 400, { error: 'Sin ronda' });
     if (!['open','locked'].includes(sim.config.roundState)) return send(res, 400, { error: 'Estado incorrecto' });
-    if (ronda.estado === 'simulated') return send(res, 400, { error: 'Ya simulada' });
+    if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
     const equipos = await storage.getEquipos(sim.id);
     const decisiones = equipos.filter(eq => ronda.decisiones[eq.id]).map(eq => ({...ronda.decisiones[eq.id]}));
     if (!decisiones.length) return send(res, 400, { error: 'Sin decisiones' });
@@ -556,11 +678,13 @@ async function route(req, res, body) {
       const equipos = await storage.getEquipos(sim.id);
       const eqMap = {};
       equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
-      const detalle = Object.values(ronda.preSimulacion).map(r => ({...r, equipoNombre: eqMap[r.equipo]||r.equipo}));
+      const detalle = Object.values(ronda.preSimulacion).map(r => ({...r, equipoNombre: resolveNombre(r, eqMap)}));
       return send(res, 200, { roundState: sim.config.roundState, total: detalle.length,
         confirmados: detalle.filter(r=>r.confirmado).length, detalle, mercadoSegmentos: ronda.preSimMercado||[] });
     } else {
-      const miDato = ronda.preSimulacion[s.userId];
+      const miDato = Object.values(ronda.preSimulacion || {}).find(
+        p => p.equipoOriginal === s.userId
+      );
       if (!miDato) return send(res, 404, { error: 'Sin datos para tu equipo' });
       return send(res, 200, { roundState: sim.config.roundState, presim: miDato, mercadoSegmentos: ronda.preSimMercado||[] });
     }
@@ -604,57 +728,165 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true });
   }
 
+// ══ BLOQUE D — reemplaza la ruta POST /admin/simular ════════════════════════
+// BUSCA: if (url === '/admin/simular' && method === 'POST') { ... }
+// REEMPLAZA todo el bloque if con esto:
+
   if (url === '/admin/simular' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
-    const n = sim.config.currentRound;
+
+    const n     = sim.config.currentRound;
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda) return send(res, 400, { error: 'Sin ronda' });
-    if (ronda.estado === 'simulated') return send(res, 400, { error: 'Ya simulada' });
-    if (!['open','locked','pre-sim'].includes(sim.config.roundState)) return send(res, 400, { error: 'Estado incorrecto' });
+    if (!ronda)                       return send(res, 400, { error: 'Sin ronda' });
+    if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
+    if (!['open', 'locked', 'pre-sim'].includes(sim.config.roundState))
+      return send(res, 400, { error: 'Estado incorrecto' });
     if (sim.config.roundState === 'pre-sim') {
-      const pendientes = Object.values(ronda.preSimulacion||{}).filter(r => !r.confirmado);
-      if (pendientes.length > 0) return send(res, 400, { error: `Faltan ${pendientes.length} equipo(s) por confirmar.` });
+      const pendientes = Object.values(ronda.preSimulacion || {}).filter(r => !r.confirmado);
+      if (pendientes.length > 0)
+        return send(res, 400, { error: `Faltan ${pendientes.length} equipo(s) por confirmar.` });
     }
+
     const equipos = await storage.getEquipos(sim.id);
     if (!equipos.length) return send(res, 400, { error: 'Sin equipos' });
-    const decisiones = equipos.filter(eq => ronda.decisiones[eq.id]).map(eq => ({...ronda.decisiones[eq.id]}));
+
+    // Etapa 2.2: construir mapa de demandaBase de la ronda anterior
+    const demandaBaseAnteriorMap = {};
+    if (n > 1) {
+      const rondaPrevia = await storage.getRonda(sim.id, n - 1);
+      if (rondaPrevia?.mercadoSegmentos?.length) {
+        rondaPrevia.mercadoSegmentos.forEach(seg => {
+          demandaBaseAnteriorMap[seg.nombre] = seg.demandaBase;
+        });
+      }
+    }
+
+    const simCfg = {
+      meta:                  sim.config.industria ? { nombre: sim.config.industria } : {},
+      params:                sim.parametros,
+      tiposProducto:         sim.tipos_producto,
+      canales:               sim.canales,
+      segmentos:             sim.segmentos,
+      afinidadMatrix:        sim.afinidad_matrix,
+      competenciaExterna:    sim.competencia_externa,
+      demandaBaseAnteriorMap,  // Etapa 2.2: demanda dinámica
+      rondaNumero:    n,         // Etapa 3.1: número de ronda para lead time
+      proveedores:    sim.proveedores || [],  // Etapa 3.1: catálogo de proveedores
+    };
+
+    // ── Generar decisiones de bots ─────────────────────────────────────────
+    const botsDeEstaSimulacion = equipos.filter(eq => eq.isBot);
+    if (botsDeEstaSimulacion.length > 0) {
+      console.log(`[server] Generando decisiones para ${botsDeEstaSimulacion.length} bot(s)...`);
+
+      // Construir historial de las últimas 2 rondas para contexto de los bots
+      const historialRondas = [];
+      for (let i = Math.max(1, n - 2); i < n; i++) {
+        const rondaHist = await storage.getRonda(sim.id, i);
+        if (rondaHist) historialRondas.push({ numero: i, ...rondaHist });
+      }
+
+      // Generar decisiones de todos los bots en paralelo
+      await Promise.allSettled(
+        botsDeEstaSimulacion.map(async (bot) => {
+          try {
+            const historialBot = {
+              rondaActual:    n,
+              ultimas2Rondas: historialRondas,
+              resultados:     historialRondas.map(r => r.resultados?.[bot.id]).filter(Boolean),
+            };
+            const decisionBot = await generarDecisionBot(bot, historialBot, simCfg);
+
+            // Guardar la decisión del bot en la ronda (dual-write)
+            ronda.decisiones[bot.id] = decisionBot;
+            await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
+
+            console.log(`[server] ✓ Decisión generada para bot "${bot.nombre}" (${bot.perfil})`);
+          } catch (errBot) {
+            console.error(`[server] ✗ Error generando decisión para bot "${bot.nombre}": ${errBot.message}`);
+          }
+        })
+      );
+    }
+
+    // ── Ejecutar el motor con todas las decisiones (humanos + bots) ────────
+    // Recargar la ronda para incluir las decisiones de bots recién guardadas
+    const rondaActualizada = await storage.getRonda(sim.id, n);
+    const decisiones = equipos
+      .filter(eq => rondaActualizada.decisiones[eq.id])
+      .map(eq => ({ ...rondaActualizada.decisiones[eq.id] }));
+
     if (!decisiones.length) return send(res, 400, { error: 'Sin decisiones' });
+
     try {
-      const simCfg = {
-        params: sim.parametros,
-        tiposProducto: sim.tipos_producto,
-        canales: sim.canales,
-        segmentos: sim.segmentos,
-        afinidadMatrix: sim.afinidad_matrix,
-        competenciaExterna: sim.competencia_externa
-      };
       const result = ejecutarSimulador(decisiones, simCfg);
-      ronda.estado = 'simulated';
-      ronda.ejecutadaAt = new Date().toISOString();
-      ronda.mercadoSegmentos = result.mercadoSegmentos;
-      ronda.atractivoEquipos = result.atractivoEquipos;
-      ronda.dashboard = result.dashboard;
-      result.resultados.forEach(r => { ronda.resultados[r.equipo] = r; });
+
+      rondaActualizada.estado      = 'simulated';
+      rondaActualizada.ejecutadaAt = new Date().toISOString();
+      rondaActualizada.mercadoSegmentos = result.mercadoSegmentos;
+      rondaActualizada.atractivoEquipos = result.atractivoEquipos;
+      rondaActualizada.dashboard        = result.dashboard;
+      rondaActualizada.empresas         = result.empresas;
+
+      result.resultados.forEach(r => { rondaActualizada.resultados[r.equipo] = r; });
+
       const reportes = {};
       for (const d of decisiones) {
-        reportes[d.equipo] = generarReportes(d, result.mercadoSegmentos, result.atractivoEquipos, ronda.resultados, simCfg);
+        reportes[d.equipo] = generarReportes(
+          d, result.mercadoSegmentos, result.atractivoEquipos, rondaActualizada.resultados, simCfg
+        );
       }
-      ronda.reportes = reportes;
+      rondaActualizada.reportes = reportes;
+
       sim.config.roundState = 'simulated';
       await storage.updateSimulacion(sim.id, { config: sim.config });
       await storage.updateRonda(sim.id, n, {
-        estado: ronda.estado,
-        ejecutadaAt: ronda.ejecutadaAt,
-        mercadoSegmentos: ronda.mercadoSegmentos,
-        atractivoEquipos: ronda.atractivoEquipos,
-        dashboard: ronda.dashboard,
-        resultados: ronda.resultados,
-        reportes: ronda.reportes
+        estado:           rondaActualizada.estado,
+        ejecutadaAt:      rondaActualizada.ejecutadaAt,
+        mercadoSegmentos: rondaActualizada.mercadoSegmentos,
+        atractivoEquipos: rondaActualizada.atractivoEquipos,
+        dashboard:        rondaActualizada.dashboard,
+        empresas:         rondaActualizada.empresas,
+        resultados:       rondaActualizada.resultados,
+        reportes:         rondaActualizada.reportes,
       });
-      return send(res, 200, { ok: true, ronda: n, equiposSimulados: decisiones.length });
-    } catch(e) { return send(res, 500, { error: e.message }); }
+
+      // ── Notificación WebSocket a todos los clientes de esta simulación ──
+      const nHumanos = decisiones.filter(d => !d.isBot).length;
+      const nBots    = decisiones.filter(d =>  d.isBot).length;
+      const topEquipo = [...result.resultados]
+        .sort((a, b) => b.utilidadNeta - a.utilidadNeta)[0];
+
+      broadcast(sim.id, 'ronda_calculada', {
+        ronda:           n,
+        equiposSimulados: decisiones.length,
+        equiposHumanos:   nHumanos,
+        equiposBots:      nBots,
+        dashboard:        result.dashboard,
+        lider: topEquipo ? {
+          equipo:       topEquipo.equipoNombre || topEquipo.equipo,
+          utilidadNeta: topEquipo.utilidadNeta,
+          shareReal:    topEquipo.shareReal,
+        } : null,
+        mensaje: `✅ Ronda ${n} calculada — ${nHumanos} equipo(s) compitieron.`,
+      });
+
+      console.log(`[server] Ronda ${n} simulada | sim: ${sim.id} | equipos: ${decisiones.length} (${nBots} bots)`);
+      return send(res, 200, {
+        ok: true,
+        ronda: n,
+        equiposSimulados: decisiones.length,
+        equiposHumanos:   nHumanos,
+        equiposBots:      nBots,
+      });
+    } catch (e) {
+      console.error('[server] Error en motor de simulación:', e.message, e.stack);
+      return send(res, 500, { error: e.message });
+    }
   }
+
+
 
   if (url === '/admin/ronda/siguiente' && method === 'POST') {
     if (needAdmin()) return;
@@ -674,13 +906,41 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda || ronda.estado !== 'simulated') return send(res, 404, { error: 'Sin resultados' });
+    if (!ronda || !['simulated','calculada'].includes(ronda.estado)) return send(res, 404, { error: 'Sin resultados' });
     const equipos = await storage.getEquipos(sim.id);
     const eqMap = {};
     equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
-    const resultados = Object.values(ronda.resultados).map(r => ({...r, equipoNombre: eqMap[r.equipo]||r.equipo}));
+    const resultados = Object.values(ronda.resultados).map(r => ({
+      ...r,
+      equipoNombre: resolveNombre(r, eqMap),
+      alertaCaja:   (r.cajaFinal ?? 0) < 0 ? 'ALERTA' : 'OK',
+      segmento:     r.segmentoObjetivo || r.segmento || '—',
+    }));
+
+    // Etapa 3.5: resumen fiscal agregado del período
+    const dashboardFiscal = {
+      totalIT:          resultados.reduce((s, r) => s + (r.impuestoIT  ?? 0), 0),
+      totalIVA:         resultados.reduce((s, r) => s + (r.ivaAPagar   ?? 0), 0),
+      totalIUE:         resultados.reduce((s, r) => s + (r.impuestoIUE ?? 0), 0),
+      totalImpuestos:   resultados.reduce((s, r) => s + (r.totalImpuestos ?? (r.ivaAPagar ?? 0) + (r.impuestoIT ?? 0) + (r.impuestoIUE ?? 0)), 0),
+      utilidadBrutaTotal: resultados.reduce((s, r) => s + (r.utilidadBruta ?? 0), 0),
+      presionFiscalPct: (() => {
+        const ub = resultados.reduce((s, r) => s + (r.utilidadBruta ?? 0), 0);
+        const ti = resultados.reduce((s, r) => s + (r.totalImpuestos ?? 0), 0);
+        return ub > 0 ? Math.round(ti / ub * 10000) / 100 : 0;
+      })(),
+      porEquipo: resultados.map(r => ({
+        equipoNombre: r.equipoNombre,
+        impuestoIT:   r.impuestoIT  ?? 0,
+        ivaAPagar:    r.ivaAPagar   ?? 0,
+        impuestoIUE:  r.impuestoIUE ?? 0,
+        totalImpuestos: r.totalImpuestos ?? ((r.ivaAPagar ?? 0) + (r.impuestoIT ?? 0) + (r.impuestoIUE ?? 0)),
+      })),
+    };
+
     return send(res, 200, { ronda: n, estado: ronda.estado, ejecutadaAt: ronda.ejecutadaAt,
-      resultados, mercadoSegmentos: ronda.mercadoSegmentos, dashboard: ronda.dashboard });
+      resultados, mercadoSegmentos: ronda.mercadoSegmentos, dashboard: ronda.dashboard,
+      dashboardFiscal });  // Etapa 3.5
   }
 
   if (url === '/admin/historial' && method === 'GET') {
@@ -859,7 +1119,41 @@ async function route(req, res, body) {
           plazoPrestamoOperativo: cfg.params.plazoPrestamoOperativo,
           plazoPrestamoInversion: cfg.params.plazoPrestamoInversion,
           comisionAperturaPrestamo: cfg.params.comisionAperturaPrestamo,
+          // Etapa 3.1: params de materia prima
+          unidadesMPporUnidad:         cfg.params.unidadesMPporUnidad    ?? 1,
+          costoAlmacenamientoMP:       cfg.params.costoAlmacenamientoMP  ?? 0.05,
+          // Etapa 3.2: params de operarios
+          operariosIniciales:          cfg.params.operariosIniciales          ?? 4,
+          productividadBase:           cfg.params.productividadBase           ?? 440,
+          costoOperario:               cfg.params.costoOperario               ?? 3200,
+          costoContratacionOperario:   cfg.params.costoContratacionOperario   ?? 800,
+          costoDespidoOperario:        cfg.params.costoDespidoOperario        ?? 1200,
+          factorCapacitacion:          cfg.params.factorCapacitacion          ?? 0.05,
         },
+        // Etapa 3.1: catálogo de proveedores para la hoja de decisión
+        // Fallback: si la sim se creó antes de la Etapa 3.1, leer de la plantilla
+        proveedores: (() => {
+          // Etapa 3.1: prioridad → sim.proveedores → JSON de industria → []
+          if (sim.proveedores?.length) return sim.proveedores;
+          try {
+            // Buscar el JSON de industria directamente (sin depender de plantillas.js)
+            const industria = (sim.config?.industria || 'jaboncillos_v1')
+              .replace(/[^a-zA-Z0-9_-]/g, '');
+            // Buscar en industrias/ relativo al directorio de server.js
+            const posibles = [
+              path.join(__dirname, 'industrias', `${industria}.json`),
+              path.join(__dirname, '..', 'industrias', `${industria}.json`),
+              path.join(__dirname, `${industria}.json`),
+            ];
+            for (const ruta of posibles) {
+              if (fs.existsSync(ruta)) {
+                const raw = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+                if (raw.proveedores?.length) return raw.proveedores;
+              }
+            }
+            return [];
+          } catch { return []; }
+        })(),
       },
     });
   }
@@ -868,10 +1162,19 @@ async function route(req, res, body) {
     if (needEquipo()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const equipoId = s.userId;
+    // FIX: normalizar tipoProducto -> producto en el servidor (defensa en profundidad)
+    // El formulario legado envía tipoProducto; garantizar que producto siempre exista.
+    if (body.decision && !body.decision.producto && body.decision.tipoProducto) {
+      body.decision.producto = body.decision.tipoProducto;
+    }
+    if (body.decision?.productos?.[0] && !body.decision.productos[0].producto) {
+      body.decision.productos[0].producto =
+        body.decision.producto || body.decision.tipoProducto || '';
+    }
     const n = sim.config.currentRound;
     const ronda = await storage.getRonda(sim.id, n);
     if (!ronda) return send(res, 400, { error: 'Sin ronda' });
-    if (ronda.estado === 'simulated') return send(res, 400, { error: 'Ronda simulada' });
+    if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ronda simulada' });
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
     const cur = ronda.decisiones[equipoId] || {};
     ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: cur.submitted||false };
@@ -883,10 +1186,18 @@ async function route(req, res, body) {
     if (needEquipo()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const equipoId = s.userId;
+    // FIX: normalizar tipoProducto -> producto (defensa en profundidad)
+    if (body.decision && !body.decision.producto && body.decision.tipoProducto) {
+      body.decision.producto = body.decision.tipoProducto;
+    }
+    if (body.decision?.productos?.[0] && !body.decision.productos[0].producto) {
+      body.decision.productos[0].producto =
+        body.decision.producto || body.decision.tipoProducto || '';
+    }
     const n = sim.config.currentRound;
     const ronda = await storage.getRonda(sim.id, n);
     if (!ronda) return send(res, 400, { error: 'Sin ronda' });
-    if (ronda.estado === 'simulated') return send(res, 400, { error: 'Ronda simulada' });
+    if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ronda simulada' });
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
     const cur = ronda.decisiones[equipoId] || {};
     ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: true, submittedAt: new Date().toISOString() };
@@ -901,8 +1212,13 @@ async function route(req, res, body) {
     const historial = [];
     for (let i = 1; i <= sim.config.currentRound; i++) {
       const r = await storage.getRonda(sim.id, i);
-      if (!r || r.estado !== 'simulated') continue;
-      const resultado = r.resultados[equipoId];
+      if (!r || !['simulated','calculada'].includes(r.estado)) continue;
+      // P3 FIX: r.resultados is keyed by EXPANDED ID (eq_xxx__prod_1).
+      // equipoId is the BASE ID. Find the result matching equipoOriginal.
+      const resultado = r.resultados[equipoId]
+        || Object.values(r.resultados).find(res =>
+            (res.equipoOriginal || res.equipo) === equipoId
+           );
       if (!resultado) continue;
       historial.push({ ronda:i, ejecutadaAt:r.ejecutadaAt, resultado,
         decision: r.decisiones?.[equipoId]||null, reportes: r.reportes?.[equipoId]||{} });
@@ -915,7 +1231,7 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda || ronda.estado !== 'simulated') return send(res, 404, { error: 'Sin resultados' });
+    if (!ronda || !['simulated','calculada'].includes(ronda.estado)) return send(res, 404, { error: 'Sin resultados' });
     return send(res, 200, { ronda: n, reportes: ronda.reportes?.[s.userId]||{} });
   }
 
@@ -924,7 +1240,7 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda || ronda.estado !== 'simulated') return send(res, 404, { error: 'Sin resultados' });
+    if (!ronda || !['simulated','calculada'].includes(ronda.estado)) return send(res, 404, { error: 'Sin resultados' });
     const resultados = Object.values(ronda.resultados);
     const sorted = resultados.sort((a,b) => b.utilidadNeta - a.utilidadNeta);
     const ranking = sorted.map(r => ({ esYo: r.equipo===s.userId, utilidadNeta:r.utilidadNeta, ventas:r.ventasReales, share:r.shareReal, caja:r.cajaFinal }));
@@ -936,8 +1252,11 @@ async function route(req, res, body) {
 }
 
 // ── Servidor HTTP ─────────────────────────────────────────────
+// ══ BLOQUE E — reemplaza el bloque final del servidor HTTP ═══════════════════
+// BUSCA: const server = http.createServer(...)  hasta server.listen(...)
+// REEMPLAZA con esto:
+
 const server = http.createServer(async (req, res) => {
-  // Sesión PostgreSQL
   const token = getSessionToken(req);
   req.session = token ? await getSessionFromDB(token) : null;
   req._sessionToken = token;
@@ -969,10 +1288,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// ── Adjuntar WebSocket al mismo servidor HTTP (mismo puerto, ruta /ws) ────────
+initWebSocket(server);
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor corriendo en http://0.0.0.0:${PORT}`);
   console.log(`\n╔═══════════════════════════════════════════════════════════╗`);
-  console.log(`║  🧼  SimMkt v3.0 — Multi-Simulación  ·  UAGRM             ║`);
+  console.log(`║  🚀  SimNego v3.2 — Fase 2: Bots · WS · Plantillas       ║`);
   console.log(`║  → http://localhost:${PORT}  (admin / admin123)                ║`);
+  console.log(`║  → WebSocket: ws://localhost:${PORT}/ws?simId=<id>             ║`);
+  console.log(`║  → Industrias: ${listarPlantillas().join(', ')}    ║`);
   console.log(`╚═══════════════════════════════════════════════════════════╝\n`);
 });

@@ -11,6 +11,26 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// ── Mapa de estados: JSONB legado → columna sim_rondas.estado ─────────────────
+
+
+const ESTADO_LEGACY_A_NUEVO = {
+  'open':      'abierta',
+  'locked':    'cerrada',
+  'pre-sim':   'pre-sim',
+  'simulated': 'calculada',
+  'pending':   'abierta',
+};
+const ESTADO_NUEVO_A_LEGACY = {
+  'abierta':   'open',
+  'cerrada':   'locked',
+  'pre-sim':   'pre-sim',
+  'calculada': 'simulated',
+};
+
+
+
+
 // ============================================================
 //  FUNCIONES DE USUARIOS
 // ============================================================
@@ -205,55 +225,253 @@ async function findUserInSimulacion(simulacionId, userId, ownerId = null) {
 // ============================================================
 //  RONDAS
 // ============================================================
+
+// =============================================================================
+// getRonda con lectura prioritaria de tablas normalizadas
+// =============================================================================
 async function getRonda(simulacionId, n, ownerId = null) {
+  try {
+    const rondaRow = await pool.query(
+      `SELECT estado, creada_at, calculada_at, resultados
+       FROM   sim_rondas
+       WHERE  simulacion_id = $1 AND numero = $2`,
+      [simulacionId, n]
+    );
+
+    if (rondaRow.rows.length > 0) {
+      const row        = rondaRow.rows[0];
+      const resultados = row.resultados || {};
+
+      const decisionesRows = await pool.query(
+        `SELECT equipo_id, decisiones
+         FROM   sim_decisiones
+         WHERE  simulacion_id = $1
+           AND  ronda_numero  = $2
+           AND  producto_id   = 'prod_1'
+         ORDER BY enviada_at ASC`,
+        [simulacionId, n]
+      );
+
+      const decisionesMap = {};
+      for (const d of decisionesRows.rows) {
+        decisionesMap[d.equipo_id] = d.decisiones;
+      }
+
+      const estadoLegado = ESTADO_NUEVO_A_LEGACY[row.estado] || row.estado;
+
+      return {
+        estado:            estadoLegado,
+        abiertaAt:         row.creada_at   ? row.creada_at.toISOString()   : null,
+        ejecutadaAt:       row.calculada_at ? row.calculada_at.toISOString() : null,
+        decisiones:        decisionesMap,
+        resultados:        resultados.resultados        || {},
+        mercadoSegmentos:  resultados.mercadoSegmentos  || [],
+        atractivoEquipos:  resultados.atractivoEquipos  || {},
+        dashboard:         resultados.dashboard          || {},
+        empresas:          resultados.empresas           || {},
+        reportes:          resultados.reportes           || {},
+        preSimulacion:     resultados.preSimulacion      || {},
+        preSimMercado:     resultados.preSimMercado      || [],
+        _source: 'normalized',
+      };
+    }
+  } catch (errNuevo) {
+    console.error(
+      `[storage.getRonda] Error leyendo tablas normalizadas, usando JSONB legado:`,
+      errNuevo.message
+    );
+  }
+
+  // Fallback legacy
   const sim = await getSimulacion(simulacionId, ownerId);
   if (!sim) return null;
   const rondas = sim.rondas || {};
-  return rondas[String(n)];
+  const rondaLegacy = rondas[String(n)];
+  if (rondaLegacy) {
+    rondaLegacy._source = 'legacy_jsonb';
+  }
+  return rondaLegacy;
 }
 
+// =============================================================================
+// updateRonda con dual-write
+// =============================================================================
 async function updateRonda(simulacionId, n, data, ownerId = null) {
   const sim = await getSimulacion(simulacionId, ownerId);
   if (!sim) throw new Error('Simulación no encontrada');
   const rondas = sim.rondas || {};
   rondas[String(n)] = { ...rondas[String(n)], ...data };
   await updateSimulacion(simulacionId, { rondas }, ownerId);
+
+console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ronda:', n);
+
+  try {
+    const estadoNuevo  = data.estado     ? (ESTADO_LEGACY_A_NUEVO[data.estado] || data.estado) : null;
+    const calculadaAt  = data.ejecutadaAt || null;
+
+    const camposResultados = {};
+    const CAMPOS_RESULTADOS = [
+      'mercadoSegmentos', 'atractivoEquipos', 'dashboard',
+      'empresas', 'resultados', 'reportes',
+      'preSimulacion', 'preSimMercado',
+    ];
+    let hayResultados = false;
+    for (const campo of CAMPOS_RESULTADOS) {
+      if (data[campo] !== undefined) {
+        camposResultados[campo] = data[campo];
+        hayResultados = true;
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO sim_rondas (simulacion_id, numero, estado, calculada_at, resultados)
+       VALUES ($1, $2, COALESCE($3, 'abierta'), $4::TIMESTAMPTZ, $5::jsonb)
+       ON CONFLICT (simulacion_id, numero) DO UPDATE SET
+         estado       = COALESCE($3, sim_rondas.estado),
+         calculada_at = COALESCE($4::TIMESTAMPTZ, sim_rondas.calculada_at),
+         resultados   = CASE
+                          WHEN $5::jsonb = '{}'::jsonb
+                          THEN COALESCE(sim_rondas.resultados, '{}'::jsonb)
+                          ELSE COALESCE(sim_rondas.resultados, '{}'::jsonb) || $5::jsonb
+                        END`,
+      [simulacionId, n, estadoNuevo, calculadaAt, JSON.stringify(hayResultados ? camposResultados : {})]
+    );
+
+    if (data.decisiones && typeof data.decisiones === 'object') {
+      for (const [equipoId, decisionObj] of Object.entries(data.decisiones)) {
+        if (!decisionObj) continue;
+
+        const productos = Array.isArray(decisionObj.productos) && decisionObj.productos.length
+          ? decisionObj.productos.filter(p => p.activo !== false)
+          : null;
+
+        if (productos) {
+          for (const prod of productos) {
+            const productoId = prod.productoId || 'prod_1';
+            await pool.query(
+              `INSERT INTO sim_decisiones
+                 (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
+               VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+               ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
+               DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
+              [simulacionId, n, equipoId, productoId, JSON.stringify(prod)]
+            );
+          }
+        }
+
+        await pool.query(
+          `INSERT INTO sim_decisiones
+             (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
+           VALUES ($1, $2, $3, 'prod_1', $4::jsonb, NOW())
+           ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
+           DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
+          [simulacionId, n, equipoId, JSON.stringify(decisionObj)]
+        );
+      }
+    }
+  } catch (errNuevo) {
+    console.error(
+      `[storage.updateRonda] Error en dual-write:`,
+      errNuevo.message
+    );
+  }
 }
+
+// =============================================================================
+// saveDecision (NUEVA)
+// =============================================================================
+async function saveDecision(simulacionId, rondaNumero, equipoId, productoId, decisionData) {
+  try {
+    await pool.query(
+      `INSERT INTO sim_decisiones
+         (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+       ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
+       DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
+      [simulacionId, rondaNumero, equipoId, productoId || 'prod_1', JSON.stringify(decisionData)]
+    );
+  } catch (errNuevo) {
+    console.error(`[storage.saveDecision] Error en sim_decisiones:`, errNuevo.message);
+  }
+
+  try {
+    await pool.query(
+      `UPDATE simulaciones
+       SET rondas = jsonb_set(
+                     jsonb_set(
+                       COALESCE(rondas, '{}'::jsonb),
+                       ARRAY[$2, 'decisiones'],
+                       COALESCE((rondas -> $2 -> 'decisiones'), '{}'::jsonb),
+                       true
+                     ),
+                     ARRAY[$2, 'decisiones', $3],
+                     $4::jsonb,
+                     true
+                   )
+       WHERE id = $1`,
+      [simulacionId, String(rondaNumero), equipoId, JSON.stringify(decisionData)]
+    );
+  } catch (errLegacy) {
+    console.error(`[storage.saveDecision] Error en JSONB legado:`, errLegacy.message);
+    throw errLegacy;
+  }
+}
+
+
+
+
 
 function defaultDecision(equipoId, equipoNombre, params) {
   const p = params || {};
 
-  const productoBase = {
+   const productoBase = {
     productoId: 'prod_1',
     activo: true,
 
     // Decisión comercial por producto
-    producto: 'Básico',
-    segmentoObjetivo: 'Masivo popular',
-    canalPrincipal: 'Mercado',
+    producto: '',
+    segmentoObjetivo: '',
+    canalPrincipal: '',
     canalSecundario: 'Ninguno',
 
     // Decisión operativa por producto
     calidad: 5,
-    precioVenta: 3.60,
-    produccion: 18000,
+    precioVenta: 0,
+    produccion: 0,
 
     // Marketing por producto
-    publicidad: 3000,
-    promocion: 2000,
-    eventos: 1000,
-    marketingRedes: 1000,
-    relacionesPublicas: 1000,
+    publicidad: 0,
+    promocion: 0,
+    eventos: 0,
+    marketingRedes: 0,
+    relacionesPublicas: 0,
 
     // Innovación por producto
     innovacion: false,
-    tipoInnovacion: '',
+    tipoInnovacion: 'Producto',
     montoInnovacion: 0,
 
-    // Variables acumulables futuras
+    // Variables acumulables
     brandEquityInicial: 50,
     reputacionInicial: 50,
-    inventarioInicial: p.inventarioInicialUnid || 0
+    inventarioInicial: p.inventarioInicialUnid || 0,
+
+    // Etapa 3.1: Materia prima
+    stockMPInicial:    0,
+    proveedorElegido:  '',
+    cantidadMPpedida:  0,
+    pedidosPendientes: [],   // [{rondaEntrega, cantidad, costoMP}]
+
+    // Vendedores (nuevo)
+    vendedoresIniciales: 2,
+    contratarVendedores: 0,
+    despedirVendedores: 0,
+
+    // Etapa 3.2: Operarios
+    operariosIniciales:  p.operariosIniciales || 4,
+    contratarOperarios:  0,
+    despedirOperarios:   0,
+    montoCapacitacion:   0,
   };
 
   return {
@@ -279,6 +497,9 @@ function defaultDecision(equipoId, equipoNombre, params) {
     innovacion: productoBase.innovacion,
     tipoInnovacion: productoBase.tipoInnovacion,
     montoInnovacion: productoBase.montoInnovacion,
+    vendedoresIniciales: productoBase.vendedoresIniciales,
+    contratarVendedores: productoBase.contratarVendedores,
+    despedirVendedores: productoBase.despedirVendedores,
 
     // RRHH empresarial
     rrhh: {
@@ -331,6 +552,11 @@ function defaultDecision(equipoId, equipoNombre, params) {
   };
 }
 
+// hasta aqui//
+
+
+
+
 async function ensureRonda(simulacionId, n, ownerId = null) {
   let ronda = await getRonda(simulacionId, n, ownerId);
   if (!ronda) {
@@ -363,6 +589,12 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
               nuevaDec.vendedoresIniciales  = Math.max(1, resPrev.vendedoresFinales);
               nuevaDec.activosFijosIniciales= Math.max(0, resPrev.activosFijosNetos || 78000);
               nuevaDec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado;
+              nuevaDec.brandEquityInicial   = resPrev.brandEquityFinal ?? 50;
+              // Etapa 3.1: propagar stock de MP y pedidos pendientes
+              nuevaDec.stockMPInicial      = Math.max(0, resPrev.stockMPFinal ?? 0);
+              nuevaDec.pedidosPendientes   = resPrev.pedidosPendientesResta ?? [];
+              // Etapa 3.2: propagar operarios
+              nuevaDec.operariosIniciales  = Math.max(1, resPrev.operariosFinales ?? 4);
             }
             rondaBase.decisiones[eq.id] = nuevaDec;
           } else {
@@ -420,6 +652,7 @@ module.exports = {
   createSimulacion, getSimulacion, listSimulaciones, updateSimulacion, deleteSimulacion,
   getEquipos, addEquipo, findUserInSimulacion,
   getRonda, updateRonda, ensureRonda, defaultDecision,
+  saveDecision,
   getSimConfig, updateSimConfig,
   genSimId, genCodigo
 };

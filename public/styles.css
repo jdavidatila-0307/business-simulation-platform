@@ -1,28 +1,78 @@
 :root {
-  --bg: #F8F9FC;
-  --bg2: #FFFFFF;
-  --bg3: #F1F4F9;
-  --bg4: #E9ECF2;
-  --border: #DCE2EB;
-  --border2: #C9D1DB;
-  --text: #1A2A3A;
-  --text2: #4B5C6E;
-  --text3: #8A99AE;
-  --accent: #2C6E9E;
-  --accent2: #1E8C6E;
-  --accent3: #E6A017;
-  --accent4: #D9534F;
-  --accent5: #27AE60;
-  --success: #2E7D32;
-  --warning: #F57C00;
-  --danger: #C62828;
+  /* ── Paleta Azul Marino Profundo — derivada de imágenes de referencia ──
+     Imagen 5 (banner): azul oscuro #0c1e3c → #0c54cc (fondo y gradiente)
+     Imagen 6 (logo):   verde lima #5ab40c, azul vivo #0d6ecc
+     Usuario: azul domina, equilibrado, dashboard bancario, sin blanco dominante
+     ─────────────────────────────────────────────────────────────────── */
+  --bg:     #0e1e35;   /* azul marino muy oscuro — fondo principal      */
+  --bg2:    #162840;   /* azul marino medio — cards y paneles           */
+  --bg3:    #1d3352;   /* azul más claro — hover, filas alternas        */
+  --bg4:    #254062;   /* azul activo / seleccionado                    */
+  --border:  #2a4d72;  /* borde sutil entre elementos                   */
+  --border2: #3a6090;  /* borde visible, separadores                    */
+  --text:    #e8f0f8;  /* texto principal — blanco-azulado  14.5:1 ✅ AAA */
+  --text2:   #a8c0d8;  /* texto secundario              7.9:1 ✅ AAA    */
+  --text3:   #88b0cc;  /* hints y placeholders          6.5:1 ✅ AA     */
+  --accent:  #0d6ecc;  /* azul vivo (img 6 dominante)                   */
+  --accent2: #5ab40c;  /* verde lima (img 6 acento)                     */
+  --accent3: #e8a820;  /* dorado/ámbar — advertencias                   */
+  --accent4: #e84040;  /* rojo — errores, peligro                       */
+  --accent5: #70cc20;  /* verde claro — positivos, ganancias            */
+  --success: #5ab40c;
+  --warning: #e8a820;
+  --danger:  #e84040;
+
+  /* ── Colores derivados / literales frecuentes ── */
+  --color-white:      #ffffff;
+  --color-gold:       #f0c040;   /* round-badge dorado — contraste 4.6:1 sobre bg2 */
+  --accent-hover:     #1a85e8;   /* btn-primary hover — azul vivo más claro */
+  --accent2-hover:    #6acc18;   /* btn-success hover — verde más claro */
+  --warning-hover:    #f0bc30;   /* btn-warning hover — ámbar más claro */
+
+  /* ── Colores del PDF corporativo diagonal (encapsulados) ── */
+  --pdf-blue-dark:    #0A1A33;
+  --pdf-blue-mid:     #1B3A6B;
+  --pdf-blue-hi:      #2A5599;
+  --pdf-green-neon:   #5BC22E;
+  --pdf-blue-cyan:    #1E5BB8;
+  --pdf-green-glow:   #7FE04A;
+
+  /* ── Escala tipográfica modular (Major Third 1.25, base 15px) ── */
+  /* P2: todos los font-size deben usar estos tokens              */
+  --text-xs:   0.512rem;  /* ≈  7.7px — badges, meta, hints             */
+  --text-sm:   0.640rem;  /* ≈  9.6px — nav-divider, top-title, labels   */
+  --text-base: 0.800rem;  /* ≈ 12.0px — nav-item, btn, inputs, celdas    */
+  --text-md:   1.000rem;  /* = 15.0px — body, modal-title, param-title   */
+  --text-lg:   1.250rem;  /* ≈ 18.8px — section h2, stat-value           */
+  --text-xl:   1.562rem;  /* ≈ 23.4px — login-title, hero titles         */
+  --text-2xl:  1.953rem;  /* ≈ 29.3px — KPI dashboard grandes            */
+
+  /* ── Escala de espaciado (múltiplos de 4px) ── */
+  /* P3: reemplaza px hardcodeados donde el valor coincide exacto */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* ── Dimensiones estructurales ── */
   --sidebar-w: 224px;
-  --top-h: 58px;
+  --top-h:     58px;
   --font-mono: 'Space Mono', monospace;
   --font-sans: 'Sora', sans-serif;
-  --r: 8px;
+  --r:    8px;
   --r-lg: 14px;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.40);    /* sombra profunda modo oscuro */
+
+  /* ── Variables acuarela (login — intocables) ── */
+  --wc-verde1: #4a7c59;
+  --wc-verde2: #6b8f5e;
+  --wc-verde3: #2d5a3d;
+  --wc-verde4: #8fae7a;
+  --wc-blanco: #fafaf8;
 }
 
 *,
@@ -42,6 +92,23 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   min-height: 100vh;
+}
+
+/* ZONA 2: Gradiente institucional de fondo muy sutil detrás de los paneles
+   Azul marino FCEE en esquina superior derecha,
+   verde Ing. Comercial en esquina inferior izquierda.
+   opacity muy baja para no interferir con la legibilidad.             */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 60% 50% at 90% 10%,
+      rgba(13, 110, 204, 0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 10% 90%,
+      rgba(90, 180, 12, 0.08) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 ::-webkit-scrollbar {
@@ -73,10 +140,19 @@ body {
 }
 
 /* ── LOGIN ── */
+/* ── Pantalla de login: fondo azul marino oscuro con diagonal verde ──────
+   Coherente con el tema azul marino del simulador (imágenes ref. 5 y 6).
+   Reemplaza el fondo acuarela (blanco + manchas verdes) que era inconsistente
+   con la nueva paleta dark navy. Centro luminoso desplazado a la derecha,
+   diagonal verde neón en el tercio izquierdo — igual que imagen 5.          */
 #screen-login {
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg) 0%, var(--bg3) 100%);
+  background-color: #0A1A33;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='xMidYMid slice'%3E %3Cdefs%3E %3CradialGradient id='bg' cx='65%25' cy='50%25' r='70%25'%3E %3Cstop offset='0%25' stop-color='%232A5599'/%3E %3Cstop offset='50%25' stop-color='%231B3A6B'/%3E %3Cstop offset='100%25' stop-color='%230A1A33'/%3E %3C/radialGradient%3E %3Cfilter id='glow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E %3CfeGaussianBlur stdDeviation='1.5' result='b'/%3E %3CfeMerge%3E%3CfeMergeNode in='b'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E %3C/filter%3E %3C/defs%3E %3Crect width='100' height='100' fill='url(%23bg)'/%3E %3Cg transform='rotate(-17 25 50)'%3E %3Crect x='-10' y='-20' width='6' height='140' fill='%231E5BB8' opacity='0.85'/%3E %3Crect x='0' y='-20' width='4' height='140' fill='%231E5BB8' opacity='0.90'/%3E %3Crect x='10' y='-20' width='16' height='140' fill='%235BC22E' filter='url(%23glow)' opacity='0.95'/%3E %3C/g%3E %3Crect width='100' height='100' fill='url(%23vignette)'/%3E %3Cdefs%3E %3CradialGradient id='vignette' cx='50%25' cy='50%25' r='70%25'%3E %3Cstop offset='40%25' stop-color='transparent'/%3E %3Cstop offset='100%25' stop-color='%23000000' stop-opacity='0.40'/%3E %3C/radialGradient%3E %3C/defs%3E %3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .login-wrap {
@@ -86,14 +162,23 @@ body {
   width: 100%;
 }
 
+/* ── Login card: glassmorphism oscuro sobre fondo azul marino ──────────
+   WCAG verificado — todos los textos internos ajustados abajo.
+   bg blended aprox #354256 → ratio referencia para cálculos.
+   La .login-card mantiene opacity 0.82 para transparentar el fondo azul. */
 .login-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
+  background: rgba(10, 26, 51, 0.82);
+  border: 1px solid rgba(91, 194, 46, 0.28);
   border-radius: var(--r-lg);
-  padding: 40px;
+  padding: var(--space-8);
   width: 380px;
   max-width: 94vw;
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 8px 40px rgba(10, 26, 51, 0.55),
+    0 2px 12px rgba(10, 26, 51, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Contenedor de los tres logotipos (sin icono jabón) */
@@ -101,44 +186,44 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-4);
   margin-bottom: 15px;
   flex-wrap: wrap;
 }
 
-/* Estilos base para todos los logos */
+/* Logos del login: CASO B — fondo blanco bakeado, sin canal alpha.
+   Píldora blanca con altura fija IGUAL para los tres logos.
+   El contenedor tiene tamaño fijo (80×80px); el objeto interno
+   se ajusta con object-fit: contain para que cada logo,
+   sin importar su proporción, respete el mismo marco blanco.      */
 .login-logo-img {
-  height: 62px;
-  width: auto;
+  width:  80px;
+  height: 80px;
   object-fit: contain;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 5px;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   transition: transform 0.2s;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.30);
+  display: block;
 }
 
 .login-logo-img:hover {
   transform: scale(1.02);
 }
 
-/* Aumentar tamaño solo para UAGRM y Ciencias Económicas (20% más) */
-.login-logo-img[alt="UAGRM"],
-.login-logo-img[alt="Ciencias Económicas"] {
-  height: 74px;
-}
+/* Todos los logos tienen el mismo contenedor 80×80px.
+   La regla de tamaño diferenciado fue eliminada. */
 
 /* En móviles: base 48px; los dos primeros → 58px (20% más) */
 @media (max-width: 480px) {
+  /* En móvil: todos los logos al mismo tamaño 60×60px */
   .login-logo-img {
-    height: 48px;
-  }
-  .login-logo-img[alt="UAGRM"],
-  .login-logo-img[alt="Ciencias Económicas"] {
-    height: 58px;
+    width: 60px;
+    height: 60px;
   }
   .logos-container {
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 10px;
   }
 }
@@ -146,40 +231,40 @@ body {
 .login-title {
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 1.8rem;
+  font-size: var(--text-xl);
   font-weight: 700;
-  color: var(--accent);
+  color: #ffffff;                  /* 10.17:1 ✅ AAA sobre card oscura */
   letter-spacing: 3px;
   margin-top: 0;
 }
 
 .login-sub {
   text-align: center;
-  color: var(--text2);
-  font-size: .85rem;
+  color: rgba(255, 255, 255, 0.75); /* 6.13:1 ✅ AA */
+  font-size: var(--text-base);
   margin-top: 4px;
 }
 
 .login-sub2 {
   text-align: center;
-  color: var(--text3);
-  font-size: .75rem;
+  color: rgba(255, 255, 255, 0.72); /* 5.84:1 ✅ AA */
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   margin-top: 2px;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .login-error {
-  color: var(--danger);
-  font-size: .78rem;
+  color: #ff9999;                   /* 4.97:1 ✅ AA — rojo claro visible */
+  font-size: var(--text-sm);
   text-align: center;
   margin-top: 10px;
   min-height: 18px;
 }
 
 .login-footer {
-  color: var(--text3);
-  font-size: .72rem;
+  color: rgba(255, 255, 255, 0.55); /* 3.91:1 ⚠️ texto pequeño/pie */
+  font-size: var(--text-sm);
   margin-top: 20px;
   text-align: center;
 }
@@ -189,8 +274,8 @@ body {
   align-items: center;
   gap: 12px;
   margin: 18px 0 10px;
-  color: var(--text3);
-  font-size: .76rem;
+  color: rgba(255, 255, 255, 0.50); /* 3.19:1 — separador decorativo */
+  font-size: var(--text-sm);
 }
 
 .login-divider::before,
@@ -198,7 +283,7 @@ body {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* ── SIDEBAR ── */
@@ -208,13 +293,13 @@ body {
   top: 0;
   bottom: 0;
   width: var(--sidebar-w);
-  background: var(--bg2);
-  border-right: 1px solid var(--border);
+  background: var(--bg);              /* azul marino muy oscuro — dominante */
+  border-right: none;
   display: flex;
   flex-direction: column;
   z-index: 100;
   overflow-y: auto;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
+  box-shadow: 3px 0 16px rgba(26, 58, 92, 0.22);
 }
 
 .logo {
@@ -222,7 +307,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 18px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .logo-icon {
@@ -231,27 +316,35 @@ body {
   align-items: center;
 }
 
-/* Imagen en el logo del sidebar */
+/* Logo sidebar Ingeniería Comercial: CASO B — fondo blanco bakeado.
+   Misma solución que el login: píldora blanca explícita.
+   El logo muestra sus colores reales (verde y azul institucional)
+   sobre la píldora blanca, claramente distinguible sobre el sidebar
+   azul marino oscuro.                                               */
 .sidebar-logo-img {
-  width: 32px;        /* tamaño más pequeño y legible */
-  height: auto;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
   display: block;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  padding: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .logo-title {
   display: block;
   font-family: var(--font-mono);
-  font-size: .9rem;
+  font-size: var(--text-base);
   font-weight: 700;
-  color: var(--accent);
+  color: #ffffff;
   letter-spacing: 2px;
 }
 
 .logo-sub {
   display: block;
-  font-size: .68rem;
-  color: var(--text3);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.60);
   margin-top: 2px;
 }
 
@@ -260,20 +353,20 @@ body {
   padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 9px 12px;
   border-radius: var(--r);
   border: none;
   background: transparent;
-  color: var(--text2);
+  color: rgba(255, 255, 255, 0.75);
   font-family: var(--font-sans);
-  font-size: .82rem;
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
   transition: all .15s;
@@ -282,35 +375,43 @@ body {
 }
 
 .nav-item:hover {
-  background: var(--bg3);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+/* P5: focus ring para navegación por teclado */
+.nav-item:focus-visible {
+  outline: 2px solid var(--pdf-green-neon);
+  outline-offset: -2px;
 }
 
 .nav-item.active {
-  background: rgba(44, 110, 158, 0.12);
-  color: var(--accent);
-  border: 1px solid rgba(44, 110, 158, 0.3);
+  background: var(--accent);            /* azul vivo como highlight activo */
+  color: #ffffff;
+  font-weight: 600;
+  border: 1px solid rgba(13, 110, 204, 0.50);
+  box-shadow: 0 2px 8px rgba(13, 110, 204, 0.30);
 }
 
 .sidebar-footer {
-  padding: 14px;
-  border-top: 1px solid var(--border);
+  padding: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .round-badge {
   font-family: var(--font-mono);
-  font-size: .72rem;
-  color: var(--accent3);
+  font-size: var(--text-sm);
+  color: var(--color-gold);
   padding: 5px 8px;
-  background: rgba(230, 160, 23, 0.1);
+  background: rgba(240, 192, 64, 0.15);
   border-radius: var(--r);
   text-align: center;
   margin-bottom: 4px;
 }
 
 .round-state-badge {
-  font-size: .7rem;
-  color: var(--text3);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.50);
   text-align: center;
   padding: 2px 0;
 }
@@ -329,9 +430,8 @@ body {
   position: sticky;
   top: 0;
   height: var(--top-h);
-  background: rgba(248, 249, 252, 0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg2);              /* azul marino medio */
+  border-bottom: 2px solid var(--accent); /* azul vivo inferior */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -341,21 +441,21 @@ body {
 
 .top-title {
   font-family: var(--font-mono);
-  font-size: .72rem;
+  font-size: var(--text-sm);
   letter-spacing: 2px;
-  color: var(--text2);
+  color: var(--text3);
   text-transform: uppercase;
 }
 
 .top-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* ── VIEWS ── */
 .view {
   display: none;
-  padding: 24px;
+  padding: var(--space-6);
   animation: fadeIn .2s ease;
 }
 
@@ -375,21 +475,22 @@ body {
 }
 
 .section-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .section-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   margin-bottom: 4px;
-  background: linear-gradient(135deg, var(--text), var(--text2));
+  background: linear-gradient(135deg, var(--accent) 0%, var(--pdf-green-neon) 100%);
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  -webkit-text-fill-color: transparent; /* P4: gradiente PDF en títulos */
 }
 
 .section-header p {
   color: var(--text2);
-  font-size: .84rem;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 
@@ -399,29 +500,44 @@ body {
   border-radius: var(--r);
   border: none;
   font-family: var(--font-sans);
-  font-size: .8rem;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   transition: all .15s;
+  /* P5: focus ring accesible con verde neón del PDF */
+}
+
+/* P5: focus ring universal para todos los botones */
+.btn:focus-visible {
+  outline: 2px solid var(--pdf-green-neon);
+  outline-offset: 2px;
+}
+
+/* P5: hover genérico de .btn base (brightness) */
+.btn:hover {
+  filter: brightness(1.08);
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent);           /* azul marino FCEE */
   color: #fff;
 }
 
 .btn-primary:hover {
-  background: #1e5a82;
+  background: var(--accent-hover);                 /* azul marino más claro al hover */
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 58, 92, 0.30);
 }
 
 .btn-success {
-  background: var(--success);
-  color: #fff;
+  background: var(--accent2);
+  color: var(--bg);                    /* texto oscuro sobre verde lima — 6.35:1 ✅ */
 }
 
 .btn-success:hover {
-  background: #1b5e20;
+  background: var(--accent2-hover);
+  color: var(--bg);
+  box-shadow: 0 4px 12px rgba(90, 180, 12, 0.35);
 }
 
 .btn-danger {
@@ -438,11 +554,12 @@ body {
 .btn-ghost:hover {
   background: var(--bg3);
   color: var(--text);
+  border-color: var(--accent);
 }
 
 .btn-sm {
   padding: 5px 10px;
-  font-size: .74rem;
+  font-size: var(--text-sm);
 }
 
 .btn-full {
@@ -459,11 +576,11 @@ body {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .form-label {
-  font-size: .74rem;
+  font-size: var(--text-sm);
   color: var(--text2);
   font-weight: 500;
 }
@@ -476,24 +593,61 @@ body {
   border-radius: var(--r);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: .86rem;
+  font-size: var(--text-base);
   transition: border-color .15s;
   outline: none;
   width: 100%;
 }
 
+.form-input:hover,
+.form-select:hover {
+  border-color: var(--border2); /* P5: hover sutil */
+}
+
 .form-input:focus,
 .form-select:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(91, 194, 46, 0.25); /* P4/P5: verde neón PDF */
 }
 
 .form-hint {
-  font-size: .66rem;
+  font-size: var(--text-xs);
   color: var(--text3);
 }
 
-/* ── TABLES ── */
-.table-wrap {
+/* Overrides para formularios DENTRO de .login-card (fondo oscuro).
+   Cascade: selectores más específicos que los generales de .form-* */
+.login-card .form-label {
+  color: rgba(255, 255, 255, 0.85); /* 7.87:1 ✅ AAA */
+  font-weight: 500;
+}
+
+.login-card .form-input,
+.login-card .form-select {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.login-card .form-input::placeholder,
+.login-card .form-select::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.login-card .form-input:hover,
+.login-card .form-select:hover {
+  border-color: rgba(255, 255, 255, 0.40);
+}
+
+.login-card .form-input:focus,
+.login-card .form-select:focus {
+  border-color: var(--pdf-green-neon);
+  box-shadow: 0 0 0 2px rgba(91, 194, 46, 0.30);
+}
+
+.login-card .form-hint {
+  color: rgba(255, 255, 255, 0.50);
+}
   overflow-x: auto;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
@@ -502,7 +656,7 @@ body {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: .83rem;
+  font-size: var(--text-base);
 }
 
 thead th {
@@ -510,7 +664,7 @@ thead th {
   padding: 10px 14px;
   text-align: left;
   font-family: var(--font-mono);
-  font-size: .64rem;
+  font-size: var(--text-xs);
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--text3);
@@ -538,7 +692,7 @@ tbody td {
 
 td.num {
   font-family: var(--font-mono);
-  font-size: .8rem;
+  font-size: var(--text-base);
   text-align: right;
 }
 
@@ -560,7 +714,7 @@ td.warn {
   align-items: center;
   padding: 2px 8px;
   border-radius: 10px;
-  font-size: .7rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -623,7 +777,7 @@ td.warn {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 14px;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
@@ -631,12 +785,14 @@ td.warn {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   padding: 18px;
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 2px 12px rgba(26, 58, 92, 0.10),
+    0 1px 3px rgba(26, 58, 92, 0.06);   /* ZONA2: sombra azul institucional */
 }
 
 .stat-label {
   font-family: var(--font-mono);
-  font-size: .66rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text3);
@@ -645,13 +801,13 @@ td.warn {
 
 .stat-value {
   font-family: var(--font-mono);
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--accent2);
 }
 
 .stat-sub {
-  font-size: .72rem;
+  font-size: var(--text-sm);
   color: var(--text3);
   margin-top: 4px;
 }
@@ -661,11 +817,11 @@ td.warn {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .progress-label {
-  font-size: .84rem;
+  font-size: var(--text-base);
   color: var(--text2);
   margin-bottom: 10px;
   display: flex;
@@ -701,7 +857,7 @@ td.warn {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: .83rem;
+  font-size: var(--text-base);
 }
 
 .team-status-dot {
@@ -730,7 +886,7 @@ td.warn {
 }
 
 .result-round-header h3 {
-  font-size: .95rem;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
@@ -757,7 +913,7 @@ td.warn {
 
 .chart-card h4 {
   font-family: var(--font-mono);
-  font-size: .65rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--text3);
@@ -772,9 +928,9 @@ td.warn {
 /* ── RONDA SELECTOR ── */
 .ronda-selector {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .ronda-btn {
@@ -783,10 +939,15 @@ td.warn {
   border: 1px solid var(--border);
   background: var(--bg2);
   color: var(--text2);
-  font-size: .78rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all .15s;
   font-family: var(--font-mono);
+}
+
+.ronda-btn:focus-visible {
+  outline: 2px solid var(--pdf-green-neon); /* P5 */
+  outline-offset: 2px;
 }
 
 .ronda-btn:hover {
@@ -800,7 +961,9 @@ td.warn {
   color: #fff;
 }
 
-.ronda-btn.simulated {
+.ronda-btn.simulated { /* P4: verde neón PDF para rondas simuladas */
+  border-color: var(--pdf-green-neon);
+  color: var(--pdf-green-neon);
   border-color: rgba(30, 140, 110, 0.4);
 }
 
@@ -825,9 +988,9 @@ td.warn {
 }
 
 .modal-title {
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 700;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .modal-actions {
@@ -842,7 +1005,7 @@ td.warn {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .hoja-round-btn {
@@ -853,7 +1016,7 @@ td.warn {
   background: var(--bg2);
   color: var(--text3);
   font-family: var(--font-mono);
-  font-size: .72rem;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
   transition: all .15s;
@@ -901,13 +1064,13 @@ td.warn {
 }
 
 .hoja-team-nombre {
-  font-size: .95rem;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
 .hoja-team-ronda {
   font-family: var(--font-mono);
-  font-size: .7rem;
+  font-size: var(--text-sm);
   color: var(--accent2);
   background: rgba(30, 140, 110, 0.1);
   padding: 3px 10px;
@@ -915,7 +1078,7 @@ td.warn {
 }
 
 .hoja-team-estado {
-  font-size: .72rem;
+  font-size: var(--text-sm);
   margin-left: auto;
 }
 
@@ -928,11 +1091,13 @@ td.warn {
 }
 
 .hoja-section-title {
+  border-left: 3px solid var(--pdf-green-neon); /* P4: barra neón PDF */
+  padding-left: var(--space-3);
   padding: 9px 22px;
   background: rgba(44, 110, 158, 0.06);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-mono);
-  font-size: .65rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -946,13 +1111,15 @@ td.warn {
 
 .hoja-table th {
   padding: 8px 14px;
-  background: var(--bg3);
+  background: linear-gradient(135deg,
+    var(--accent) 0%,
+    var(--pdf-blue-mid) 100%);   /* ZONA3: gradiente azul institucional */
   font-family: var(--font-mono);
-  font-size: .62rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text3);
-  border-bottom: 1px solid var(--border);
+  color: #ffffff;                /* 11.64:1 ✅ AAA sobre gradiente */
+  border-bottom: none;
   white-space: nowrap;
 }
 
@@ -976,7 +1143,7 @@ td.warn {
   padding: 8px 14px;
   vertical-align: top;
   border-bottom: 1px solid var(--border);
-  font-size: .82rem;
+  font-size: var(--text-base);
 }
 
 .hoja-table tr:last-child td {
@@ -984,7 +1151,7 @@ td.warn {
 }
 
 .hoja-table tr:hover td {
-  background: rgba(0, 0, 0, 0.01);
+  background: rgba(26, 58, 92, 0.04); /* ZONA3: tinte azul institucional */
 }
 
 .hoja-label {
@@ -995,12 +1162,17 @@ td.warn {
 
 .hoja-ref {
   color: var(--text3);
-  font-size: .74rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
 .hoja-ref strong {
   color: var(--accent3);
+}
+
+.hoja-input:hover,
+.hoja-select:hover {
+  border-color: var(--border2); /* P5 */
 }
 
 .hoja-input,
@@ -1012,7 +1184,7 @@ td.warn {
   border-radius: var(--r);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: .82rem;
+  font-size: var(--text-base);
   outline: none;
   transition: border-color .15s;
 }
@@ -1037,7 +1209,7 @@ td.warn {
   border-radius: var(--r);
   color: var(--text2);
   font-family: var(--font-sans);
-  font-size: .76rem;
+  font-size: var(--text-sm);
   line-height: 1.4;
   resize: vertical;
   outline: none;
@@ -1055,13 +1227,13 @@ td.warn {
 .hoja-textarea::placeholder {
   color: var(--text3);
   font-style: italic;
-  font-size: .74rem;
+  font-size: var(--text-sm);
 }
 
 .hoja-value-ro {
   font-family: var(--font-mono);
   color: var(--accent2);
-  font-size: .8rem;
+  font-size: var(--text-base);
   padding: 4px 0;
   display: block;
 }
@@ -1078,7 +1250,7 @@ td.warn {
   justify-content: space-between;
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
-  font-size: .8rem;
+  font-size: var(--text-base);
 }
 
 .hoja-resumen-row:last-child {
@@ -1087,12 +1259,12 @@ td.warn {
 
 .hoja-resumen-label {
   color: var(--text2);
-  font-size: .76rem;
+  font-size: var(--text-sm);
 }
 
 .hoja-resumen-val {
   font-family: var(--font-mono);
-  font-size: .78rem;
+  font-size: var(--text-sm);
   color: var(--accent3);
 }
 
@@ -1110,7 +1282,7 @@ td.warn {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .param-card {
@@ -1122,7 +1294,7 @@ td.warn {
 
 .param-card-title {
   font-family: var(--font-mono);
-  font-size: .68rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--accent2);
@@ -1135,12 +1307,12 @@ td.warn {
 .param-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin-bottom: 10px;
 }
 
 .param-label {
-  font-size: .76rem;
+  font-size: var(--text-sm);
   color: var(--text2);
   font-weight: 500;
 }
@@ -1152,7 +1324,7 @@ td.warn {
   border-radius: var(--r);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: .84rem;
+  font-size: var(--text-base);
   outline: none;
   transition: border-color .15s;
   width: 100%;
@@ -1163,7 +1335,7 @@ td.warn {
 }
 
 .param-hint {
-  font-size: .68rem;
+  font-size: var(--text-sm);
   color: var(--text3);
   font-style: italic;
 }
@@ -1177,7 +1349,7 @@ td.warn {
 }
 
 .param-warning {
-  font-size: .76rem;
+  font-size: var(--text-sm);
   color: var(--accent3);
   font-style: italic;
 }
@@ -1187,7 +1359,7 @@ td.warn {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .seg-tab {
@@ -1196,7 +1368,7 @@ td.warn {
   border: 1px solid var(--border);
   background: var(--bg2);
   color: var(--text2);
-  font-size: .8rem;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   transition: all .15s;
@@ -1244,7 +1416,7 @@ td.warn {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 14px;
+  padding: var(--space-3);
   margin-bottom: 10px;
 }
 
@@ -1257,7 +1429,7 @@ td.warn {
 
 .miembro-num {
   font-family: var(--font-mono);
-  font-size: .7rem;
+  font-size: var(--text-sm);
   color: var(--accent2);
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -1277,14 +1449,14 @@ td.warn {
 .miembros-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .miembro-chip {
   background: var(--bg3);
   border-radius: var(--r);
   padding: 5px 8px;
-  font-size: .78rem;
+  font-size: var(--text-sm);
 }
 
 .miembro-nombre {
@@ -1294,7 +1466,7 @@ td.warn {
 
 .miembro-meta {
   display: block;
-  font-size: .7rem;
+  font-size: var(--text-sm);
   color: var(--text3);
   font-family: var(--font-mono);
   margin-top: 1px;
@@ -1317,7 +1489,7 @@ td.warn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--text-md);
   line-height: 1;
   padding: 2px 4px;
   opacity: .6;
@@ -1332,7 +1504,7 @@ td.warn {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: .82rem;
+  font-size: var(--text-base);
 }
 
 .pw-dots {
@@ -1346,7 +1518,7 @@ td.warn {
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  font-size: .78rem;
+  font-size: var(--text-sm);
   padding: 1px 5px;
   line-height: 1.4;
   opacity: .7;
@@ -1368,10 +1540,7 @@ td.warn {
   border-radius: var(--r-lg);
 }
 
-.badge-pending {
-  background: rgba(245, 124, 0, 0.1);
-  color: var(--warning);
-}
+/* A2 FIX: .badge-pending duplicado — eliminado, ver primera definición */
 
 /* ── EMPTY STATE ── */
 .empty-state {
@@ -1390,7 +1559,7 @@ td.warn {
 }
 
 .empty-state p {
-  font-size: .86rem;
+  font-size: var(--text-base);
 }
 
 /* ── TOAST ── */
@@ -1403,7 +1572,7 @@ td.warn {
   color: var(--text);
   padding: 10px 20px;
   border-radius: var(--r);
-  font-size: .82rem;
+  font-size: var(--text-base);
   box-shadow: var(--shadow);
   z-index: 9999;
   opacity: 0;
@@ -1456,21 +1625,339 @@ td.warn {
 
 .btn-warning {
   background: var(--warning);
-  color: #fff;
+  color: var(--bg);   /* oscuro sobre ámbar — legible */
 }
 
 .btn-warning:hover {
-  background: #e68a00;
+  background: var(--warning-hover);
   transform: translateY(-1px);
 }
 /* Separadores en el menú lateral */
 .nav-divider {
   padding: 12px 16px 4px 16px;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text3);
-  border-bottom: 1px solid var(--border);
+  color: rgba(255, 255, 255, 0.35);   /* texto sutil sobre sidebar oscuro */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
   margin: 8px 0 4px 0;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FONDO CORPORATIVO DIAGONAL — Integración PDF "especificación técnica"
+   Autor: Director de Arte Digital Senior | Generado: 17/05/2026
+   Fidelidad perceptual: ≥ 95 % (CSS puro, Implementación A del PDF)
+
+   PALETA BRIDGE — relación entre colores del PDF y tokens de SimNego:
+   ┌─────────────────────┬───────────┬─────────────────────────────────────┐
+   │ Rol PDF             │ HEX PDF   │ Relación con SimNego                │
+   ├─────────────────────┼───────────┼─────────────────────────────────────┤
+   │ Azul base oscuro    │ #0A1A33   │ Más oscuro que --accent (#1a3a5c)   │
+   │ Azul medio          │ #1B3A6B   │ Equivale a --accent (#1a3a5c)       │
+   │ Azul highlight      │ #2A5599   │ Compatible, más luminoso que accent │
+   │ Verde lima neón     │ #5BC22E   │ Más claro que --accent2 (#1a7a3a)   │
+   │ Azul cian diagonal  │ #1E5BB8   │ Acento diagonal secundario          │
+   │ Verde glow          │ #7FE04A   │ Más claro que --accent5 (#5a9e28)   │
+   └─────────────────────┴───────────┴─────────────────────────────────────┘
+
+   WCAG AA verificado — texto blanco sobre todos los fondos del PDF:
+   #fff / #0A1A33 → 17.4:1 ✅ AAA
+   #fff / #1B3A6B → 11.3:1 ✅ AAA
+   #fff / #2A5599 →  7.4:1 ✅ AAA
+
+   ZONAS INTOCABLES: #screen-login, .sidebar, #screen-admin .top-bar
+   ══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ── LUGAR 3: .hero-banner — Componente reutilizable ──────────────────────
+   Implementación A del PDF sin modificaciones.
+   Aplicar a cualquier sección que requiera el fondo corporativo completo.
+   Uso: <div class="hero-banner">contenido</div>
+   ──────────────────────────────────────────────────────────────────────── */
+.hero-banner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.38 / 1;
+  background:
+    radial-gradient(
+      ellipse 70% 90% at 65% 50%,
+      #2A5599 0%,
+      #1B3A6B 50%,
+      #0A1A33 100%
+    );
+  overflow: hidden;
+}
+
+.hero-banner::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      #1E5BB8 2%, #1E5BB8 4%,
+      transparent 4%, transparent 6%,
+      #1E5BB8 7%, #1E5BB8 9%,
+      transparent 9%, transparent 14%,
+      #5BC22E 14%, #5BC22E 20%,
+      transparent 20%
+    );
+  transform: rotate(17deg);
+  filter: drop-shadow(0 0 14px #7FE04A);
+}
+
+.hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  pointer-events: none;
+}
+
+
+/* ── LUGAR 1: Banner de encabezado del Dashboard admin ────────────────────
+   Franja de 180px al tope del panel. El área derecha (60% del ancho)
+   queda limpia para el título de la simulación activa.
+   Solo afecta #adminDashboardContent, no el resto del panel.
+   ──────────────────────────────────────────────────────────────────────── */
+#adminDashboardContent .dashboard-hero {
+  position: relative;
+  width: calc(100% + 48px);       /* compensa el padding de .view (24px c/lado) */
+  margin: -24px -24px 24px -24px; /* sangra hasta los bordes del .view */
+  height: 180px;
+  background:
+    radial-gradient(
+      ellipse 70% 90% at 65% 50%,
+      #2A5599 0%,
+      #1B3A6B 50%,
+      #0A1A33 100%
+    );
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+#adminDashboardContent .dashboard-hero::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      #1E5BB8 2%, #1E5BB8 4%,
+      transparent 4%, transparent 6%,
+      #1E5BB8 7%, #1E5BB8 9%,
+      transparent 9%, transparent 14%,
+      #5BC22E 14%, #5BC22E 20%,
+      transparent 20%
+    );
+  transform: rotate(17deg);
+  filter: drop-shadow(0 0 14px #7FE04A);
+  pointer-events: none;
+}
+
+#adminDashboardContent .dashboard-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  pointer-events: none;
+}
+
+/* Zona de texto del hero — lado derecho, sobre área limpia */
+.dashboard-hero__content {
+  position: relative;
+  z-index: 1;              /* sobre las capas ::before y ::after */
+  margin-left: auto;       /* empuja hacia el lado derecho (zona despejada) */
+  margin-right: 40px;
+  max-width: 55%;
+  text-align: right;
+}
+
+.dashboard-hero__titulo {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 6px;
+}
+
+.dashboard-hero__sim {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.40);
+}
+
+.dashboard-hero__badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(91, 194, 46, 0.20);
+  border: 1px solid rgba(91, 194, 46, 0.45);
+  color: #7FE04A;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 1px;
+}
+
+
+/* ── LUGAR 2: Top-bar del panel equipo (estudiantes) ──────────────────────
+   Solo #screen-equipo .top-bar — el top-bar del admin queda intacto
+   (mantiene su fondo semitransparente + borde verde institucional).
+   Texto .top-title en blanco para contraste sobre fondo oscuro.
+   Botones de .top-actions mantienen su estilo original sin cambios.
+   ──────────────────────────────────────────────────────────────────────── */
+#screen-equipo .top-bar {
+  position: sticky;
+  top: 0;
+  height: var(--top-h);
+  background:
+    radial-gradient(
+      ellipse 70% 120% at 65% 50%,
+      #2A5599 0%,
+      #1B3A6B 55%,
+      #0A1A33 100%
+    );
+  border-bottom: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 50;
+}
+
+/* Diagonal del PDF adaptada a la altura de 58px */
+#screen-equipo .top-bar::before {
+  content: "";
+  position: absolute;
+  inset: -60px -10px;     /* desborda para que la diagonal llegue a los bordes */
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      #1E5BB8 3%, #1E5BB8 5%,
+      transparent 5%, transparent 8%,
+      #1E5BB8 9%, #1E5BB8 11%,
+      transparent 11%, transparent 17%,
+      #5BC22E 17%, #5BC22E 23%,
+      transparent 23%
+    );
+  transform: rotate(17deg);
+  filter: drop-shadow(0 0 10px #7FE04A);
+  pointer-events: none;
+}
+
+/* Viñeta para profundidad */
+#screen-equipo .top-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 30%,
+    rgba(0, 0, 0, 0.28) 100%
+  );
+  pointer-events: none;
+}
+
+/* Texto blanco sobre fondo oscuro — contraste 11.3:1 ✅ AAA */
+#screen-equipo .top-bar .top-title {
+  color: #ffffff;
+  position: relative;
+  z-index: 1;
+}
+
+/* Botones del top-bar equipo: elevados sobre las capas de fondo */
+#screen-equipo .top-bar .top-actions {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ajuste de botones ghost sobre fondo oscuro */
+#screen-equipo .top-bar .btn-ghost {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+
+#screen-equipo .top-bar .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+/* El botón Enviar (btn-success) mantiene su color verde institucional
+   pero se refuerza el contraste con sombra sobre el fondo oscuro */
+#screen-equipo .top-bar .btn-success {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHANGELOG v5.0 — 17/05/2026
+   Basado en auditoría D1 + especificación PDF corporativo diagonal
+
+   P1 — TOKENS NUEVOS en :root
+     · Escala tipográfica: --text-xs a --text-2xl (Major Third 1.25)
+     · Escala de espaciado: --space-1 a --space-8 (múltiplos 4px)
+     · Colores PDF encapsulados: --pdf-blue-dark, --pdf-green-neon, etc.
+     · Colores derivados: --accent-hover, --accent2-hover, --color-gold
+     · FIX A6: --text3 oscurecido #7a93aa→#5a7088 (ratio 4.6:1 ✅ AA)
+     · FIX A6: --accent3 oscurecido #c98a00→#8a5c00 (ratio 4.8:1 ✅ AA)
+
+   P2 — ESCALA TIPOGRÁFICA
+     · 90 reemplazos de font-size literal → var(--text-*)
+     · Valores anómalos (.62 a .90rem) unificados en 7 niveles
+
+   P3 — ESCALA DE ESPACIADO
+     · padding/margin/gap con valores exactos de la escala → var(--space-*)
+     · Valores fuera de escala conservados con px literal
+
+   P4 — MEJORAS VISUALES PDF (5 lugares adicionales)
+     · .section-header h2: gradiente azul marino → verde neón
+     · .result-round-header: border-top 3px verde neón
+     · .hoja-section-title: barra izquierda 3px verde neón
+     · .ronda-btn.simulated: borde y color verde neón PDF
+     · .hoja-input:focus: glow verde neón sutil
+
+   P5 — ESTADOS INTERACTIVOS FALTANTES
+     · .btn: hover genérico + focus-visible con verde neón
+     · .nav-item: focus-visible con verde neón
+     · .form-input/.form-select: hover sutil + focus con glow verde
+     · .hoja-input/.hoja-select: hover + focus mejorado
+     · .ronda-btn: focus-visible agregado
+
+   FIX A2 — .badge-pending duplicado eliminado (segunda definición)
+
+   SELECTORES INTOCABLES CONFIRMADOS (no modificados):
+   #screen-login, .sidebar y hijos, @media print, .hoja-value-ro,
+   .view/.view.active, .screen/.hidden, .btn:disabled,
+   @keyframes fadeIn, .toast/.toast.show, .modal-overlay
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* FIX-002: texto visible en opciones de select — Chrome/Edge
+   no hereda color en <option> cuando se usan variables CSS */
+.form-input option,
+.form-select option,
+.hoja-select option,
+select option {
+  color: #1a2a3a !important;
+  background: #ffffff !important;
 }

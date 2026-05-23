@@ -15,6 +15,190 @@ const fmt = {
 let charts = {};
 let state = { me: null, ref: null, decisiones: null, resultados: null };
 
+// modificaciones en public/app.js (listener WebSocket + UI de bots + selector de industria)
+// =============================================================================
+// INSTRUCCIONES DE APLICACIÓN:
+//
+//   1. BLOQUE A: Añadir el módulo WS_CLIENT justo DESPUÉS de la declaración
+//      de `let state = { ... }` (alrededor de la línea 16).
+//
+//   2. BLOQUE B: En la función `doLogin()`, añadir `wsClient.conectar()`
+//      DESPUÉS de que el login es exitoso y antes de retornar.
+//      Busca: `toast(\`Bienvenido...`
+//
+//   3. BLOQUE C: Añadir el selector de industria al formulario de nueva
+//      simulación. Busca el div con id="newSimCopyFrom" y añade el campo
+//      después.
+//
+//   4. BLOQUE D: En `crearSimulacion()`, añadir la lectura del campo industria
+//      al construir el body del POST.
+//
+//   5. BLOQUE E: Añadir la sección de Bots al final de `loadAdminEquipos()`.
+//      El bloque se añade después del innerHTML del equiposTableWrap.
+//
+//   6. BLOQUE F: Añadir las funciones de gestión de bots (window.*Bot*).
+//      Añadir después de `window.cambiarPassword`.
+// =============================================================================
+
+
+// ══ BLOQUE A — módulo WebSocket del cliente (añadir tras `let state = ...`) ═══
+
+// ── WebSocket client ─────────────────────────────────────────────────────────
+// Gestiona la conexión en tiempo real con el servidor.
+// Se conecta automáticamente al seleccionar una simulación.
+const wsClient = (() => {
+  let socket = null;
+  let simIdActivo = null;
+  let intentosReconexion = 0;
+  const MAX_INTENTOS = 8;
+  const DELAY_BASE_MS = 1500;
+
+  function conectar(simId) {
+    // Si ya hay conexión para esta sim, no reconectar
+    if (socket && socket.readyState === WebSocket.OPEN && simIdActivo === simId) return;
+    // Cerrar conexión anterior si existe
+    if (socket) { socket.close(); socket = null; }
+
+    simIdActivo  = simId || state.currentSimId;
+    if (!simIdActivo) return;  // sin sim activa, no conectar
+
+    const rol      = state.me?.rol || 'equipo';
+    const equipoId = state.me?.id  || '';
+    const proto    = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url      = `${proto}//${location.host}/ws?simId=${simIdActivo}&rol=${rol}&equipoId=${equipoId}`;
+
+    try {
+      socket = new WebSocket(url);
+    } catch (e) {
+      console.warn('[ws] No se pudo crear WebSocket:', e.message);
+      return;
+    }
+
+    socket.onopen = () => {
+      intentosReconexion = 0;
+      console.log(`[ws] ✓ Conectado a sim "${simIdActivo}"`);
+    };
+
+    socket.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      manejarEventoWS(msg.evento, msg.datos);
+    };
+
+    socket.onclose = (evt) => {
+      console.log(`[ws] Conexión cerrada (código ${evt.code})`);
+      socket = null;
+      // Reconexión exponencial (solo si fue un cierre inesperado)
+      if (evt.code !== 1000 && intentosReconexion < MAX_INTENTOS) {
+        const delay = DELAY_BASE_MS * Math.pow(1.5, intentosReconexion);
+        intentosReconexion++;
+        console.log(`[ws] Reconectando en ${Math.round(delay / 1000)}s... (intento ${intentosReconexion})`);
+        setTimeout(() => conectar(simIdActivo), delay);
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.warn('[ws] Error de conexión WebSocket');
+    };
+  }
+
+  function desconectar() {
+    if (socket) { socket.close(1000, 'logout'); socket = null; }
+    simIdActivo = null;
+    intentosReconexion = 0;
+  }
+
+  return { conectar, desconectar };
+})();
+
+/**
+ * Maneja los eventos recibidos por WebSocket.
+ * Añade nuevos eventos aquí sin tocar el resto de la aplicación.
+ *
+ * @param {string} evento  Nombre del evento (ej. 'ronda_calculada')
+ * @param {Object} datos   Payload del evento
+ */
+function manejarEventoWS(evento, datos = {}) {
+  switch (evento) {
+
+    case 'conectado':
+      // Confirmación de conexión — silencioso
+      break;
+
+    case 'pong':
+      // Respuesta de heartbeat — silencioso
+      break;
+
+    case 'ronda_calculada': {
+      // ── Notificación principal: el profesor ejecutó la ronda ──────────────
+      const { ronda, lider, equiposSimulados, mensaje } = datos;
+
+      // Toast persistente (5 segundos) con más visibilidad
+      toastWS(
+        `⚡ Ronda ${ronda} calculada — ${equiposSimulados} equipos` +
+        (lider ? ` · Líder: ${lider.equipo}` : ''),
+        'success',
+        5000
+      );
+
+      // Si el usuario es un equipo, actualizar su dashboard automáticamente
+      if (state.me?.rol === 'equipo') {
+        // Pequeño delay para que el servidor termine de escribir en la BD
+        setTimeout(() => {
+          loadHojaDecision?.().catch(() => {});
+          loadResultados?.().catch(() => {});
+        }, 1200);
+      }
+
+      // Si el usuario es admin/profesor, refrescar el dashboard
+      if (state.me?.rol === 'superadmin' || state.me?.rol === 'profesor') {
+        setTimeout(() => loadAdminDashboard?.().catch(() => {}), 1200);
+      }
+      break;
+    }
+
+    case 'ronda_abierta': {
+      const { ronda } = datos;
+      toastWS(`🟢 Ronda ${ronda} abierta — ya puedes ingresar tus decisiones`, 'info', 5000);
+      if (state.me?.rol === 'equipo') {
+        setTimeout(() => loadHojaDecision?.().catch(() => {}), 800);
+      }
+      break;
+    }
+
+    case 'presim_disponible': {
+      toastWS('📊 Pre-simulación disponible — revisa las proyecciones antes de confirmar', 'info', 6000);
+      break;
+    }
+
+    default:
+      console.log('[ws] Evento no manejado:', evento, datos);
+  }
+}
+
+/**
+ * Toast especial para eventos WebSocket: más grande, dura más y tiene botón de cierre.
+ * A diferencia del toast() estándar, no usa el elemento #toast porque queremos
+ * que coexistan con los toasts normales.
+ */
+function toastWS(msg, tipo = 'success', duracion = 5000) {
+  // Reutilizar el sistema de toast existente si está disponible
+  if (typeof toast === 'function') {
+    toast(msg, tipo);
+    return;
+  }
+  // Fallback: crear un div temporal
+  const el = document.createElement('div');
+  el.style.cssText =
+    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+    'background:#1e293b;color:#f8fafc;padding:12px 20px;border-radius:8px;' +
+    'font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);max-width:420px;text-align:center';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), duracion);
+}
+
+
 // ── Utilidades globales de contraseña ──────────────────────
 window.toggleInputPw = (inputId, btn) => {
   const inp = document.getElementById(inputId);
@@ -120,6 +304,7 @@ async function doLogin() {
   try {
     const data = await api('POST','/auth/login',{id,password:pass});
     state.me = data;
+    wsClient.conectar(data.simulacionId || state.currentSimId);  // ← NUEVA LÍNEA
     if (data.rol === 'admin' || data.rol === 'superadmin' || data.rol === 'profesor') await initAdmin();
     else await initEquipo();
   } catch(e) {
@@ -334,6 +519,17 @@ async function initAdmin() {
 
 // ── Admin Simulaciones ─────────────────────────────────────
 async function loadAdminSimulaciones() {
+
+  let plantillasDisponibles = [];
+  try {
+    const data = await api('GET', '/admin/plantillas');
+    plantillasDisponibles = data.plantillas || [];
+  } catch {}
+  const plantillasOpts = plantillasDisponibles
+    .filter(p => p !== 'jaboncillos_v1')
+    .map(p => { const lbl = p.replace(/_v\d+$/, '').replace(/_/g, ' '); const cap = lbl.charAt(0).toUpperCase() + lbl.slice(1); return `<option value="${p}">${cap}</option>`; })
+    .join('');
+
   const el = document.getElementById('adminSimulacionesContent');
   if (!el) return;
   el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>`;
@@ -408,7 +604,21 @@ async function loadAdminSimulaciones() {
               ${activas.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('')}
             </select>
           </div>
-        </div>
+
+            <div>
+              <label class="form-label">Industria / Plantilla</label>
+              <select class="form-input" id="newSimIndustria">
+                <option value="" disabled selected>— Seleccionar industria —</option>
+                <option value="jaboncillos_v1">Jaboncillos</option>
+                ${plantillasOpts}
+              </select>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:4px">
+                Define el tipo de producto, canales y segmentos del mercado.
+                Solo aplica si no copias de otra simulación.
+              </div>
+            </div>
+
+            </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-success" onclick="crearSimulacion()">✓ Crear Simulación</button>
           <button class="btn btn-ghost" onclick="document.getElementById('crearSimForm').style.display='none'">Cancelar</button>
@@ -442,17 +652,26 @@ window.showCrearSimulacion = () => {
 };
 
 window.crearSimulacion = async () => {
-  const nombre = document.getElementById('newSimNombre').value.trim();
+  const nombre     = document.getElementById('newSimNombre').value.trim();
   if (!nombre) return toast('El nombre es requerido', 'error');
-  const desc       = document.getElementById('newSimDesc').value.trim();
-  const totalRounds= parseInt(document.getElementById('newSimRondas').value)||20;
-  const copyFromSimId = document.getElementById('newSimCopyFrom').value||null;
+  const desc        = document.getElementById('newSimDesc').value.trim();
+  const totalRounds = parseInt(document.getElementById('newSimRondas').value) || 20;
+  const copyFromSimId = document.getElementById('newSimCopyFrom').value || null;
+  // NUEVO: leer industria seleccionada
+  const industria   = document.getElementById('newSimIndustria')?.value || null;
+
   try {
-    const r = await api('POST','/admin/simulaciones',{nombre,descripcion:desc,totalRounds,copyFromSimId});
-    toast(`✓ Simulación creada — Código: ${r.codigoAcceso}`, 'success');
+    const r = await api('POST', '/admin/simulaciones', {
+      nombre,
+      descripcion:  desc,
+      totalRounds,
+      copyFromSimId,
+      industria:    copyFromSimId ? null : industria,  // ignorar plantilla si se copia de otra sim
+    });
+    toast(`✓ Simulación creada — Código: ${r.codigoAcceso}${r.industria ? ` · Industria: ${r.industria}` : ''}`, 'success');
     document.getElementById('crearSimForm').style.display = 'none';
     await loadAdminSimulaciones();
-  } catch(e) { toast(e.message,'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 };
 
 window.seleccionarSim = async (simId, nombre) => {
@@ -463,6 +682,7 @@ window.seleccionarSim = async (simId, nombre) => {
     // Cargar config de la simulación seleccionada
     state.ref = await api('GET','/admin/config');
     toast(`📊 Simulación activa: ${nombre}`, 'success');
+    wsClient.conectar(simId);
     // Actualizar badge en el header
     const badge = document.getElementById('simBadge');
     if (badge) badge.textContent = `📊 ${nombre}`;
@@ -599,14 +819,15 @@ async function loadAdminDashboard() {
         </div>`;
     } catch(e) { bottomHTML = `<p style="color:var(--accent4)">${e.message}</p>`; }
   } else {
-    // Show team submission status
+
+        // Show team submission status
     const equipos = await api('GET','/admin/equipos');
     bottomHTML = `
       <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">Estado de Entregas — Ronda ${ronda.currentRound}</div>
       <div class="team-status-grid">
         ${equipos.length === 0
           ? '<p style="color:var(--text3);font-size:.84rem">Sin equipos registrados. Ve a <strong>Equipos</strong> para crear equipos.</p>'
-          : equipos.map(eq => `
+          : equipos.filter(eq => !eq.isBot).map(eq => `
               <div class="team-status-card">
                 <div class="team-status-dot" style="background:${eq.submitted ? 'var(--success)' : 'var(--warning)'}"></div>
                 <div>
@@ -698,13 +919,63 @@ function buildAdminResultsHTML(rd) {
       </td>
       <td class="num">${fmt.d(r.roiMarketing,2)}x</td>
     </tr>`).join('');
+
+  // Etapa 3.5: tabla fiscal por equipo
+  const df = rd.dashboardFiscal;
+  let fiscalHTML = '';
+  if (df) {
+    const fRows = (df.porEquipo || []).map(e => `
+      <tr>
+        <td><strong>${e.equipoNombre}</strong></td>
+        <td class="num neg">${fmt.bs(e.impuestoIT)}</td>
+        <td class="num neg">${fmt.bs(e.ivaAPagar)}</td>
+        <td class="num neg">${fmt.bs(e.impuestoIUE)}</td>
+        <td class="num neg"><strong>${fmt.bs(e.totalImpuestos)}</strong></td>
+      </tr>`).join('');
+    fiscalHTML = `
+    <div style="margin-top:20px">
+      <h4 style="color:var(--text2);font-size:.82rem;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">
+        🧾 Dashboard Fiscal — Etapa 3.5
+      </h4>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="kpi-card" style="flex:1;min-width:130px">
+          <div class="kpi-label">IT Total (3%)</div>
+          <div class="kpi-value neg">${fmt.bs(df.totalIT)}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:130px">
+          <div class="kpi-label">IVA neto Total</div>
+          <div class="kpi-value neg">${fmt.bs(df.totalIVA)}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:130px">
+          <div class="kpi-label">IUE Total (25%)</div>
+          <div class="kpi-value neg">${fmt.bs(df.totalIUE)}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:130px;border-color:var(--accent4)">
+          <div class="kpi-label">Total impuestos</div>
+          <div class="kpi-value neg"><strong>${fmt.bs(df.totalImpuestos)}</strong></div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:130px">
+          <div class="kpi-label">Presión fiscal promedio</div>
+          <div class="kpi-value ${df.presionFiscalPct>30?'neg':df.presionFiscalPct>20?'warn':''}">${df.presionFiscalPct.toFixed(1)}% s/ut.bruta</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Equipo</th><th>IT</th><th>IVA neto</th><th>IUE</th><th>Total</th></tr></thead>
+          <tbody>${fRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   return `
     <div class="table-wrap" style="margin-top:4px">
       <table>
         <thead><tr><th>Equipo</th><th>Segmento</th><th>Ventas (unid)</th><th>Market Share</th><th>EBIT</th><th>Utilidad neta</th><th>Caja final</th><th>ROI Mkt</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${fiscalHTML}`;
 }
 
 async function doPreSimular() {
@@ -783,7 +1054,7 @@ async function loadAdminEquipos() {
   if (!requireSimSelected('equiposContent')) return;
   const equipos = await api('GET','/admin/equipos');
 
-  const rows = equipos.map(eq => {
+    const rows = equipos.filter(eq => !eq.isBot).map(eq => {
     const miembros = (eq.miembros || []);
     const miembrosHTML = miembros.length
       ? miembros.map(m => `
@@ -822,7 +1093,9 @@ async function loadAdminEquipos() {
       </tr>`;
   }).join('');
 
+
   document.getElementById('equiposTableWrap').innerHTML = `
+    <div id="botsSection"></div>
     <table>
       <thead>
         <tr>
@@ -839,6 +1112,7 @@ async function loadAdminEquipos() {
     </table>`;
 
   document.getElementById('btnExportarEquipos')?.addEventListener('click', () => exportarEquipos(equipos));
+  await renderBotsSection();
 }
 
 window.togglePw = (pwId) => {
@@ -909,6 +1183,15 @@ window.eliminarEquipo = async (id, nombre) => {
   } catch(e) { toast(e.message,'error'); }
 };
 
+// ── Emojis de perfil para bots ─────────────────────────────────────────────
+const PERFILES_BOT_EMOJI = {
+  Agresivo:    '⚡',
+  Premium:     '💎',
+  Equilibrado: '⚖️',
+  Innovador:   '🚀',
+};
+
+
 window.cambiarPassword = async (id, nombre) => {
   const p = prompt(`Nueva contraseña para "${nombre}":`);
   if (!p || p.length < 4) return;
@@ -917,6 +1200,122 @@ window.cambiarPassword = async (id, nombre) => {
     toast('✓ Contraseña actualizada','success');
   } catch(e) { toast(e.message,'error'); }
 };
+
+// ══ BLOQUE F — funciones de gestión de bots ══════════════════════════════════
+// Añadir DESPUÉS de window.cambiarPassword en app.js:
+
+window.agregarBot = async () => {
+  const nombre = (document.getElementById('botNombre').value || '').trim();
+  const perfil = document.getElementById('botPerfil').value;
+  if (!perfil) return toast('Selecciona un perfil de bot', 'error');
+  try {
+    const r = await api('POST', '/admin/bots', { nombre: nombre || `Bot ${perfil}`, perfil });
+    toast(`✓ Bot "${r.nombre}" (${r.perfil}) agregado`, 'success');
+    document.getElementById('botNombre').value = '';
+    await renderBotsSection();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.eliminarBot = async (id, nombre) => {
+  if (!confirm(`¿Eliminar el bot "${nombre}"?\n\nNo participará en las próximas rondas.`)) return;
+  try {
+    await api('DELETE', `/admin/bots/${id}`);
+    toast(`Bot "${nombre}" eliminado`, 'info');
+    await renderBotsSection();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+
+
+// ══ BLOQUE E — sección de Bots en loadAdminEquipos() ════════════════════════
+// BUSCA en loadAdminEquipos() la línea:
+//   document.getElementById('btnExportarEquipos')?.addEventListener(...)
+// AÑADE justo DESPUÉS (al final del try{} de loadAdminEquipos):
+
+async function renderBotsSection() {
+  const botsWrap = document.getElementById('botsSection');
+  if (!botsWrap) return;
+
+  let botsData;
+  try {
+    botsData = await api('GET', '/admin/bots');
+  } catch (e) {
+    botsWrap.innerHTML = `<p style="color:var(--accent4);font-size:.82rem">${e.message}</p>`;
+    return;
+  }
+
+  const { bots = [], perfiles = [] } = botsData;
+
+  const perfilOpts = perfiles
+    .map(p => `<option value="${p.id}">${p.emoji || ''} ${p.id}</option>`)
+    .join('');
+
+  const botRows = bots.length
+    ? bots.map(b => `
+        <tr>
+          <td>
+            <span style="font-family:var(--font-mono);font-size:.82rem">🤖 ${b.nombre}</span>
+          </td>
+          <td>
+            <span class="badge badge-ok" style="font-size:.72rem">${PERFILES_BOT_EMOJI[b.perfil] || '🤖'} ${b.perfil}</span>
+          </td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="eliminarBot('${b.id}','${b.nombre}')">✕ Eliminar</button>
+          </td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="3" style="color:var(--text3);font-size:.82rem;padding:12px 0">
+         Sin bots configurados. Los bots compiten automáticamente en cada ronda.
+       </td></tr>`;
+
+  botsWrap.innerHTML = `
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+      <h3 style="margin:0 0 4px">🤖 Competidores IA (Bots)</h3>
+      <p style="color:var(--text3);font-size:.8rem;margin:0 0 16px">
+        Los bots generan sus decisiones automáticamente antes de ejecutar cada ronda.
+        No aparecen en el panel de equipos estudiantiles.
+      </p>
+
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <label class="form-label" style="font-size:.75rem">Nombre del bot</label>
+          <input class="form-input" id="botNombre" placeholder="Ej: CompetidorA" style="width:160px">
+        </div>
+        <div>
+          <label class="form-label" style="font-size:.75rem">Perfil estratégico</label>
+          <select class="form-input" id="botPerfil" style="width:160px">${perfilOpts}</select>
+        </div>
+        <button class="btn btn-success" onclick="agregarBot()">+ Agregar Bot</button>
+      </div>
+
+      <table style="width:100%;font-size:.82rem">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:6px 0">Bot</th>
+            <th style="text-align:left;padding:6px 0">Perfil</th>
+            <th style="text-align:left;padding:6px 0">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>${botRows}</tbody>
+      </table>
+
+      <div style="margin-top:12px;padding:10px;background:var(--bg2);border-radius:8px;font-size:.76rem;color:var(--text3)">
+        <strong>Perfiles disponibles:</strong>
+        ${perfiles.map(p => `<span style="margin-right:12px">${p.emoji || '🤖'} <strong>${p.id}</strong></span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+
+// INSTRUCCIÓN: añadir <div id="botsSection"></div> al HTML de la vista
+// admin-equipos, DESPUÉS del div equiposTableWrap.
+// También añadir esta línea al final de loadAdminEquipos():
+//   await renderBotsSection();
+
+
+
+
 
 // ── Admin Rondas ───────────────────────────────────────────
 async function loadAdminRondas() {
@@ -933,7 +1332,7 @@ async function loadAdminRondas() {
     '<span class="badge badge-pending">⏸ Pendiente</span>';
 
   const histRows = hist.map(h => {
-    const estadoBadge = h.estado === 'simulated'
+    const estadoBadge = ['simulated','calculada'].includes(h.estado)
       ? '<span class="badge badge-simulated">✅ Simulada</span>'
       : '<span class="badge badge-open">🟢 Activa</span>';
     return `
@@ -942,7 +1341,7 @@ async function loadAdminRondas() {
         <td>${estadoBadge}</td>
         <td>${h.enviados}/${h.total}</td>
         <td>${fmt.dt(h.ejecutadaAt)}</td>
-        <td>${h.estado==='simulated'
+        <td>${['simulated','calculada'].includes(h.estado)
           ? `<button class="btn btn-ghost btn-sm" onclick="verResultadosRonda(${h.ronda})">Ver →</button>`
           : '—'}</td>
       </tr>`;
@@ -1058,7 +1457,7 @@ async function loadAdminResultados(rondaNum) {
 
   // Build round selector
   const hist = await api('GET','/admin/historial');
-  const simuladas = hist.filter(h => h.estado === 'simulated');
+  const simuladas = hist.filter(h => ['simulated','calculada'].includes(h.estado));
   if (!simuladas.length) {
     document.getElementById('adminResultadosContent').innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>No hay rondas simuladas aún</p></div>`;
     return;
@@ -1112,22 +1511,33 @@ function renderAdminCharts() {
 async function loadAdminMercado() {
   if (!requireSimSelected('mercadoContent')) return;
   const ref = state.ref || await api('GET','/admin/config');
-  const segs = ref.mercadoSegmentos;
+  const segs = ref.mercadoSegmentos || [];
+  if (!segs.length) {
+    document.getElementById('adminMercadoContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📊</div><p>Sin datos de mercado.</p></div>';
+    return;
+  }
   const tend = t => t==='Alto crecimiento'?'badge-high':t==='Creciente'?'badge-grow':'badge-stable';
   const rows = segs.map(s => `
     <tr>
       <td><strong>${s.nombre}</strong></td>
-      <td class="num">${fmt.pct(s.participacion)}</td>
-      <td class="num">${fmt.bs(s.mercadoFormal)}</td>
-      <td class="num">${fmt.bs(s.precioRetailProm)}</td>
-      <td class="num">${fmt.num(s.demandaFormalUnid)}</td>
-      <td>${s.canalPreferido}</td>
+      <td class="num">${fmt.num(s.demandaBase)}</td>
+      <td class="num">${fmt.pct(s.pctContrabando)}</td>
+      <td class="num val-gold">${fmt.num(s.demandaFormal)}</td>
+      <td class="num">${fmt.pct(s.tasaCrecimiento ?? 0)}</td>
       <td><span class="badge ${tend(s.tendencia)}">${s.tendencia}</span></td>
     </tr>`).join('');
   document.getElementById('adminMercadoContent').innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Segmento</th><th>Participación</th><th>Mercado formal (Bs)</th><th>P° retail prom.</th><th>Demanda formal (unid)</th><th>Canal preferido</th><th>Tendencia</th></tr></thead>
+        <thead><tr>
+          <th>Segmento</th>
+          <th>Demanda base</th>
+          <th>% Contrabando</th>
+          <th>Demanda formal (unid)</th>
+          <th>Tasa crecimiento</th>
+          <th>Tendencia</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -1210,12 +1620,54 @@ async function loadAdminParametros() {
       </div>
 
       <div class="param-card">
+        <div class="param-card-title">🧾 Sistema Tributario Bolivia — Etapa 3.5</div>
+        ${pf('IVA (tasa)','tasaIVA','0.13 = 13%')}
+        ${pf('IT — Impuesto a las Transacciones (tasa)','tasaIT','0.03 = 3% sobre ventas brutas')}
+        ${pf('IUE — Impuesto s/Utilidades (tasa)','tasaIUE','0.25 = 25% sobre utilidad gravable')}
+        ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
+        ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
+        ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
+      </div>
+
+      <div class="param-card">
         <div class="param-card-title">🧪 Costo Base por Producto (Bs/unid)</div>
         ${Object.entries(tp).map(([n,v])=>`
           <div class="param-row">
             <label class="param-label">${n}</label>
             <input class="param-input" type="number" step="0.01" data-tp="${n}" value="${v.costoBase}"/>
           </div>`).join('')}
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">⚙️ Módulos Activos — Control de Funcionalidades</div>
+        <div style="font-size:.78rem;color:var(--text3);margin-bottom:12px">
+          Activa o desactiva módulos para adaptar la complejidad del simulador a tu curso.
+          Los módulos desactivados no aparecen en la hoja de decisión de los equipos.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+          ${[
+            { id:'modMateriaPrima',  label:'🏭 Materia Prima',          desc:'Compra de MP, proveedores, lead time, restricción de producción',  etapa:'3.1' },
+            { id:'modOperarios',     label:'👷 Operarios',              desc:'Contratación, despido, capacitación y capacidad efectiva',          etapa:'3.2' },
+            { id:'modIVA',           label:'🧾 IVA (13%)',              desc:'Débito, crédito fiscal y pago neto de IVA en el P&L',              etapa:'3.3' },
+            { id:'modImpuestos',     label:'📊 IT + IUE',              desc:'Impuesto a las Transacciones (3%) e IUE (25%) anual',             etapa:'3.4' },
+            { id:'modBrandEquity',   label:'⭐ Brand Equity',           desc:'Acumulación de reputación de marca entre rondas',                  etapa:'2.1' },
+            { id:'modCanibalizacion',label:'🔀 Canibalización',         desc:'Penalización al atractivo cuando la empresa compite en N segmentos',etapa:'2.3' },
+            { id:'modDemandaDin',    label:'📈 Demanda Dinámica',       desc:'Crecimiento/decrecimiento de mercado por tendencia de segmento',   etapa:'2.2' },
+            { id:'modInnovacion',    label:'💡 Innovación',             desc:'Inversión en producto, proceso o canal para mejorar posición',     etapa:'base' },
+            { id:'modInvestigacion', label:'🔍 Investigación Mercado',  desc:'Compra de reportes básicos y premium de inteligencia',            etapa:'base' },
+          ].map(mod => `
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2);cursor:pointer">
+              <input type="checkbox" data-modulo="${mod.id}"
+                ${(p['modulos_'+mod.id] !== 0) ? 'checked' : ''}
+                style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent);flex-shrink:0"/>
+              <div>
+                <div style="font-weight:600;font-size:.85rem;color:var(--text1)">${mod.label}
+                  <span style="font-size:.7rem;color:var(--text3);font-weight:400;margin-left:4px">Etapa ${mod.etapa}</span>
+                </div>
+                <div style="font-size:.75rem;color:var(--text3);margin-top:2px">${mod.desc}</div>
+              </div>
+            </label>`).join('')}
+        </div>
       </div>
 
       <div class="param-card" style="grid-column:span 2">
@@ -1255,6 +1707,11 @@ async function loadAdminParametros() {
 async function saveParametros() {
   const parametros = {};
   document.querySelectorAll('[data-pkey]').forEach(el => { parametros[el.dataset.pkey] = +el.value; });
+
+  // Guardar estado de módulos como params booleanos (1=activo, 0=inactivo)
+  document.querySelectorAll('[data-modulo]').forEach(el => {
+    parametros['modulos_' + el.dataset.modulo] = el.checked ? 1 : 0;
+  });
 
   const tiposProducto = {};
   document.querySelectorAll('[data-tp]').forEach(el => { tiposProducto[el.dataset.tp] = { costoBase: +el.value }; });
@@ -1539,6 +1996,9 @@ async function initEquipo() {
   document.getElementById('equipoNombreSidebar').textContent = state.me.nombre;
   document.getElementById('btnEquipoLogout').addEventListener('click', doLogout);
   document.getElementById('btnPrintHoja').addEventListener('click', printHoja);
+  // P1 FIX: conectar botones del encabezado a sus funciones
+  document.getElementById('btnGuardar')?.addEventListener('click', guardarDecision);
+  document.getElementById('btnEnviar')?.addEventListener('click', enviarDecision);
 
   // Show/hide print button only on hoja view
   document.querySelectorAll('#screen-equipo .nav-item').forEach(btn => {
@@ -1614,8 +2074,9 @@ async function loadDecisionForm() {
   const ref = state.ref;
   const disabled = isEditable ? '' : 'disabled';
 
-  const segOpts = ref.segmentos.map(s => `<option ${s.nombre===d.segmentoObjetivo?'selected':''}>${s.nombre}</option>`).join('');
-  const prodOpts = ref.tiposProducto.map(t => `<option value="${t.nombre}" ${t.nombre===d.tipoProducto?'selected':''}>${t.nombre} (Bs ${t.costoBase})</option>`).join('');
+  const segOpts = '<option value="">-- Seleccionar segmento --</option>' +
+  ref.segmentos.map(s => `<option ${s.nombre === d.segmentoObjetivo ? 'selected' : ''}>${s.nombre}</option>`).join('');
+  
   const canalOpts = ref.canales.map(c => `<option ${c.nombre===d.canal?'selected':''}>${c.nombre}</option>`).join('');
 
   const inp = (field, val, extra='') => `<input class="form-input editable" data-field="${field}" ${disabled} ${extra} value="${val ?? ''}"/>`;
@@ -1712,6 +2173,11 @@ async function loadDecisionForm() {
               : el.value;
       if (el.tagName === 'SELECT' && el.dataset.field === 'tipoProducto') {
         val = el.value.replace(/\s*\(Bs[\d.\s]+\)\s*$/, '').trim();
+        // FIX: escribir también el campo canónico "producto" que usa el motor
+        state.decisiones['producto'] = val;
+        if (state.decisiones.productos?.[0]) {
+          state.decisiones.productos[0].producto = val;
+        }
       }
       state.decisiones[el.dataset.field] = val;
     });
@@ -1720,6 +2186,34 @@ async function loadDecisionForm() {
   // Toggle buttons visibility
   document.getElementById('btnGuardar').style.display = isEditable ? '' : 'none';
   document.getElementById('btnEnviar').style.display  = isEditable ? '' : 'none';
+}
+
+function sincronizarHojaConEstado() {
+  // P4 FIX: sincroniza el DOM de la hoja con state.decisiones antes de
+  // guardar o enviar, capturando cambios no procesados por el change handler.
+  document.querySelectorAll('[data-hoja-field]').forEach(el => {
+    if (!state.decisiones) return;
+    const field = el.dataset.hojaField;
+    const v = el.type === 'checkbox' ? el.checked
+            : el.type === 'number'   ? +el.value
+            : el.tagName === 'SELECT'
+              ? el.value.replace(/\s*\(Bs[\d.\s]+\)\s*$/, '').trim()
+            : el.value;
+    const prodFields = ['producto','segmentoObjetivo','canalPrincipal',
+      'canalSecundario','calidad','precioVenta','produccion','publicidad',
+      'promocion','eventos','marketingRedes','relacionesPublicas',
+      'innovacion','tipoInnovacion','montoInnovacion'];
+    if (state.decisiones.productos?.[0] && prodFields.includes(field)) {
+      state.decisiones.productos[0][field] = v;
+    }
+    if (field === 'producto' || field === 'tipoProducto') {
+      state.decisiones['producto'] = v;
+      if (state.decisiones.productos?.[0]) {
+        state.decisiones.productos[0].producto = v;
+      }
+    }
+    state.decisiones[field] = v;
+  });
 }
 
 async function guardarDecision() {
@@ -1756,13 +2250,19 @@ let hojaProductoActivo = 0;
 function normalizarDecisionMultiproducto(decision) {
   decision = decision || {};
 
+  // FIX: el formulario legado usa data-field="tipoProducto"; mapear a "producto"
+  // para garantizar que el motor siempre recibe el campo correcto.
+  if (!decision.producto && decision.tipoProducto) {
+    decision.producto = decision.tipoProducto;
+  }
+
   if (!Array.isArray(decision.productos) || decision.productos.length === 0) {
     decision.productos = [{
       productoId: 'prod_1',
       activo: true,
-      producto: decision.producto || 'Básico',
-      segmentoObjetivo: decision.segmentoObjetivo || 'Masivo popular',
-      canalPrincipal: decision.canalPrincipal || 'Mercado',
+      producto: decision.producto || decision.tipoProducto || '',
+      segmentoObjetivo: decision.segmentoObjetivo || '',
+      canalPrincipal: decision.canalPrincipal || '',
       canalSecundario: decision.canalSecundario || 'Ninguno',
       calidad: decision.calidad ?? 5,
       precioVenta: decision.precioVenta ?? 3.6,
@@ -1801,23 +2301,37 @@ function normalizarDecisionMultiproducto(decision) {
 
 function crearProductoDefault(idx) {
   return {
-    productoId: `prod_${idx + 1}`,
+    productoId: 'prod_' + (idx + 1),
     activo: true,
-    producto: 'Básico',
-    segmentoObjetivo: 'Masivo popular',
-    canalPrincipal: 'Mercado',
+    producto: '',
+    segmentoObjetivo: '',
+    canalPrincipal: '',
     canalSecundario: 'Ninguno',
     calidad: 5,
-    precioVenta: 3.6,
-    produccion: 18000,
-    publicidad: 3000,
-    promocion: 2000,
-    eventos: 1000,
-    marketingRedes: 1000,
-    relacionesPublicas: 1000,
+    precioVenta: 0,
+    produccion: 0,
+    publicidad: 0,
+    promocion: 0,
+    eventos: 0,
+    marketingRedes: 0,
+    relacionesPublicas: 0,
     innovacion: false,
-    tipoInnovacion: '',
-    montoInnovacion: 0
+    tipoInnovacion: 'Producto',
+    montoInnovacion: 0,
+    vendedoresIniciales: 2,
+    contratarVendedores: 0,
+    despedirVendedores: 0,
+    // Etapa 3.2: Operarios
+    contratarOperarios:  0,
+    despedirOperarios:   0,
+    montoCapacitacion:   0,
+    // Etapa 3.1: Materia Prima
+    proveedorElegido:    '',
+    cantidadMPpedida:    0,
+    // Campos legado (para no romper motor con decisiones monoproducto viejas)
+    tipoPrestamo: 'Ninguno',
+    montoPrestamo: 0,
+    amortizacion: 0,
   };
 }
 
@@ -2012,13 +2526,13 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   }
 
   const j = decision.justificaciones || {};
+   const productos = decision.productos || [];
 
-    const productos = decision.productos || [];
-    const productoActivo = productos[hojaProductoActivo] || productos[0];
+      if (hojaProductoActivo >= productos.length) {
+        hojaProductoActivo = 0;
+      }
 
-    if (hojaProductoActivo >= productos.length) {
-      hojaProductoActivo = 0;
-    }
+      const productoActivo = productos[hojaProductoActivo] || productos[0] || crearProductoDefault(0);
 
     window.hojaSeleccionarProducto = (idx) => {
       hojaProductoActivo = idx;
@@ -2067,16 +2581,19 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       ? `<input type="checkbox" data-hoja-field="${field}" ${decision[field]?'checked':''} style="width:16px;height:16px;accent-color:var(--accent)"/> ${label}`
       : `<span class="hoja-value-ro">${decision[field]?'✓ Sí':'✗ No'}</span> ${label}`;
 
-  const segOpts    = ref.segmentos.map(s=>`<option ${s.nombre===decision.segmentoObjetivo?'selected':''}>${s.nombre}</option>`).join('');
-  const prodOpts   = ref.tiposProducto.map(t=>`<option ${t.nombre===decision.producto?'selected':''}>${t.nombre} (Bs ${t.costoBase})</option>`).join('');
-  // canales puede ser array [{nombre,...}] o objeto {nombre:{...}}
+    const segOpts = '<option value="">-- Seleccionar segmento --</option>' +
+    ref.segmentos.map(s => `<option ${s.nombre === productoActivo.segmentoObjetivo ? 'selected' : ''}>${s.nombre}</option>`).join('');
+     const prodOpts = '<option value="">-- Seleccionar producto --</option>' +
+    ref.tiposProducto.map(t => `<option ${t.nombre === productoActivo.producto ? 'selected' : ''}>${t.nombre} (Bs ${t.costoBase})</option>`).join('');
+  
+      // canales puede ser array [{nombre,...}] o objeto {nombre:{...}}
   const _canalNames = Array.isArray(ref.canales)
     ? ref.canales.map(c => c.nombre)
     : Object.keys(ref.canales || {});
-  const canalOpts  = ['Ninguno', ..._canalNames].map(c => `<option ${c===decision.canalPrincipal?'selected':''}>${c}</option>`).join('');
-  const canal2Opts = ['Ninguno', ..._canalNames].map(c => `<option ${c===decision.canalSecundario?'selected':''}>${c}</option>`).join('');
+  const canalOpts  = ['Ninguno', ..._canalNames].map(c => `<option ${c===productoActivo.canalPrincipal?'selected':''}>${c}</option>`).join('');
+  const canal2Opts = ['Ninguno', ..._canalNames].map(c => `<option ${c===productoActivo.canalSecundario?'selected':''}>${c}</option>`).join('');
   const tipoPresOpts = ['Ninguno','Operativo','Inversión'].map(t=>`<option ${t===decision.tipoPrestamo?'selected':''}>${t}</option>`).join('');
-  const tipoInnOpts  = ['Producto','Proceso','Canal'].map(t=>`<option ${t===decision.tipoInnovacion?'selected':''}>${t}</option>`).join('');
+  const tipoInnOpts = ['Producto','Proceso','Canal'].map(t=>`<option ${t===productoActivo.tipoInnovacion?'selected':''}>${t}</option>`).join('');
   const tipoInvOpts  = ['No','Básica','Premium'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
 
   const p = ref.parametros || {};
@@ -2138,7 +2655,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td class="hoja-ref">Opcional — promedia con canal principal</td>
               <td></td></tr>
           <tr><td class="hoja-label">⭐ Calidad (1–10)</td>
-              <td>${inp('calidad',decision.calidad,'number','min="1" max="10" step="1"')}</td>
+              <td>${inp('calidad',productoActivo.calidad,'number','min="1" max="10" step="1"')}</td>
               <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
               <td></td></tr>
           <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
@@ -2153,42 +2670,124 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       </table>
     </div>
 
-    <!-- S2: MARKETING DESAGREGADO -->
+        <!-- S2: MARKETING DESAGREGADO -->
     <div class="hoja-section">
       <div class="hoja-section-title">2 · Marketing y Fuerza de Ventas</div>
       <table class="hoja-table">
         <thead><tr><th>Rubro</th><th>Monto (Bs)</th><th>Referencia</th><th>Justificación</th></tr></thead>
         <tbody>
           <tr><td class="hoja-label">📣 Publicidad</td>
-              <td>${inp('publicidad',decision.publicidad,'number','min="0" step="500"')}</td>
+              <td>${inp('publicidad',productoActivo.publicidad,'number','min="0" step="500"')}</td>
               <td class="hoja-ref">Impacto en atractivo competitivo</td>
               <td>${ta('marketing','¿Cómo distribuiste el presupuesto?')}</td></tr>
           <tr><td class="hoja-label">🎁 Promoción</td>
-              <td>${inp('promocion',decision.promocion,'number','min="0" step="500"')}</td>
+              <td>${inp('promocion',productoActivo.promocion,'number','min="0" step="500"')}</td>
               <td class="hoja-ref">Alta eficacia en segmentos masivos</td><td></td></tr>
           <tr><td class="hoja-label">🎪 Eventos</td>
-              <td>${inp('eventos',decision.eventos,'number','min="0" step="500"')}</td>
+              <td>${inp('eventos',productoActivo.eventos,'number','min="0" step="500"')}</td>
               <td class="hoja-ref">Eficacia media; fortalece posicionamiento</td><td></td></tr>
           <tr><td class="hoja-label">📱 Marketing en redes</td>
-              <td>${inp('marketingRedes',decision.marketingRedes,'number','min="0" step="500"')}</td>
+              <td>${inp('marketingRedes',productoActivo.marketingRedes,'number','min="0" step="500"')}</td>
               <td class="hoja-ref">Alta eficacia en segmentos Natural y Cosmético</td><td></td></tr>
           <tr><td class="hoja-label">📰 Relaciones públicas</td>
-              <td>${inp('relacionesPublicas',decision.relacionesPublicas,'number','min="0" step="500"')}</td>
+              <td>${inp('relacionesPublicas',productoActivo.relacionesPublicas,'number','min="0" step="500"')}</td>
               <td class="hoja-ref">Alta eficacia en segmentos diferenciados</td><td></td></tr>
           <tr style="border-top:2px solid var(--border2)">
             <td class="hoja-label">👥 Vendedores actuales</td>
             <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
           <tr><td class="hoja-label">➕ Contratar vendedores</td>
-              <td>${inp('contratarVendedores',decision.contratarVendedores,'number','min="0" max="10" step="1"')}</td>
+              <td>${inp('contratarVendedores',productoActivo.contratarVendedores,'number','min="0" max="10" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
           <tr><td class="hoja-label">➖ Despedir vendedores</td>
-              <td>${inp('despedirVendedores',decision.despedirVendedores,'number','min="0" step="1"')}</td>
+              <td>${inp('despedirVendedores',productoActivo.despedirVendedores,'number','min="0" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
         </tbody>
       </table>
     </div>
 
+        <!-- S2.5: OPERARIOS — Etapa 3.2 -->
+    ${(p.costoOperario !== undefined && p.modulos_modOperarios !== 0) ? `
+    <div class="hoja-section">
+      <div class="hoja-section-title">2.5 · RRHH — Operarios de Producción</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="hoja-label">🏭 Operarios actuales</td>
+            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
+            <td class="hoja-ref">Propagado de ronda anterior</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">➕ Contratar operarios</td>
+            <td>${inp('contratarOperarios', decision.contratarOperarios ?? 0, 'number', 'min="0" max="20" step="1"')}</td>
+            <td class="hoja-ref">Costo contratación: Bs ${fmt.num(p.costoContratacionOperario ?? 800)} c/u</td>
+            <td style="font-size:.78rem;color:var(--text3)">Sueldo: Bs ${fmt.num(p.costoOperario ?? 3200)}/trim/operario</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">➖ Despedir operarios</td>
+            <td>${inp('despedirOperarios', decision.despedirOperarios ?? 0, 'number', 'min="0" step="1"')}</td>
+            <td class="hoja-ref">Costo despido: Bs ${fmt.num(p.costoDespidoOperario ?? 1200)} c/u</td>
+            <td style="font-size:.78rem;color:var(--text3)">Mínimo final: 0 operarios</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🎓 Inversión en capacitación (Bs)</td>
+            <td>${inp('montoCapacitacion', decision.montoCapacitacion ?? 0, 'number', 'min="0" step="1000"')}</td>
+            <td class="hoja-ref">+${fmt.pct(p.factorCapacitacion ?? 0.05)} productividad por cada Bs 10.000</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. = operarios × ${p.productividadBase ?? 440} × (1 + factor)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+        <!-- S2.6: MATERIA PRIMA — Etapa 3.1 -->
+    ${(ref.proveedores && ref.proveedores.length > 0 && p.modulos_modMateriaPrima !== 0) ? `
+    <div class="hoja-section">
+      <div class="hoja-section-title">2.6 · Materia Prima — Compra de insumos</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="hoja-label">📦 Stock MP disponible</td>
+            <td><span class="hoja-value-ro">${fmt.num(decision.stockMPInicial ?? 0)} unid</span></td>
+            <td class="hoja-ref">Heredado + pedidos recibidos esta ronda</td>
+            <td style="font-size:.78rem;color:var(--text3)">
+              Producibles: ${fmt.num(Math.floor((decision.stockMPInicial ?? 0) / (p.unidadesMPporUnidad ?? 1)))} unid
+              ${decision.pedidosPendientes?.length > 0
+                ? ' · <strong style="color:var(--accent3)">Pedidos en tránsito: ' + decision.pedidosPendientes.length + '</strong>'
+                : ''}
+            </td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🏢 Proveedor a elegir</td>
+            <td>${isEditable
+              ? `<select class="hoja-select editable" data-hoja-field="proveedorElegido">
+                  <option value="">— Sin pedido este trimestre —</option>
+                  ${ref.proveedores.map(pv =>
+                    `<option value="${pv.id}" ${decision.proveedorElegido===pv.id?'selected':''}>
+                      ${pv.nombre} · Bs ${pv.costoMP}/unid · Lead time: ${pv.leadTime} trim.
+                    </option>`
+                  ).join('')}
+                </select>`
+              : `<span class="hoja-value-ro">${decision.proveedorElegido || '—'}</span>`
+            }</td>
+            <td class="hoja-ref">El stock llega en la ronda indicada por el lead time</td>
+            <td style="font-size:.78rem;color:var(--accent4)">⚠ Pedir con anticipación</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🛒 Cantidad a pedir (unid MP)</td>
+            <td>${inp('cantidadMPpedida', decision.cantidadMPpedida ?? 0, 'number', 'min="0" step="100"')}</td>
+            <td class="hoja-ref">Almacenamiento MP sobrante: Bs ${p.costoAlmacenamientoMP ?? 0.05}/unid/trim</td>
+            <td style="font-size:.78rem;color:var(--text3)">0 si no vas a pedir. 1 unid MP → ${p.unidadesMPporUnidad ?? 1} unid producidas</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+        ${hojaProductoActivo === 0 ? `
     <!-- S3: FINANCIAMIENTO -->
     <div class="hoja-section">
       <div class="hoja-section-title">3 · Financiamiento</div>
@@ -2215,27 +2814,32 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         Caja Bs ${fmt.bs(decision.cajaInicial)} · CxC Bs ${fmt.bs(decision.cxcInicial)} · Deuda Bs ${fmt.bs(decision.deudaInicial)} · Inventario ${fmt.num(decision.inventarioInicial)} unid
       </div>
     </div>
+    ` : ''}
 
-    <!-- S4: INNOVACIÓN -->
+      <!-- S4: INNOVACIÓN -->
     <div class="hoja-section">
       <div class="hoja-section-title">4 · Innovación</div>
       <table class="hoja-table">
         <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Justificación</th></tr></thead>
         <tbody>
           <tr><td class="hoja-label">💡 ¿Innovar este trimestre?</td>
-              <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer">${chk('innovacion','Sí, innovar')}</label></td>
+              <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" data-hoja-field="innovacion" ${productoActivo.innovacion ? 'checked' : ''} ${isEditable ? '' : 'disabled'}/>
+                Sí, innovar
+              </label></td>
               <td class="hoja-ref">Afecta costo unitario o atractivo según tipo</td>
               <td>${ta('innovacion','¿Por qué innovar y en qué?')}</td></tr>
           <tr><td class="hoja-label">🔧 Tipo de innovación</td>
               <td>${sel('tipoInnovacion',tipoInnOpts)}</td>
               <td class="hoja-ref">Producto: +CU · Proceso: −CU · Canal: +atractivo</td><td></td></tr>
           <tr><td class="hoja-label">💰 Inversión en innovación (Bs)</td>
-              <td>${inp('montoInnovacion',decision.montoInnovacion,'number','min="0" step="1000"')}</td>
+              <td>${inp('montoInnovacion',productoActivo.montoInnovacion,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Se desembolsa este trimestre (gasto operativo)</td><td></td></tr>
         </tbody>
       </table>
     </div>
 
+      ${hojaProductoActivo === 0 ? `
     <!-- S5: INVESTIGACIÓN DE MERCADO -->
     <div class="hoja-section">
       <div class="hoja-section-title">5 · Investigación de Mercado</div>
@@ -2252,6 +2856,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         </tbody>
       </table>
     </div>
+    ` : ''}
 
     <!-- S6: RESUMEN DE VALORES -->
     <div class="hoja-section">
@@ -2274,42 +2879,97 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
     </div>
   </div>`;
 
-  if (isEditable) {
-    cont.querySelectorAll('[data-hoja-field]').forEach(el => {
-      el.addEventListener(el.type==='checkbox'?'change':'input', () => {
-        const v = el.type==='checkbox' ? el.checked
-                : el.type==='number'   ? +el.value
-                : el.tagName==='SELECT'? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/,'').trim()
-                : el.value;
+if (isEditable) {
+  cont.querySelectorAll('[data-hoja-field]').forEach(el => {
+
+    el.addEventListener(
+      el.type === 'checkbox' ? 'change' : 'input',
+      () => {
+
+        const v =
+          el.type === 'checkbox' ? el.checked
+          : el.type === 'number' ? +el.value
+          : el.tagName === 'SELECT'
+            ? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/, '').trim()
+            : el.value;
+
         const productFields = [
-          'producto','segmentoObjetivo','canalPrincipal','canalSecundario',
-          'calidad','precioVenta','produccion',
-          'publicidad','promocion','eventos','marketingRedes','relacionesPublicas',
-          'innovacion','tipoInnovacion','montoInnovacion'
+          'producto',
+          'segmentoObjetivo',
+          'canalPrincipal',
+          'canalSecundario',
+          'calidad',
+          'precioVenta',
+          'produccion',
+          'publicidad',
+          'promocion',
+          'eventos',
+          'marketingRedes',
+          'relacionesPublicas',
+          'innovacion',
+          'tipoInnovacion',
+          'montoInnovacion',
+          // Etapa 3.2: Operarios
+          'contratarOperarios',
+          'despedirOperarios',
+          'montoCapacitacion',
+          // Etapa 3.1: Materia Prima
+          'cantidadMPpedida',
+          'proveedorElegido',
         ];
 
-        if (productFields.includes(el.dataset.hojaField)) {
-          if (!state.decisiones.productos) state.decisiones.productos = [];
-          if (!state.decisiones.productos[hojaProductoActivo]) {
-            state.decisiones.productos[hojaProductoActivo] = crearProductoDefault(hojaProductoActivo);
+        const field = el.dataset.hojaField;
+
+        if (productFields.includes(field)) {
+
+          if (!state.decisiones.productos) {
+            state.decisiones.productos = [];
           }
 
-           state.decisiones.productos[hojaProductoActivo][el.dataset.hojaField] = v;
+          if (!state.decisiones.productos[hojaProductoActivo]) {
+            state.decisiones.productos[hojaProductoActivo] =
+              crearProductoDefault(hojaProductoActivo);
+          }
 
-          // Compatibilidad temporal SOLO con producto activo
+          const prod =
+            state.decisiones.productos[hojaProductoActivo];
+
+          prod[field] = v;
+
+          if (productoActivo) {
+            productoActivo[field] = v;
+          }
+
+          // Compatibilidad temporal con producto 1
           if (hojaProductoActivo === 0) {
-          state.decisiones[el.dataset.hojaField] = v;
+            state.decisiones[field] = v;
+          }
+
+          decision = state.decisiones;
+
+        } else {
+
+          decision[field] = v;
+
+          if (state.decisiones) {
+            state.decisiones[field] = v;
+          }
         }
 
-decision = state.decisiones;
-          } else {
-            decision[el.dataset.hojaField] = v;
-            if (state.decisiones) state.decisiones[el.dataset.hojaField] = v;
-          }
         const r = document.getElementById('hojaResumen');
-        if (r) r.innerHTML = hojaResumenV2(decision);
-      });
-    });
+
+        if (r) {
+          r.innerHTML = hojaResumenV2(decision);
+        }
+      }
+    );
+  });
+}
+
+  
+
+
+
     cont.querySelectorAll('[data-hoja-just]').forEach(el => {
       el.addEventListener('input', () => {
         if (!decision.justificaciones) decision.justificaciones = {};
@@ -2330,7 +2990,7 @@ decision = state.decisiones;
       } catch(e) { toast(e.message,'error'); }
     });
   }
-}
+
 
 function hojaResumenV2(d) {
   if (!d) return '';
@@ -2426,46 +3086,67 @@ window.mostrarKpiRonda = (n, historial) => {
   document.getElementById('kpiDetalle').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:14px">
 
+      <!-- ── Gerente de Marketing ────────────────────── -->
       <div class="result-round-card">
-        <div class="result-round-header"><h3>📦 Ventas y Producción</h3></div>
+        <div class="result-round-header"><h3>📣 Gerente de Marketing</h3></div>
         <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Ventas en unidades',           fmt.num(r.ventasReales))}
-          ${kpiRow('Producción',                   fmt.num(r.produccion))}
-          ${kpiRow('Inventario final (unidades)',  fmt.num(r.inventarioFinal))}
-          ${kpiRow('Inventario / Producción',      invProd+'%', +invProd>20?'var(--accent4)':'var(--accent5)')}
-          ${kpiRow('Participación en segmento',    fmt.pct(r.shareReal), r.shareReal>0.3?'var(--accent5)':'var(--accent3)')}
+          ${kpiRow('Market Share (seg. objetivo)',  fmt.pct(r.shareReal),                    r.shareReal>0.3?'var(--accent5)':'var(--accent3)')}
+          ${kpiRow('Brand Equity',                  (r.brandEquityFinal ?? 50).toFixed(1)+' pts', 'var(--accent3)')}
+          ${kpiRow('ROI Marketing',                 fmt.d(r.roiMarketing??0,2)+'x',          (r.roiMarketing??0)>=1?'var(--accent5)':'var(--accent4)')}
+          ${kpiRow('Ventas en unidades',            fmt.num(r.ventasReales))}
+          ${kpiRow('Precio de venta (Bs)',           fmt.d(r.precioVenta||0,2))}
+          ${kpiRow('Gasto publicidad (Bs)',          fmt.bs(r.publicidad??0))}
         </table>
       </div>
 
+      <!-- ── Gerente de Producción ───────────────────── -->
       <div class="result-round-card">
-        <div class="result-round-header"><h3>💰 Rentabilidad</h3></div>
+        <div class="result-round-header"><h3>🏭 Gerente de Producción</h3></div>
         <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Margen bruto',                 mgBruto+'%', +mgBruto<0?'var(--accent4)':'var(--accent5)')}
-          ${kpiRow('Margen neto',                  mgNeto+'%',  +mgNeto<0?'var(--accent4)':'var(--accent5)')}
-          ${kpiRow('Costo unitario (Bs)',           fmt.d(r.costoUnitario,3))}
-          ${kpiRow('Precio de venta (Bs)',          fmt.d(r.precioVenta||0,2))}
-          ${kpiRow('Utilidad por unidad vendida',  utilPorUnid)}
+          ${kpiRow('Producción (pares)',             fmt.num(r.produccion))}
+          ${kpiRow('Inventario final (unidades)',   fmt.num(r.inventarioFinal))}
+          ${kpiRow('Inventario / Producción',       invProd+'%', +invProd>20?'var(--accent4)':'var(--accent5)')}
+          ${kpiRow('Capacidad efectiva (pares)',    fmt.num(r.capacidadEfectiva ?? '—'))}
+          ${kpiRow('Stock MP disponible (unid)',    fmt.num(r.stockMPFinal ?? '—'))}
         </table>
       </div>
 
+      <!-- ── Gerente de RRHH ─────────────────────────── -->
       <div class="result-round-card">
-        <div class="result-round-header"><h3>👥 Fuerza de Ventas</h3></div>
+        <div class="result-round-header"><h3>👥 Gerente de RRHH</h3></div>
         <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Vendedores finales',            vendFin)}
-          ${kpiRow('Ventas por vendedor (unid)',    ventasPorVend)}
-          ${kpiRow('Ingresos netos por vendedor',   ingrPorVend)}
+          ${kpiRow('Vendedores finales',             vendFin)}
+          ${kpiRow('Ventas por vendedor (unid)',     ventasPorVend)}
+          ${kpiRow('Ingresos netos por vendedor',    ingrPorVend)}
+          ${kpiRow('Operarios finales',              fmt.num(r.operariosFinales ?? '—'))}
+          ${kpiRow('Costo operarios (Bs)',           r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—')}
         </table>
       </div>
 
-      <div class="result-round-card">
-        <div class="result-round-header"><h3>🏦 Situación Financiera</h3></div>
-        <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Endeudamiento (Deuda/Activos)', endeud+'%', +endeud>50?'var(--accent4)':+endeud>30?'var(--accent3)':'var(--accent5)')}
-          ${kpiRow('Liquidez corriente',            liquidez)}
-          ${kpiRow('Caja final',                    fmt.bs(r.cajaFinal), r.cajaFinal<=0?'var(--accent4)':'var(--accent5)')}
-          ${kpiRow('Sobregiro',                     r.sobregiro>0?fmt.bs(r.sobregiro):'—', r.sobregiro>0?'var(--accent4)':'')}
-          ${kpiRow('Deuda total',                   fmt.bs(r.deudaFinal))}
-        </table>
+      <!-- ── Gerente Financiero ──────────────────────── -->
+      <div class="result-round-card" style="grid-column:span 2">
+        <div class="result-round-header"><h3>💰 Gerente Financiero</h3></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+          <table style="width:100%;border-collapse:collapse">
+            ${kpiRow('Costo unitario (Bs)',           fmt.d(r.costoUnitario,3))}
+            ${kpiRow('Margen bruto',                  mgBruto+'%',  +mgBruto<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Margen neto',                   mgNeto+'%',   +mgNeto<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Utilidad por unidad vendida',   utilPorUnid)}
+            ${kpiRow('Utilidad neta (Bs)',             fmt.bs(r.utilidadNeta), r.utilidadNeta<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('EBIT (Bs)',                      fmt.bs(r.ebit??0),      (r.ebit??0)<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Caja final (Bs)',                fmt.bs(r.cajaFinal),    r.cajaFinal<=0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Sobregiro (Bs)',                 r.sobregiro>0?fmt.bs(r.sobregiro):'—', r.sobregiro>0?'var(--accent4)':'')}
+          </table>
+          <table style="width:100%;border-collapse:collapse">
+            ${kpiRow('Deuda total (Bs)',               fmt.bs(r.deudaFinal))}
+            ${kpiRow('Endeudamiento (Deuda/Activos)',  endeud+'%', +endeud>50?'var(--accent4)':+endeud>30?'var(--accent3)':'var(--accent5)')}
+            ${kpiRow('Liquidez corriente',             liquidez)}
+            ${kpiRow('IVA neto pagado (Bs)',           r.ivaAPagar!=null?fmt.bs(r.ivaAPagar):'—', 'var(--accent4)')}
+            ${kpiRow('IT pagado (Bs)',                 r.impuestoIT!=null?fmt.bs(r.impuestoIT):'—', 'var(--accent4)')}
+            ${kpiRow('IUE pagado (Bs)',                r.impuestoIUE>0?fmt.bs(r.impuestoIUE):'(pago anual)', r.impuestoIUE>0?'var(--accent4)':'')}
+            ${kpiRow('Provisión IUE (Bs)',             r.provisionIUE!=null?fmt.bs(r.provisionIUE):'—', 'var(--accent3)')}
+          </table>
+        </div>
       </div>
 
     </div>`;
@@ -2683,6 +3364,7 @@ window.mostrarRondaResultado = async (n, historial) => {
           </div>
           <div class="kpi-row"><span class="kpi-label">Costo unitario</span><span class="kpi-value">Bs ${fmt.d(r.costoUnitario,3)}</span></div>
           <div class="kpi-row"><span class="kpi-label">ROI Marketing</span><span class="kpi-value ${r.roiMarketing>=1?'up':'down'}">${fmt.d(r.roiMarketing,2)}x</span></div>
+          <div class="kpi-row"><span class="kpi-label">Brand Equity</span><span class="kpi-value" style="color:var(--accent3)">${(r.brandEquityFinal ?? 50).toFixed(1)} <span style="font-size:.7rem;color:var(--text3)">pts</span></span></div>
           <div class="kpi-row"><span class="kpi-label">Dotación (Op/Adm/Vend)</span><span class="kpi-value">${r.operarios}/${r.admins}/${r.vendedoresFinales}</span></div>
         </div>
       </div>
@@ -2996,7 +3678,7 @@ async function loadAdminCreditos() {
 
     // Load all simulated rounds
     const rondaData = {};
-    for (const h of historialResp.filter(h=>h.estado==='simulated')) {
+    for (const h of historialResp.filter(h=>['simulated','calculada'].includes(h.estado))) {
       try {
         const r = await api('GET', `/admin/resultados/${h.ronda}`);
         rondaData[h.ronda] = r;
@@ -3008,7 +3690,7 @@ async function loadAdminCreditos() {
 
     const panels = equipos.map((eq,i) => {
       const historialEquipo = Object.entries(rondaData).map(([ronda, rd]) => {
-        const res = rd.resultados?.find(r => r.equipo === eq.id);
+        const res = rd.resultados?.find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || r.equipo?.startsWith(eq.id));
         return res ? { ronda: parseInt(ronda), resultado: res } : null;
       }).filter(Boolean).sort((a,b)=>a.ronda-b.ronda);
 
@@ -3216,7 +3898,7 @@ function printHoja() {
     </style>
   </head><body>
     <h1>📋 Hoja de Decisión — ${state.me?.nombre}</h1>
-    <div class="sub">Trimestre ${hojaRondaActual} / 20 &nbsp;·&nbsp; Simulador de Marketing &nbsp;·&nbsp; Mercado Boliviano de Jaboncillos</div>
+    <div class="sub">Trimestre ${hojaRondaActual} / 20 &nbsp;·&nbsp; Simulador de Negocios &nbsp;·&nbsp; Juego de Negocios</div>
     ${content.innerHTML}
     <script>setTimeout(()=>window.print(),400)<\/script>
   </body></html>`);
@@ -3383,6 +4065,7 @@ window.eliminarProfesor = async (id, nombre) => {
 
 // ── Logout ─────────────────────────────────────────────────
 async function doLogout() {
+  wsClient.desconectar();
   await api('POST','/auth/logout');
   state = { me:null, ref:null, decisiones:null, resultados:null };
   showScreen('screen-login');

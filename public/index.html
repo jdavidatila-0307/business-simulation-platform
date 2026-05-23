@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SimMkt — Jaboncillos Bolivia</title>
+  <title>SimNeg UAGRM — Juego de Negocios</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -22,8 +22,8 @@
         <img src="images/ciencias.jpg" alt="Ciencias Económicas" class="login-logo-img">
         <img src="images/ingcomercial.png" alt="Ingeniería Comercial" class="login-logo-img">
       </div>
-      <h1 class="login-title">Simulador de Marketing</h1>
-      <p class="login-sub">Mercado Boliviano de Jaboncillos</p>
+      <h1 class="login-title">Simulador de Negocios</h1>
+      <p class="login-sub">Juego de Negocios</p>
       <p class="login-sub2">20 Trimestres · Hasta 30 Equipos</p>
 
       <div class="form-group">
@@ -98,7 +98,7 @@
       <p class="login-error" id="registroError"></p>
     </div>
 
-    <p class="login-footer">UAGRM - Ingeniería Comercial - COM400A Estrategia Comercial – Profesor Jhonny David Atila Lijerón</p>
+    <p class="login-footer">UAGRM - Ingeniería Comercial – COM540 Juego de Negocios – Profesor Jhonny David Atila Lijerón</p>
   </div>
 </div>
 
@@ -111,7 +111,7 @@
         <img src="images/ingcomercial.png" alt="Ingeniería Comercial" class="sidebar-logo-img">
       </div>
       <div>
-        <span class="logo-title">SimMkt</span>
+        <span class="logo-title">SimNeg UAGRM</span>
         <span class="logo-sub">Panel Admin</span>
       </div>
     </div>
@@ -124,15 +124,15 @@
         <button class="nav-item" data-view="admin-equipos">👥 Equipos</button>
         <button class="nav-item" data-view="admin-rondas">🔄 Rondas</button>
 
-        <!-- Separador: Reportes del SimMkt -->
-        <div class="nav-divider">Reportes del SimMkt</div>
+        <!-- Separador: Reportes del SimNeg -->
+        <div class="nav-divider">Reportes del SimNeg</div>
 
         <button class="nav-item" data-view="admin-resultados">📈 Resultados</button>
         <button class="nav-item" data-view="admin-creditos">🏦 Créditos</button>
         <button class="nav-item" data-view="admin-mercado">🌍 Mercado</button>
 
-        <!-- Separador: Parámetros del SimMkt -->
-        <div class="nav-divider">Parámetros del SimMkt</div>
+        <!-- Separador: Parámetros del SimNeg -->
+        <div class="nav-divider">Parámetros del SimNeg</div>
 
         <button class="nav-item" data-view="admin-parametros">⚙️ Parámetros</button>
         <button class="nav-item" data-view="admin-segmentos">🎯 Segmentos</button>
@@ -149,7 +149,7 @@
     <header class="top-bar"><span class="top-title" id="adminTopTitle">Dashboard</span><div class="top-actions"></div></header>
     <section class="view" id="admin-simulaciones"><div id="adminSimulacionesContent"></div></section>
     <section class="view active" id="admin-dashboard"><div id="adminDashboardContent"></div></section>
-    <section class="view" id="admin-equipos"><div id="equiposTableWrap" class="table-wrap" style="margin-top:16px"></div></section>
+    <section class="view" id="admin-equipos"><div id="equiposTableWrap" class="table-wrap" style="margin-top:16px"><div id="botsSection"></div></div></section>
     <section class="view" id="admin-rondas"><div id="rondasContent"></div></section>
     <section class="view" id="admin-resultados"><div id="adminResultadosContent"></div></section>
     <section class="view" id="admin-creditos"><div id="adminCreditosContent"></div></section>
@@ -175,7 +175,7 @@
         <img src="images/ingcomercial.png" alt="Ingeniería Comercial" class="sidebar-logo-img">
       </div>
       <div>
-        <span class="logo-title">SimMkt</span>
+        <span class="logo-title">SimNeg UAGRM</span>
         <span class="logo-sub" id="equipoNombreSidebar">—</span>
       </div>
     </div>

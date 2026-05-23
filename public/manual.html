@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Manual del Estudiante · SimMkt</title>
+<title>Manual del Estudiante · SimNeg UAGRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -196,7 +196,7 @@
     border-bottom: 1px solid rgba(125,194,66,0.09);
   }
   .hero::before {
-    content: 'SimMkt';
+    content: 'SimNeg UAGRM';
     position: absolute;
     right: -10px; top: -20px;
     font-family: var(--font-disp);
@@ -993,9 +993,9 @@
     <div class="sidebar-logo">
       <div class="logo-top">
         <img src="ingcomercial.png" alt="Ingeniería Comercial UAGRM" class="sidebar-inst-logo" />
-        <span class="sim-tag">Manual · SimMkt</span>
+        <span class="sim-tag">Manual · SimNeg UAGRM</span>
       </div>
-      <h1>Sim<span>Mkt</span></h1>
+      <h1>Sim<span>Neg</span></h1>
       <p class="sidebar-subtitle">
         Simulador de Estrategia Comercial<br>
         UAGRM · FCEE – Ing. Comercial<br>
@@ -1081,7 +1081,7 @@
     </div>
 
     <div class="sidebar-footer">
-      <p><strong>SimMkt v2.0</strong> · 2026<br>20 trimestres · Jaboncillos Bolivia<br>Competencia oligopólica simulada<br><span style='color:var(--gold);font-size:.7rem;'>UAGRM · FCEE · COM400A</span></p>
+      <p><strong>SimNeg UAGRM v2.0</strong> · 2026<br>20 trimestres · Calzados Especializados<br>Competencia oligopólica simulada<br><span style='color:var(--gold);font-size:.7rem;'>UAGRM · Ing. Comercial · COM540</span></p>
     </div>
   </nav>
 
@@ -1094,7 +1094,7 @@
       <span class="hero-tag">Manual del Estudiante</span>
       <h2>Tu guía para competir,<br><em>analizar y decidir</em></h2>
       <p class="hero-desc">
-        SimMkt simula un mercado oligopólico de jaboncillos en Bolivia durante 20 trimestres. 
+        SimNeg UAGRM simula un mercado oligopólico de calzado especializado en Bolivia durante 20 trimestres. 
         No se trata de maximizar una única métrica — se trata de construir 
         <strong>ventaja competitiva sostenible</strong> mientras mantienes viabilidad financiera.
       </p>
@@ -1113,14 +1113,14 @@
         <div class="section-num">01</div>
         <div class="section-title-block">
           <h3>Propósito y Fundamento Teórico</h3>
-          <p>¿Qué modela SimMkt y sobre qué literatura se construye?</p>
+          <p>¿Qué modela SimNeg UAGRM y sobre qué literatura se construye?</p>
         </div>
       </div>
 
       <p class="prose">
-        SimMkt es un simulador de <strong>gestión estratégica de marketing</strong> basado en la 
+        SimNeg UAGRM es un simulador de <strong>gestión estratégica de negocios</strong> basado en la 
         teoría de juegos y la competencia dinámica en oligopolios (Tirole, 1988; Shapiro & Varian, 2013). 
-        El mercado boliviano de jaboncillos se modela con múltiples segmentos, productos diferenciados 
+        El mercado boliviano de calzado especializado se modela con múltiples segmentos, productos diferenciados 
         y competidores externos (contrabando, marcas locales). 
         <em>El objetivo no es maximizar una sola métrica</em>, sino construir ventaja competitiva sostenible 
         mientras se mantiene la viabilidad financiera del negocio.
@@ -1195,7 +1195,7 @@
               <td><span class="ref-inline">Damodaran (2012, 2ª ed.)</span></td>
             </tr>
             <tr>
-              <td>ROI Marketing</td>
+              <td>ROI Mkt / Brand Equity</td>
               <td>(Vtas netas − CV − Gto. mkt) / Gasto mkt</td>
               <td>Eficiencia del presupuesto; umbrales dependen del sector y el trimestre</td>
               <td><span class="ref-inline">Hanssens (2015); Srinivasan & Hanssens (2009)</span></td>
@@ -1304,8 +1304,35 @@
 
         <div class="decision-card" data-num="7">
           <div class="dc-top">
-            <div class="dc-icon dc-gold">🏭</div>
-            <h4>3.7 Producción e Inventarios</h4>
+            <div class="dc-icon dc-purple">👷</div>
+            <h4>3.7 Operarios de Producción</h4>
+          </div>
+          <p class="insight">Los operarios determinan la <strong>capacidad efectiva de producción</strong>. Sin suficientes operarios, la producción queda limitada aunque haya materia prima disponible.</p>
+          <ul class="decision-list">
+            <li><strong>Contratar operarios:</strong> Costo Bs 800/operario + sueldo Bs 3.200/trim.</li>
+            <li><strong>Despedir operarios:</strong> Costo Bs 1.200/operario.</li>
+            <li><strong>Capacitación (opcional):</strong> +5% productividad por cada Bs 10.000 invertidos.</li>
+            <li>Cap. efectiva = operarios × 440 pares/trim × (1 + factor capacitación).</li>
+            <li>Producción real = mín(decisión, cap.efectiva, stockMP, cap.máx.planta).</li>
+          </ul>
+        </div>
+        <div class="decision-card">
+          <div class="decision-header">
+          <div class="dc-icon dc-green">📦</div>
+            <h4>3.8 Materia Prima</h4>
+          </div>
+          <p class="insight">La producción está restringida por el stock de materia prima disponible. Elegir el proveedor importado requiere planificar con <strong>un trimestre de anticipación</strong>.</p>
+          <ul class="decision-list">
+            <li><strong>Proveedor Nacional (Santa Cruz):</strong> Bs 12/unid MP — entrega el mismo trimestre (lead time 1).</li>
+            <li><strong>Proveedor Importado (Brasil/China):</strong> Bs 7/unid MP — entrega al siguiente trimestre (lead time 2).</li>
+            <li>1 unidad de MP produce 1 par de calzado.</li>
+            <li>Stock sobrante se acumula (almacenamiento: Bs 0.05/unid/trim).</li>
+          </ul>
+        </div>
+        <div class="decision-card">
+          <div class="decision-header">
+          <div class="dc-icon dc-gold">🏭</div>
+            <h4>3.9 Producción e Inventarios</h4>
           </div>
           <p class="insight">Producir en exceso genera costos de almacenamiento (Bs 0,10/unidad) y riesgo de obsolescencia. Producir de menos significa pérdida de ventas. El equilibrio depende de la demanda estimada.</p>
           <div class="tip">Usa la pre-simulación para ajustar tu producción antes de que el profesor ejecute los resultados finales.</div>
@@ -1315,7 +1342,7 @@
         <div class="decision-card" data-num="8">
           <div class="dc-top">
             <div class="dc-icon dc-red">🏦</div>
-            <h4>3.8 Financiamiento</h4>
+            <h4>3.10 Financiamiento</h4>
           </div>
           <p class="insight">Préstamos operativos (4% trimestral) o de inversión (3% trimestral), más comisión de apertura del 1%. El sobregiro automático cuesta 6% — evítalo planificando el flujo de caja.</p>
           <div class="tip">Endeúdate para crecer, no para cubrir pérdidas recurrentes. Controla el ratio Deuda/Activos &lt; 0.6.</div>
@@ -1325,7 +1352,7 @@
         <div class="decision-card" data-num="9">
           <div class="dc-top">
             <div class="dc-icon dc-purple">🔬</div>
-            <h4>3.9 Innovación</h4>
+            <h4>3.11 Innovación</h4>
           </div>
           <p class="insight">Innovación de Producto eleva el costo unitario pero diferencia. Innovación de Proceso reduce el costo unitario. Innovación de Canal aumenta el atractivo competitivo en distribución.</p>
           <div class="tip">Elige el tipo de innovación que refuerza tu ventaja competitiva declarada, no el más costoso.</div>
@@ -1335,7 +1362,7 @@
         <div class="decision-card" data-num="10">
           <div class="dc-top">
             <div class="dc-icon dc-blue">🔍</div>
-            <h4>3.10 Investigación de Mercado</h4>
+            <h4>3.12 Investigación de Mercado</h4>
           </div>
           <p class="insight">Básica (Bs 4.000): tamaño de mercado, precios observados y alertas. Premium (Bs 7.500): añade participación por segmento, sensibilidad del consumidor y recomendaciones genéricas.</p>
           <div class="tip">La información reduce asimetría (Akerlof, 1970). Invierte en premium cuando la incertidumbre es alta o el mercado cambia rápidamente.</div>
@@ -1371,7 +1398,7 @@
           <div class="timeline-content">
             <span class="timeline-step">Paso 2</span>
             <h4>Ingreso de Decisiones</h4>
-            <p>El equipo completa la hoja de decisión (puede guardar borrador y enviar dentro del plazo). Incluye: segmento, producto, precio, producción, marketing, vendedores, financiamiento e innovación.</p>
+            <p>El equipo completa la hoja de decisión (puede guardar borrador y enviar dentro del plazo). Incluye: segmento, producto, precio, producción, marketing, vendedores, operarios, materia prima, financiamiento e innovación.</p>
           </div>
         </div>
         <div class="timeline-item">
@@ -1656,64 +1683,93 @@
         </div>
         <div class="formula-box">
           <span class="f-label">Fórmula de costo parcial</span>
-          Costo unitario parcial = Costo base + (0.20 × Calidad elegida)
-          <br><span style="color:var(--muted);font-size:.73rem;">donde Calidad es un entero de 1 a 10 definido en la hoja de decisiones</span>
+          Costo unitario = Costo base + (0.20 × Calidad) + Costo MP del proveedor
+          <br><span style="color:var(--muted);font-size:.73rem;">Costo base = costo de fabricación (sin MP). Con Proveedor Nacional +Bs 12, con Importado +Bs 7. Así el costo total coincide con el diseñado por cada equipo.</span>
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
             <thead>
-              <tr><th>Producto</th><th>Costo base (Bs/unid)</th><th>Calidad = 1</th><th>Calidad = 5</th><th>Calidad = 10</th></tr>
+              <tr><th>Producto</th><th>Costo base (Bs/par)</th><th>Calidad = 1</th><th>Calidad = 5</th><th>Calidad = 10</th></tr>
             </thead>
             <tbody>
-              <tr><td>Básico</td><td class="mono">Bs 2.10</td><td class="mono">Bs 2.30</td><td class="mono val-gold">Bs 3.10</td><td class="mono">Bs 4.10</td></tr>
-              <tr><td>Antibacterial</td><td class="mono">Bs 2.60</td><td class="mono">Bs 2.80</td><td class="mono val-gold">Bs 3.60</td><td class="mono">Bs 4.60</td></tr>
-              <tr><td>Cosmético</td><td class="mono">Bs 3.20</td><td class="mono">Bs 3.40</td><td class="mono val-gold">Bs 4.20</td><td class="mono">Bs 5.20</td></tr>
-              <tr><td>Dermatológico</td><td class="mono">Bs 3.80</td><td class="mono">Bs 4.00</td><td class="mono val-gold">Bs 4.80</td><td class="mono">Bs 5.80</td></tr>
-              <tr><td>Natural</td><td class="mono">Bs 3.40</td><td class="mono">Bs 3.60</td><td class="mono val-gold">Bs 4.40</td><td class="mono">Bs 5.40</td></tr>
-              <tr><td>Institucional</td><td class="mono">Bs 2.90</td><td class="mono">Bs 3.10</td><td class="mono val-gold">Bs 3.90</td><td class="mono">Bs 4.90</td></tr>
+              <tr><td>Sandalia Infantil Ajustable</td><td class="mono">Bs 79.00</td><td class="mono">Bs 79.20</td><td class="mono val-gold">Bs 80.00</td><td class="mono">Bs 81.00</td></tr>
+              <tr><td>Calzado Sensorial TEA</td><td class="mono">Bs 120.00</td><td class="mono">Bs 120.20</td><td class="mono val-gold">Bs 121.00</td><td class="mono">Bs 122.00</td></tr>
+              <tr><td>Calzado Ortopédico Laboral</td><td class="mono">Bs 136.00</td><td class="mono">Bs 136.20</td><td class="mono val-gold">Bs 137.00</td><td class="mono">Bs 138.00</td></tr>
+              <tr><td>Calzado Biomecánico Formal</td><td class="mono">Bs 153.00</td><td class="mono">Bs 153.20</td><td class="mono val-gold">Bs 154.00</td><td class="mono">Bs 155.00</td></tr>
+              <tr><td>Calzado Médico Especializado</td><td class="mono">Bs 226.57</td><td class="mono">Bs 226.77</td><td class="mono val-gold">Bs 227.57</td><td class="mono">Bs 228.57</td></tr>
+              <tr><td>Sneaker Cultural Premium</td><td class="mono">Bs 298.00</td><td class="mono">Bs 298.20</td><td class="mono val-gold">Bs 299.00</td><td class="mono">Bs 300.00</td></tr>
             </tbody>
           </table>
         </div>
         <div class="anx-table-wrap" style="margin-top:16px;">
           <table class="anx-table">
-            <thead><tr><th>Producto</th><th>Descripción de atributos diferenciadores</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Descripción y equipo de origen</th></tr></thead>
             <tbody>
-              <tr><td>Básico</td><td>Jabón de uso general sin atributo diferenciador específico. Formulación estándar con ingredientes de bajo costo. Apto para higiene cotidiana masiva.</td></tr>
-              <tr><td>Antibacterial</td><td>Contiene agentes antimicrobianos activos. Formulado para reducción de bacterias en el lavado de manos. Atributo funcional verificable.</td></tr>
-              <tr><td>Cosmético</td><td>Incorpora ingredientes activos para cuidado y embellecimiento: humectantes, fragancias selectas, nutrientes. Orientado al bienestar y experiencia sensorial.</td></tr>
-              <tr><td>Dermatológico</td><td>Formulación hipoalergénica con pH neutro o ligeramente ácido. Desarrollado para pieles sensibles, con dermatitis o condiciones cutáneas. Requiere respaldo técnico.</td></tr>
-              <tr><td>Natural</td><td>Elaborado con ingredientes de origen vegetal o mineral sin síntesis química artificial. Libre de parabenos, sulfatos y colorantes. Atractivo para consumidores con conciencia ambiental.</td></tr>
-              <tr><td>Institucional</td><td>Diseñado para uso corporativo, hospitalario, hotelero o educativo. Prioriza la eficiencia en costo-uso sobre atributos diferenciadores.</td></tr>
+              <tr><td>Sandalia Infantil Ajustable</td><td>Sandalia con sistema Slide & Lock que crece hasta 3 tallas. Diseñada para niños de 2-4 años. Materiales: EVA, goma, velcro, tela, LED opcional. <em>[GrowStep Kids — Eq. 4]</em></td></tr>
+              <tr><td>Calzado Sensorial TEA</td><td>Calzado especializado para niños con Trastorno del Espectro Autista. Prioriza comodidad sensorial, ergonomía y facilidad de uso. Materiales: memory foam, microfibra PU, velcro alta resistencia, TPU. <em>[TE Acompaña Kids — Eq. 2]</em></td></tr>
+              <tr><td>Calzado Ortopédico Laboral</td><td>Calzado para personas que trabajan largas jornadas de pie. Plantilla con gel de silicona, soporte lumbar, amortiguación. Materiales: EVA/PU, gel silicona, cuero sintético. <em>[ORTHO STEP — Eq. 5 / LEVITA Casual — Eq. 7]</em></td></tr>
+              <tr><td>Calzado Biomecánico Formal</td><td>Calzado biomecánico con diseño formal para personas con escoliosis o dismetría. Equilibra la pisada sin cambiar el estilo. Materiales: cuero/microfibra, suela EVA/TPU, plantilla biomecánica. <em>[LEVITA Formal — Eq. 7]</em></td></tr>
+              <tr><td>Calzado Médico Especializado</td><td>Calzado ergonómico de alto soporte para fascitis plantar. Soporte anatómico del arco, amortiguación premium, estabilidad talón. No vendemos zapatos, vendemos salud y bienestar. <em>[BIOPASO — Eq. 3]</em></td></tr>
+              <tr><td>Sneaker Cultural Premium</td><td>Sneaker urbano de identidad boliviana. Diseño que exalta la cultura regional con estándares internacionales. Objeto de deseo de alto impacto emocional. Materiales: cuero plena flor, goma vulcanizada, textiles artesanales. <em>[Raíz — Grupo 1]</em></td></tr>
             </tbody>
           </table>
         </div>
-        <div class="note-box"><span class="note-icon">📌</span> El costo base <strong>no incluye</strong>: (1) el costo adicional por unidad del canal de distribución, ni (2) el efecto de la innovación. El costo unitario final se calcula en el Paso 3 del motor (ver Anexo F).</div>
+        <div style="margin-top:16px;">
+  <p style="font-size:.82rem;color:var(--muted);margin-bottom:8px;">
+    <strong>Costo unitario total según proveedor elegido:</strong>
+    (costoBase + costoMP). Este es el costo que el motor calcula al simular.
+  </p>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+      <thead style="background:rgba(158,216,48,0.07)">
+        <tr>
+          <th style="padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Producto</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Costo base</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">+ MP Nacional (Bs 12)</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">+ MP Importado (Bs 7)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Sandalia Infantil Ajustable</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 79.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 91.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 86.00</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Sensorial TEA</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 120.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 132.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 127.00</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Ortopédico Laboral</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 136.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 148.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 143.00</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Biomecánico Formal</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 153.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 165.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 160.00</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Médico Especializado</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 226.57</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 238.57</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 233.57</td></tr>
+        <tr><td style="padding:10px 14px">Sneaker Cultural Premium</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 298.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 310.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 305.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="note-box"><span class="note-icon">📌</span> El costo base representa <strong>solo los costos de fabricación</strong> (mano de obra, energía, planta) <strong>sin la materia prima</strong>. El motor suma: Costo base + Costo MP del proveedor + Canal + Calidad. Así el costo unitario total coincide exactamente con lo que cada equipo calculó en su formulario de diseño de industria.</div>
       </div>
 
-      <!-- ── ANEXO B ──────────────────────────────── -->
+      <!-- ── ANEXO B  ──────────────────────────────── -->
       <div class="annex-section" id="anx-b">
         <div class="annex-section-header">
           <div class="anx-badge">B</div>
           <div>
             <h4>Descripción de los Segmentos de Mercado</h4>
-            <p>7 segmentos con demanda formal, tendencia y perfil del consumidor tipo</p>
+            <p>6 segmentos con demanda formal, tendencia y perfil del consumidor tipo</p>
           </div>
         </div>
         <div class="formula-box">
           <span class="f-label">Demanda formal</span>
           Demanda formal = Demanda base × (1 − % Contrabando)
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <span class="f-label">Demanda dinámica (Etapa 2.2)</span>
+          Demanda base<sub>T</sub> = Demanda base<sub>T−1</sub> × (1 + tasa crecimiento)
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
             <thead><tr><th>Segmento</th><th>Demanda base</th><th>% Contrabando</th><th>Demanda formal</th><th>Tendencia</th></tr></thead>
             <tbody>
-              <tr><td>Masivo popular</td><td class="mono">40,000</td><td class="mono val-neg">30%</td><td class="mono val-gold">28,000</td><td>Estable</td></tr>
-              <tr><td>Masivo aspiracional</td><td class="mono">18,000</td><td class="mono">20%</td><td class="mono val-gold">14,400</td><td>Creciente</td></tr>
-              <tr><td>Funcional familiar</td><td class="mono">16,000</td><td class="mono">15%</td><td class="mono val-gold">13,600</td><td>Creciente</td></tr>
-              <tr><td>Cosmético</td><td class="mono">14,000</td><td class="mono">10%</td><td class="mono val-gold">12,600</td><td>Estable</td></tr>
-              <tr><td>Dermatológico</td><td class="mono">10,000</td><td class="mono val-pos">5%</td><td class="mono val-gold">9,500</td><td>Creciente</td></tr>
-              <tr><td>Natural</td><td class="mono">12,000</td><td class="mono">12%</td><td class="mono val-gold">10,560</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
-              <tr><td>Institucional</td><td class="mono">10,000</td><td class="mono val-pos">3%</td><td class="mono val-gold">9,700</td><td>Estable</td></tr>
+              <tr><td>Padres y familias con niños (0-10 años)</td><td class="mono">7,000</td><td class="mono ">18%</td><td class="mono val-gold">5,740</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
+              <tr><td>Personas con condición postural</td><td class="mono">5,500</td><td class="mono ">12%</td><td class="mono val-gold">4,840</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
+              <tr><td>Personas con fascitis y dolor plantar</td><td class="mono">3,000</td><td class="mono ">10%</td><td class="mono val-gold">2,700</td><td>Estable</td></tr>
+              <tr><td>Comerciantes y trabajadores de mercado</td><td class="mono">8,000</td><td class="mono ">18%</td><td class="mono val-gold">6,560</td><td>Creciente</td></tr>
+              <tr><td>Jóvenes urbanos / lifestyle boliviano</td><td class="mono">4,500</td><td class="mono val-neg">45%</td><td class="mono val-gold">2,475</td><td>Creciente</td></tr>
+              <tr><td>Personal de salud y bienestar</td><td class="mono">5,000</td><td class="mono ">10%</td><td class="mono val-gold">4,500</td><td><strong style="color:#4CAF50">Alto crecimiento</strong></td></tr>
             </tbody>
           </table>
         </div>
@@ -1721,133 +1777,90 @@
           <table class="anx-table">
             <thead><tr><th>Segmento</th><th>Perfil del consumidor</th><th>Motivación de compra principal</th></tr></thead>
             <tbody>
-              <tr><td>Masivo popular</td><td>Hogares de ingresos bajos a medios bajos. Compra en mercados de barrio y ferias.</td><td>Precio mínimo. Alta sensibilidad. El contrabando es un sustituto directo.</td></tr>
-              <tr><td>Masivo aspiracional</td><td>Hogares de ingresos medios en ascenso. Compra en supermercados y tiendas de cadena.</td><td>Relación calidad-precio. Dispuesto a pagar un pequeño diferencial por marca.</td></tr>
-              <tr><td>Funcional familiar</td><td>Familias con niños o adultos mayores. Priorizan efectividad comprobable.</td><td>Funcionalidad verificable. El atributo antibacterial es un requisito, no un diferencial.</td></tr>
-              <tr><td>Cosmético</td><td>Mujeres adultas de ingresos medios-altos. Alta implicación con la imagen personal.</td><td>Experiencia sensorial: fragancia, textura, empaque. Alta disposición a pagar.</td></tr>
-              <tr><td>Dermatológico</td><td>Personas con condiciones cutáneas. Frecuentemente recomendado por médicos.</td><td>Necesidad médica o preventiva. Baja sensibilidad al precio. Alta lealtad.</td></tr>
-              <tr><td>Natural</td><td>Consumidores con conciencia ambiental. Ingresos medios-altos. Mercado en crecimiento acelerado.</td><td>Valores: sustentabilidad, ingredientes limpios, origen verificable.</td></tr>
-              <tr><td>Institucional</td><td>Empresas, hospitales, hoteles. Compras por volumen con procesos de cotización.</td><td>Eficiencia de costo por dosis. Contratos de suministro. La fuerza de ventas es clave.</td></tr>
+              <tr><td>Padres y familias con niños (0-10 años)</td><td>Padres y madres de ingresos medios con hijos de 2-10 años. Compran en tiendas infantiles, ferias y online.</td><td>Seguridad, funcionalidad y durabilidad. Dispuestos a pagar diferencial por calzado especializado o terapéutico.</td></tr>
+              <tr><td>Personas con condición postural</td><td>Adultos de 18-55 años con escoliosis, dismetría o dolor lumbar. Ingresos medios-altos.</td><td>Solución biomecánica discreta que no sacrifique estética. Baja sensibilidad al precio, alta lealtad.</td></tr>
+              <tr><td>Personas con fascitis y dolor plantar</td><td>Adultos de 40-60 años con fascitis plantar. Trabajan largas jornadas de pie. Frecuentemente orientados por médicos.</td><td>Alivio del dolor real. Dispuestos a pagar premium. El aval médico o técnico es clave.</td></tr>
+              <tr><td>Comerciantes y trabajadores de mercado</td><td>Comerciantes, vendedores y personal de ferias. Jornadas de 8+ horas de pie. Ingresos variables.</td><td>Comodidad a precio accesible. Alta sensibilidad al precio. El contrabando es competencia directa.</td></tr>
+              <tr><td>Jóvenes urbanos / lifestyle boliviano</td><td>Jóvenes de 18-35 años con identidad cultural boliviana. Alta influencia digital y de redes sociales.</td><td>Identidad, estética y diferenciación. Alta influencia del marketing digital. Compiten con importaciones informales.</td></tr>
+              <tr><td>Personal de salud y bienestar</td><td>Enfermeras, médicos, fisioterapeutas. Jornadas largas, exigen comodidad y soporte profesional.</td><td>Comodidad profesional, higiene y soporte. Receptivos a convenios institucionales. Volumen garantizado.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ── ANEXO C ──────────────────────────────── -->
+      <!-- ── ANEXO C  ──────────────────────────────── -->
       <div class="annex-section" id="anx-c">
         <div class="annex-section-header">
           <div class="anx-badge">C</div>
           <div>
             <h4>Matriz de Afinidad Producto × Segmento</h4>
-            <p>Tabla 6×7 con valores de afinidad de +3 (ajuste perfecto) a -2 (mal ajuste severo)</p>
+            <p>Índice de ajuste natural de cada producto con cada segmento (escala −3 a +4). Afecta directamente el atractivo competitivo.</p>
           </div>
         </div>
-        <div class="anx-table-wrap" style="margin-bottom:14px;">
-          <table class="anx-table">
-            <thead><tr><th>Escala</th><th>Significado</th><th>Interpretación</th></tr></thead>
-            <tbody>
-              <tr><td><span class="val-pos">+3</span></td><td>Ajuste perfecto</td><td>El producto responde exactamente a la necesidad principal del segmento.</td></tr>
-              <tr><td><span class="val-pos">+2</span></td><td>Buen ajuste</td><td>El producto satisface bien la necesidad, aunque no es su uso primario.</td></tr>
-              <tr><td><span class="val-pos">+1</span></td><td>Ajuste aceptable</td><td>Hay compatibilidad, pero el producto no está optimizado para ese segmento.</td></tr>
-              <tr><td><span class="val-neu">0</span></td><td>Neutral</td><td>El consumidor no percibe ni ventaja ni desventaja particular.</td></tr>
-              <tr><td><span class="val-neg">-1</span></td><td>Mal ajuste leve</td><td>El producto no encaja con las expectativas del segmento. Penaliza ligeramente.</td></tr>
-              <tr><td><span class="val-neg">-2</span></td><td>Mal ajuste severo</td><td>El producto es percibido como inapropiado. Penaliza fuertemente el atractivo.</td></tr>
-            </tbody>
-          </table>
+        <div class="formula-box">
+          <span class="f-label">Uso en el motor</span>
+          Atractivo += afinidad[producto][segmento] &nbsp;·&nbsp;
+          Un valor de +4 implica ajuste óptimo; −3 implica incompatibilidad.
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
             <thead>
-              <tr>
-                <th>Producto \ Segmento</th>
-                <th class="center">Masivo popular</th>
-                <th class="center">Masivo aspiracional</th>
-                <th class="center">Func. familiar</th>
-                <th class="center">Cosmético</th>
-                <th class="center">Dermatológico</th>
-                <th class="center">Natural</th>
-                <th class="center">Institucional</th>
-              </tr>
+              <tr><th>Producto \ Segmento</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Padres/Niños</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Cond. Postural</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Fascitis</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Comerciantes</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Jóvenes</th><th style="font-size:.72rem;writing-mode:vertical-lr;min-width:50px">Personal Salud</th></tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Básico</td>
-                <td class="center val-pos">+3</td><td class="center val-pos">+1</td><td class="center val-pos">+2</td>
-                <td class="center val-neg">-2</td><td class="center val-neg">-2</td><td class="center val-neg">-1</td><td class="center val-neu">0</td>
-              </tr>
-              <tr>
-                <td>Antibacterial</td>
-                <td class="center val-pos">+2</td><td class="center val-pos">+1</td><td class="center val-pos">+3</td>
-                <td class="center val-neu">0</td><td class="center val-pos">+1</td><td class="center val-neu">0</td><td class="center val-pos">+1</td>
-              </tr>
-              <tr>
-                <td>Cosmético</td>
-                <td class="center val-neg">-2</td><td class="center val-pos">+2</td><td class="center val-neu">0</td>
-                <td class="center val-pos">+3</td><td class="center val-pos">+1</td><td class="center val-pos">+1</td><td class="center val-neg">-2</td>
-              </tr>
-              <tr>
-                <td>Dermatológico</td>
-                <td class="center val-neg">-2</td><td class="center val-neu">0</td><td class="center val-pos">+1</td>
-                <td class="center val-pos">+1</td><td class="center val-pos">+3</td><td class="center val-pos">+1</td><td class="center val-neg">-2</td>
-              </tr>
-              <tr>
-                <td>Natural</td>
-                <td class="center val-neg">-1</td><td class="center val-pos">+1</td><td class="center val-pos">+1</td>
-                <td class="center val-pos">+1</td><td class="center val-pos">+1</td><td class="center val-pos">+3</td><td class="center val-neg">-2</td>
-              </tr>
-              <tr>
-                <td>Institucional</td>
-                <td class="center val-neg">-2</td><td class="center val-neg">-2</td><td class="center val-neu">0</td>
-                <td class="center val-neg">-2</td><td class="center val-neg">-2</td><td class="center val-neg">-2</td><td class="center val-pos">+3</td>
-              </tr>
+              <tr><td style="font-size:.82rem">Sandalia Infantil Ajustable</td><td class="mono val-pos">+4</td><td class="mono val-neg">-2</td><td class="mono val-neg">-2</td><td class="mono val-neg">-1</td><td class="mono val-neg">-1</td><td class="mono val-neutral">+0</td></tr>
+<tr><td style="font-size:.82rem">Calzado Sensorial TEA</td><td class="mono val-pos">+3</td><td class="mono val-neg">-1</td><td class="mono val-neg">-1</td><td class="mono val-neg">-2</td><td class="mono val-neg">-2</td><td class="mono val-neutral">+0</td></tr>
+<tr><td style="font-size:.82rem">Calzado Ortopédico Laboral</td><td class="mono val-neg">-1</td><td class="mono val-pos">+1</td><td class="mono val-pos">+2</td><td class="mono val-pos">+3</td><td class="mono val-neg">-1</td><td class="mono val-pos">+2</td></tr>
+<tr><td style="font-size:.82rem">Calzado Biomecánico Formal</td><td class="mono val-neg">-2</td><td class="mono val-pos">+4</td><td class="mono val-pos">+2</td><td class="mono val-neutral">+0</td><td class="mono val-neg">-1</td><td class="mono val-pos">+2</td></tr>
+<tr><td style="font-size:.82rem">Calzado Médico Especializado</td><td class="mono val-neg">-2</td><td class="mono val-pos">+2</td><td class="mono val-pos">+4</td><td class="mono val-neg">-1</td><td class="mono val-neg">-2</td><td class="mono val-pos">+3</td></tr>
+<tr><td style="font-size:.82rem">Sneaker Cultural Premium</td><td class="mono val-neg">-1</td><td class="mono val-neg">-2</td><td class="mono val-neg">-2</td><td class="mono val-neg">-1</td><td class="mono val-pos">+4</td><td class="mono val-neg">-1</td></tr>
+
             </tbody>
           </table>
         </div>
-        <div class="note-box"><span class="note-icon">📌</span> La afinidad es <strong>configurable por el administrador</strong> desde Admin → 🔢 Afinidad. Los valores mostrados corresponden a la configuración por defecto. Consulta con tu profesor si han sido modificados.</div>
+        <div class="note-box"><span class="note-icon">📌</span>
+          La afinidad refleja el diseño de los propios equipos: cada empresa tiene ventaja natural en su segmento objetivo y desventaja si intenta competir en segmentos ajenos a su propuesta de valor.
+        </div>
       </div>
 
-      <!-- ── ANEXO D ──────────────────────────────── -->
+      <!-- ── ANEXO D  ──────────────────────────────── -->
       <div class="annex-section" id="anx-d">
         <div class="annex-section-header">
           <div class="anx-badge">D</div>
           <div>
             <h4>Canales de Distribución — Parámetros Completos</h4>
-            <p>5 canales con costo unitario, comisión, factor vendedores y bono de atractivo</p>
+            <p>5 canales disponibles. Los parámetros afectan el costo unitario, la comisión sobre ventas y el atractivo competitivo.</p>
           </div>
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
             <thead>
-              <tr><th>Canal</th><th>Costo adic./unid</th><th>Comisión s/ventas brutas</th><th>Factor impacto vendedores</th><th>Bono atractivo base</th></tr>
+              <tr>
+                <th>Canal</th>
+                <th>Costo adicional/par</th>
+                <th>Comisión s/ventas</th>
+                <th>Factor impacto vendedores</th>
+                <th>Bono atractivo</th>
+                <th>Descripción</th>
+              </tr>
             </thead>
             <tbody>
-              <tr><td>Mercado</td><td class="mono val-pos">Bs 0.20</td><td class="mono">8%</td><td class="mono">0.40</td><td class="mono">2</td></tr>
-              <tr><td>Supermercado</td><td class="mono">Bs 0.45</td><td class="mono">15%</td><td class="mono">0.70</td><td class="mono">2</td></tr>
-              <tr><td>Farmacia</td><td class="mono val-neg">Bs 0.60</td><td class="mono val-neg">18%</td><td class="mono">0.80</td><td class="mono">2</td></tr>
-              <tr><td>Digital</td><td class="mono">Bs 0.35</td><td class="mono">10%</td><td class="mono val-neg">0.20</td><td class="mono">2</td></tr>
-              <tr><td>Institucional</td><td class="mono val-pos">Bs 0.25</td><td class="mono">12%</td><td class="mono val-pos">1.00</td><td class="mono">2</td></tr>
+              <tr><td>Tienda Propia</td><td class="mono">Bs 18</td><td class="mono">0%</td><td class="mono val-gold">1.50</td><td class="mono">4</td><td style="font-size:.79rem;color:var(--muted)">Venta directa en local propio o taller. Alto control de marca y experiencia del cliente. Propuesto por: Eq.2, Eq.3, Eq.5</td></tr>
+<tr><td>Venta Digital</td><td class="mono">Bs 8</td><td class="mono">3%</td><td class="mono val-gold">0.40</td><td class="mono">3</td><td style="font-size:.79rem;color:var(--muted)">Redes sociales (TikTok, Facebook, Instagram), WhatsApp Business y delivery. Bajo costo operativo, alta conversión digita</td></tr>
+<tr><td>Distribuidores B2B</td><td class="mono">Bs 12</td><td class="mono">15%</td><td class="mono val-gold">0.70</td><td class="mono">2</td><td style="font-size:.79rem;color:var(--muted)">Venta a distribuidores, tiendas de calzado infantil y retail. Amplia cobertura pero mayor comisión. Propuesto por: Grupo</td></tr>
+<tr><td>Ferias y Eventos</td><td class="mono">Bs 12</td><td class="mono">0%</td><td class="mono val-gold">1.20</td><td class="mono">3</td><td style="font-size:.79rem;color:var(--muted)">Ferias infantiles, eventos de salud, activaciones y expos. Alta visibilidad y contacto directo con el cliente. Propuesto</td></tr>
+<tr><td>Convenios Institucionales</td><td class="mono">Bs 10</td><td class="mono">8%</td><td class="mono val-gold">0.80</td><td class="mono">3</td><td style="font-size:.79rem;color:var(--muted)">Convenios con centros de salud, clínicas, guarderías, colegios y empresas. Volumen garantizado con condiciones pactadas.</td></tr>
+
             </tbody>
           </table>
         </div>
-        <div class="anx-table-wrap" style="margin-top:14px;">
-          <table class="anx-table">
-            <thead><tr><th>Parámetro</th><th>¿Dónde aparece en el cálculo?</th><th>Efecto sobre la empresa</th></tr></thead>
-            <tbody>
-              <tr><td>Costo adicional / unid</td><td>Se suma al costo base y calidad para formar el CU</td><td>Aumenta el costo de producción y distribución por unidad, independientemente del volumen vendido</td></tr>
-              <tr><td>Comisión sobre ventas brutas</td><td>Se deduce de ventas brutas para obtener ventas netas</td><td>Reduce los ingresos reales: mayor comisión = menor margen bruto disponible</td></tr>
-              <tr><td>Factor impacto vendedores</td><td>Multiplica el número de vendedores finales en la fórmula del atractivo</td><td>Determina cuánto contribuye cada vendedor al atractivo en ese canal específico</td></tr>
-              <tr><td>Bono de atractivo base</td><td>Se suma directamente al atractivo competitivo</td><td>Igual para todos los canales (valor: 2). Si hay canal secundario, se promedia.</td></tr>
-            </tbody>
-          </table>
+        <div class="note-box"><span class="note-icon">📌</span>
+          Si se elige canal secundario, los parámetros de costo y comisión se promedian con el canal principal.
+          El bono de atractivo se suma directamente al índice de atractivo competitivo del equipo.
         </div>
-        <div class="formula-box">
-          <span class="f-label">Canal secundario — cálculo del parámetro efectivo</span>
-          Parámetro efectivo = (Parámetro canal principal + Parámetro canal secundario) / 2
-        </div>
-        <div class="note-box"><span class="note-icon">📌</span> El canal <strong>Institucional</strong> tiene factor de vendedores = 1.00, el más alto del sistema. Cada vendedor adicional genera 1.00 punto directo de atractivo, frente a 0.20 del canal Digital. Este valor no implica una recomendación — depende del segmento y la estructura de costos.</div>
       </div>
 
-      <!-- ── ANEXO E ──────────────────────────────── -->
+      <!-- ── ANEXO E  ──────────────────────────────── -->
       <div class="annex-section" id="anx-e">
         <div class="annex-section-header">
           <div class="anx-badge">E</div>
