@@ -17,7 +17,7 @@
   "params": {
     "moneda": "Bs",
     "trimestresPorAnio": 4,
-    "capitalInicial": 480000,
+    "capitalInicial": 456000,
     "cajaInicial": 96000,
     "activosFijosIniciales": 360000,
     "inventarioInicialUnid": 0,
@@ -59,7 +59,8 @@
     "periodosIUE": 4,
     "tasaDecaimiento": 0.05,
     "lambdaLogit": 1.0,
-    "factorCanibalizacion": 0.15
+    "factorCanibalizacion": 0.15,
+    "coefPrecio": -0.005
   },
   "tiposProducto": {
     "Sandalia Infantil Ajustable": {
