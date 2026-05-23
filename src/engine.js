@@ -409,6 +409,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   }
 
   // Gastos operativos totales
+  // Gastos operativos SIN gastos financieros (para calcular EBIT correcto)
   let gastosOp = roundBs(
     (d.publicidad         || 0) +
     (d.promocion          || 0) +
@@ -421,12 +422,15 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     params.gastoFijoPlanta     +
     params.depreciacionTrimestral +
     costoAlmacenamiento        +
-    gastoInnovacion            +
-    interesesPrestamo          +
-    comisionApertura
+    gastoInnovacion
+    // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
   );
 
-  let utilidadNeta_operat = roundBs(utilidadBruta - gastosOp);
+  // Gasto financiero separado (intereses y comisiones de deuda)
+  const gastoFinanciero = roundBs(interesesPrestamo + comisionApertura);
+
+  // EBIT = Earnings Before Interest & Taxes (correcto: sin gastos financieros)
+  let utilidadNeta_operat = roundBs(utilidadBruta - gastosOp - gastoFinanciero);
   // Los impuestos reducen la utilidad neta (IS correcto):
   // Se calculan más abajo (IVA, IT, IUE) y se descuentan aquí después
   let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
@@ -495,7 +499,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     interesSobregiro = roundBs(sobregiro * params.tasaSobregiro);
     cajaPreliminar   = 0;
     utilidadNeta     = roundBs(utilidadNeta - interesSobregiro);
-    gastosOp         = roundBs(gastosOp + interesSobregiro);
+    gastosOp         = roundBs(gastosOp + interesSobregiro);  // para P&L total
   }
   const cajaFinal = cajaPreliminar;
 
@@ -547,7 +551,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoFijoPlanta:    params.gastoFijoPlanta,
     depreciacion:       params.depreciacionTrimestral,
     costoAlmacenamiento, gastoInnovacion,
-    interesesPrestamo, comisionApertura, interesSobregiro,
+    interesesPrestamo, comisionApertura, interesSobregiro, gastoFinanciero,
     gastosOp, utilidadNeta,
 
     // KPIs calculados
