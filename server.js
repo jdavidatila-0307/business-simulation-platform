@@ -822,6 +822,7 @@ async function route(req, res, body) {
   }
 
 // ══ BLOQUE D — reemplaza la ruta POST /admin/simular ════════════════════════
+// v2 — auto-forzar confirmaciones + defaultDecision sin decisiones
 // BUSCA: if (url === '/admin/simular' && method === 'POST') { ... }
 // REEMPLAZA todo el bloque if con esto:
 
@@ -918,11 +919,36 @@ async function route(req, res, body) {
     // ── Ejecutar el motor con todas las decisiones (humanos + bots) ────────
     // Recargar la ronda para incluir las decisiones de bots recién guardadas
     const rondaActualizada = await storage.getRonda(sim.id, n);
-    const decisiones = equipos
-      .filter(eq => rondaActualizada.decisiones[eq.id])
-      .map(eq => ({ ...rondaActualizada.decisiones[eq.id] }));
+    // Combinar decisiones de ronda original + rondaActualizada (bots pueden estar en cualquiera)
+    const decsCombinadas = { ...ronda.decisiones, ...(rondaActualizada.decisiones||{}) };
+    let decisiones = equipos
+      .filter(eq => decsCombinadas[eq.id])
+      .map(eq => ({ ...decsCombinadas[eq.id] }));
 
-    if (!decisiones.length) return send(res, 400, { error: 'Sin decisiones' });
+    // Si aún no hay decisiones, generar defaultDecision para todos
+    if (!decisiones.length) {
+      const prevRonda2 = await storage.getRonda(sim.id, n-1);
+      const resObj2 = prevRonda2?.resultados?.resultados || prevRonda2?.resultados || {};
+      decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
+        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        const resPrev2 = Object.values(resObj2).find(r =>
+          r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
+        );
+        if (resPrev2) {
+          dec.cajaInicial           = Math.max(0, resPrev2.cajaFinal ?? 0);
+          dec.cxcInicial            = Math.max(0, resPrev2.cxcFinal ?? 0);
+          dec.deudaInicial          = Math.max(0, resPrev2.deudaFinal ?? 0);
+          dec.activosFijosIniciales = Math.max(0, resPrev2.afNetos ?? resPrev2.activosFijosNetos ?? 80000);
+          dec.brandEquityInicial    = resPrev2.brandEquityFinal ?? 50;
+          dec.vendedoresIniciales   = Math.max(1, resPrev2.vendedoresFinales ?? 2);
+          dec.operariosIniciales    = Math.max(1, resPrev2.operariosFinales ?? 4);
+        }
+        return dec;
+      });
+    }
+
+    if (!decisiones.length) return send(res, 400, { error: 'Sin equipos registrados' });
+    console.log(`[server] Ejecutando simulación R${n} con ${decisiones.length} equipos`);
 
     try {
       const result = ejecutarSimulador(decisiones, simCfg);
