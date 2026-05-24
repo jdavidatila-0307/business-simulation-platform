@@ -1401,9 +1401,12 @@ async function route(req, res, body) {
       })),
     };
 
+    // Si la ronda es histórica (sin shock guardado), calcularlo determinísticamente
+    const probShockAdmin = sim.parametros.probabilidadShock ?? 0.35;
+    const shockFinal = ronda.shock || generarShock(sim.id, n, probShockAdmin);
     return send(res, 200, { ronda: n, estado: ronda.estado, ejecutadaAt: ronda.ejecutadaAt,
       resultados, mercadoSegmentos: ronda.mercadoSegmentos, dashboard: ronda.dashboard,
-      dashboardFiscal, shock: ronda.shock || null });  // Etapa 3.5
+      dashboardFiscal, shock: shockFinal });  // Etapa 3.5
   }
 
   if (url === '/admin/historial' && method === 'GET') {
