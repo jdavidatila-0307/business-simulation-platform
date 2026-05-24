@@ -3838,14 +3838,13 @@ window.mostrarReporteRonda = async (n, historialCache) => {
     } else {
       const inv = rep.investigacion;
       // Mercado
-      const mktRows = inv.mercado.map(s=>`<tr>
+      const mktRows = (inv.mercado||[]).map(s=>`<tr>
         <td><strong>${s.segmento}</strong></td>
-        <td class="num">${fmt.num(s.demandaBase)}</td>
-        <td class="num warn">${s.contrabando}</td>
-        <td class="num pos">${fmt.num(s.mercadoFormal)}</td>
-        <td><span class="badge ${s.tendencia==='Alto crecimiento'?'badge-high':s.tendencia==='Creciente'?'badge-grow':'badge-stable'}">${s.tendencia}</span></td>
+        <td class="num">${fmt.num(s.demandaBase||0)}</td>
+        <td class="num pos">${fmt.num(s.mercadoFormal||s.demandaFormal||0)}</td>
+        <td><span class="badge ${s.tendencia==='Alto crecimiento'?'badge-high':s.tendencia==='Creciente'?'badge-grow':'badge-stable'}">${s.tendencia||'Estable'}</span></td>
       </tr>`).join('');
-      const precRows = inv.precios.map(s=>`<tr>
+      const precRows = (inv.precios||[]).map(s=>`<tr>
         <td><strong>${s.segmento}</strong></td>
         <td class="num">${s.precioMin!=null?'Bs '+s.precioMin:'—'}</td>
         <td class="num">${s.precioProm!=null?'Bs '+s.precioProm:'—'}</td>
@@ -3858,7 +3857,7 @@ window.mostrarReporteRonda = async (n, historialCache) => {
           <div style="padding:16px 20px">
             <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Tamaño de Mercado</p>
             <div class="table-wrap" style="margin-bottom:16px">
-              <table><thead><tr><th>Segmento</th><th>Demanda total</th><th>Contrabando</th><th>Mercado formal</th><th>Tendencia</th></tr></thead>
+              <table><thead><tr><th>Segmento</th><th>Demanda base</th><th>Mercado formal</th><th>Tendencia</th></tr></thead>
               <tbody>${mktRows}</tbody></table>
             </div>
             <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Precios Observados</p>
@@ -3868,7 +3867,7 @@ window.mostrarReporteRonda = async (n, historialCache) => {
             </div>
             <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Alertas</p>
             <ul style="list-style:none;padding:0">
-              ${inv.alertas.map(a=>`<li style="padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--accent3)">⚠ ${a}</li>`).join('')}
+              ${(inv.alertas||[]).map(a=>`<li style="padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--accent3)">⚠ ${a}</li>`).join('')}
             </ul>`;
 
       // Premium additions
