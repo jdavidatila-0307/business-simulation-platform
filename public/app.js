@@ -3872,14 +3872,14 @@ window.mostrarReporteRonda = async (n, historialCache) => {
             </ul>`;
 
       // Premium additions
-      if (inv.tipo === 'Premium') {
-        const partRows = inv.participacion.map(p=>`<tr>
+      if (inv.tipo === 'Premium' || inv.tipo === 'Estratégico') {
+        const partRows = (inv.participacion||[]).map(p=>`<tr>
           <td><strong>${p.segmento}</strong></td>
           <td class="num">${p.equiposCompitiendo}</td>
           <td class="num">${fmt.pct(p.shareMaximo)}</td>
           <td class="num">${fmt.pct(p.sharePromedio)}</td>
         </tr>`).join('');
-        const sensRows = inv.sensibilidad.map(s=>`<tr>
+        const sensRows = (inv.sensibilidad||[]).map(s=>`<tr>
           <td><strong>${s.segmento}</strong></td>
           <td>${s.precio}</td><td>${s.calidad}</td><td>${s.redes}</td><td>${s.canal}</td>
         </tr>`).join('');
@@ -3896,7 +3896,7 @@ window.mostrarReporteRonda = async (n, historialCache) => {
               <tbody>${sensRows}</tbody></table>
             </div>
             <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">Recomendaciones Estratégicas</p>
-            ${inv.recomendaciones.map(rec=>`
+            ${(inv.recomendaciones||[]).map(rec=>`
               <div style="background:var(--bg3);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 var(--r) var(--r) 0;margin-bottom:8px;font-size:.82rem">
                 <strong style="color:var(--accent2)">${rec.estrategia}</strong><br>
                 Precio: ${rec.precio} · Prioridad: ${rec.prioridad}<br>
