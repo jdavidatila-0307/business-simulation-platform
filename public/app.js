@@ -3779,17 +3779,18 @@ window.mostrarFinanciero = (n) => {
         <div style="height:4px"></div>
         <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas Operativas</div>
         ${(r.pagoProduccion||0)>0    ? finRow('Pago de producción',           -(r.pagoProduccion||0),      false,'neg') : ''}
-        ${(r.pagoOperarios2||r.pagoOperarios||0)>0 ? finRow('Pago de operarios', -(r.pagoOperarios2||r.pagoOperarios||0), false,'neg') : ''}
-        ${(r.pagoMktTotal||0)>0      ? finRow('Pago de marketing total',      -(r.pagoMktTotal||0),        false,'neg') : ''}
-        ${(r.pagoInnovacion||0)>0    ? finRow('Pago de innovación operativa', -(r.pagoInnovacion||0),      false,'neg') : ''}
-        ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0 ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0), false,'neg') : ''}
-        ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta', -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
-        ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0 ? finRow('Pago de almacenamiento', -(r.pagoAlmacenamiento||r.pagoAlmacen||0), false,'neg') : ''}
-        ${(r.totalImpuestos||0)>0    ? finRow('Pago de impuestos',            -(r.totalImpuestos||0),      false,'neg') : ''}
+        ${(r.pagoOperarios2||r.pagoOperarios||0)>0 ? finRow('Pago de operarios',           -(r.pagoOperarios2||r.pagoOperarios||0),                false,'neg') : ''}
+        ${(r.costoVendedores||0)>0                  ? finRow('Pago fuerza de ventas',         -(r.costoVendedores||0),                               false,'neg') : ''}
+        ${(r.pagoMktTotal||0)>0                     ? finRow('Pago de marketing total',       -(r.pagoMktTotal||0),                                  false,'neg') : ''}
+        ${(r.pagoInnovacion||0)>0                   ? finRow('Pago de innovación operativa',  -(r.pagoInnovacion||0),                                false,'neg') : ''}
+        ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0   ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0),   false,'neg') : ''}
+        ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',      -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
+        ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0                ? finRow('Pago de almacenamiento',         -(r.pagoAlmacenamiento||r.pagoAlmacen||0),               false,'neg') : ''}
+        ${(r.totalImpuestos||0)>0                   ? finRow('Pago de impuestos',             -(r.totalImpuestos||0),                                false,'neg') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
         ${(() => {
           const entOp = (r.cobrosContado||0);
-          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
+          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
           return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
@@ -3835,7 +3836,7 @@ window.mostrarFinanciero = (n) => {
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
         ${(() => {
           const entOp = (r.cobrosContado||0);
-          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
+          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
           const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
@@ -4892,5 +4893,4 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
- 
  
