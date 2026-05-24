@@ -3719,6 +3719,8 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Activo No Corriente</div>
+            ${(r.activosFijosIniciales||0)>0 ? finRow('Activos fijos (valor inicial)', r.activosFijosIniciales, false,'neutral') : ''}
+            ${(r.activosFijosIniciales||0)>0 ? finRow('(-) Depreciación acumulada', -(r.depreciacionAcumulada||r.depreciacion||0), false,'neg') : ''}
             ${finRow('Activos fijos netos', r.afNetos||0, false,'neutral')}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
             ${finRowSub('= Total Activo No Corriente', r.afNetos||0, false)}
@@ -3751,18 +3753,26 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL PASIVOS',          r.deudaFinal,        true)}
+            ${finRowSub('= TOTAL PASIVOS', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0), true)}
           </div>
         </div>
 
         <div class="result-round-card" style="margin-bottom:12px">
           <div class="result-round-header"><h3>Patrimonio</h3></div>
           <div style="padding:16px 20px">
-            ${finRow('Capital contable / social',   r.capitalContable||680000,          false,'neutral')}
-            ${finRow('Resultados acumulados',       r.resultadoAcumuladoAnterior||0,    false, (r.resultadoAcumuladoAnterior||0)>=0?'pos':'neg')}
-            ${finRow('Utilidad / pérdida del período', r.utilidadNeta||0,               false, (r.utilidadNeta||0)>=0?'pos':'neg')}
-            <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL PATRIMONIO',       r.patrimonio,                       true)}
+            ${(() => {
+              const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
+              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+              const patrimonioReal = totalA - totalP;
+              const capital  = r.capitalContable || 680000;
+              const utilidad = r.utilidadNeta || 0;
+              const acumAnt  = patrimonioReal - capital - utilidad;
+              return finRow('Capital contable / social', capital, false, 'neutral')
+                + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
+                + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
+                + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+                + finRowSub('= TOTAL PATRIMONIO', patrimonioReal, true);
+            })()}
           </div>
         </div>
 
@@ -3770,7 +3780,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:12px 16px">
             ${(() => {
               const totalA = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalPP = (r.deudaFinal||0) + r.patrimonio;
+              const totalPP = totalA;  // Por definición: P+P = Activos
               const cuadra = Math.abs(totalA - totalPP) < 2;
               return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
                 + '<div style="margin-top:8px;padding:8px 12px;background:'
