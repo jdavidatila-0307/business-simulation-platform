@@ -1065,6 +1065,15 @@ async function loadAdminDashboard() {
     ${bottomHTML}
   `;
 
+  async function doActivarRonda() {
+    if (!confirm('¿Activar la hoja de decisiones para la Ronda ' + ronda.currentRound + '?\n\nLos equipos podrán ingresar y enviar sus decisiones.')) return;
+    try {
+      await api('POST', '/admin/ronda/activar');
+      toast('✅ Hoja de decisiones activada — Ronda ' + ronda.currentRound, 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
   document.getElementById('btnActivarDash')?.addEventListener('click', doActivarRonda);
   document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
