@@ -1085,6 +1085,25 @@ async function loadAdminDashboard() {
   }
 
   document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
+  async function doSimular(n) {
+    const estado = ronda.roundState;
+    const msg = estado === 'pre-sim'
+      ? '¿Ejecutar Simulación FINAL de la Ronda ' + n + '?\n\nTodos los resultados serán calculados.'
+      : '¿Ejecutar Simulación de la Ronda ' + n + ' sin pre-simulación?\n\nEsta acción no se puede deshacer.';
+    if (!confirm(msg)) return;
+    try {
+      const btn = document.getElementById('btnSimularDash');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Ejecutando...'; }
+      await api('POST', '/admin/simular', { ronda: n });
+      toast('✅ Simulación completada — Ronda ' + n, 'success');
+      await loadAdminDashboard();
+    } catch(e) {
+      toast(e.message, 'error');
+      const btn = document.getElementById('btnSimularDash');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Ejecutar Simulación Final'; }
+    }
+  }
+
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
   async function doCerrarRonda() {
     if (!confirm('¿Cerrar envíos de la Ronda ' + ronda.currentRound + '?\n\nLos equipos ya no podrán modificar ni enviar decisiones.')) return;

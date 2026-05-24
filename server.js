@@ -620,7 +620,19 @@ async function route(req, res, body) {
     const cfg = sim.config;
     const ronda = await storage.getRonda(sim.id, cfg.currentRound);
     const equipos = await storage.getEquipos(sim.id);
-    const enviados = ronda ? equipos.filter(eq => ronda.decisiones[eq.id]?.submitted).length : 0;
+    // Contar enviados: primero ronda.decisiones, luego sim_decisiones como fallback
+    let enviados = ronda ? equipos.filter(eq => ronda.decisiones[eq.id]?.submitted).length : 0;
+    if (enviados === 0 && ronda) {
+      // Multiproducto: buscar en claves expandidas eq_xxx__prod_N
+      const envSet = new Set();
+      Object.entries(ronda.decisiones||{}).forEach(([k,d]) => {
+        if (d?.submitted) {
+          const eq = equipos.find(e => k === e.id || k.startsWith(e.id + '__'));
+          if (eq) envSet.add(eq.id);
+        }
+      });
+      if (envSet.size > 0) enviados = envSet.size;
+    }
     return send(res, 200, { currentRound:cfg.currentRound, totalRounds:cfg.totalRounds,
       roundState:cfg.roundState, total:equipos.length, enviados,
       abiertaAt:ronda?.abiertaAt, ejecutadaAt:ronda?.ejecutadaAt });
@@ -687,7 +699,32 @@ async function route(req, res, body) {
       const equipos = await storage.getEquipos(sim.id);
       const eqMap = {};
       equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
-      const detalle = Object.values(ronda.preSimulacion).map(r => ({...r, equipoNombre: resolveNombre(r, eqMap)}));
+      // Consolidar por empresa (equipoOriginal) para multiproducto
+      const rawDetalle = Object.values(ronda.preSimulacion).map(r => ({...r, equipoNombre: resolveNombre(r, eqMap)}));
+      const porEmpresa = {};
+      rawDetalle.forEach(r => {
+        const eqId = r.equipoOriginal || r.equipo;
+        if (!porEmpresa[eqId]) {
+          porEmpresa[eqId] = {
+            equipo: eqId,
+            equipoNombre: r.equipoNombre,
+            confirmado: r.confirmado,
+            productos: []
+          };
+        }
+        // Si algún producto está confirmado, la empresa está confirmada
+        if (r.confirmado) porEmpresa[eqId].confirmado = true;
+        porEmpresa[eqId].productos.push({
+          producto:        r.producto,
+          segmento:        r.segmento || r.segmentoObjetivo,
+          demandaFormal:   r.demandaFormal,
+          shareEstimado:   r.shareEstimado,
+          demandaAsignada: r.demandaAsignada,
+          inventario:      r.inventario,
+          ventasEstimadas: r.ventasEstimadas,
+        });
+      });
+      const detalle = Object.values(porEmpresa);
       return send(res, 200, { roundState: sim.config.roundState, total: detalle.length,
         confirmados: detalle.filter(r=>r.confirmado).length, detalle, mercadoSegmentos: ronda.preSimMercado||[] });
     } else {
