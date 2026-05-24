@@ -620,18 +620,7 @@ async function route(req, res, body) {
     const cfg = sim.config;
     const ronda = await storage.getRonda(sim.id, cfg.currentRound);
     const equipos = await storage.getEquipos(sim.id);
-    // Contar enviados: buscar en ronda.decisiones (incluye IDs multiproducto)
-    let enviados = 0;
-    if (ronda?.decisiones) {
-      const enviadosSet = new Set();
-      Object.entries(ronda.decisiones).forEach(([k, d]) => {
-        if (d?.submitted) {
-          const eq = equipos.find(e => k.startsWith(e.id) || k === e.id);
-          if (eq) enviadosSet.add(eq.id);
-        }
-      });
-      enviados = enviadosSet.size;
-    }
+    const enviados = ronda ? equipos.filter(eq => ronda.decisiones[eq.id]?.submitted).length : 0;
     return send(res, 200, { currentRound:cfg.currentRound, totalRounds:cfg.totalRounds,
       roundState:cfg.roundState, total:equipos.length, enviados,
       abiertaAt:ronda?.abiertaAt, ejecutadaAt:ronda?.ejecutadaAt });
