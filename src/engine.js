@@ -658,6 +658,29 @@ function ejecutarSimulador(decisiones, cfg) {
 
   // Calcular resultados financieros completos
   const resultados = decisiones.map(d => {
+    // Producto vacío = equipo no decidió — retornar resultado en cero sin error
+    if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
+      return {
+        equipo:          d.equipo,
+        equipoOriginal:  d.equipoOriginal || d.equipo,
+        equipoNombre:    d.equipoNombre,
+        productoId:      d.productoId || 'prod_1',
+        ventasBrutas: 0, ventasNetas: 0, ventasReales: 0, costoVentas: 0,
+        utilidadBruta: 0, utilidadNeta: 0, ebit: 0,
+        gastoFinanciero: 0, gastosOp: 0, totalImpuestos: 0,
+        cajaFinal:       Math.max(0, d.cajaInicial||0),
+        deudaFinal:      d.deudaInicial||0,
+        cxcFinal:        0,
+        invFinalValorizado: 0, inventarioFinal: 0,
+        afNetos:         Math.max(0, (d.activosFijosIniciales||80000) - 2500),
+        totalActivos:    Math.max(0, (d.cajaInicial||0) + (d.activosFijosIniciales||80000) - 2500),
+        patrimonio:      Math.max(0, (d.cajaInicial||0) + (d.activosFijosIniciales||80000) - 2500 - (d.deudaInicial||0)),
+        vendedoresFinales: d.vendedoresIniciales||2,
+        operariosFinales:  d.operariosIniciales||4,
+        brandEquityFinal:  d.brandEquityInicial||50,
+        shareReal: 0, sinDecision: true,
+      };
+    }
     const seg        = segmentoPorNombre[d.segmentoObjetivo];
     const rondaNum   = cfg.rondaNumero || 1;   // Etapa 3.1: número de ronda actual
 
@@ -780,6 +803,25 @@ function ejecutarSimulador(decisiones, cfg) {
   });
 
   const resultado = decisiones.map(d => {
+    // Producto vacío = equipo no decidió — retornar ceros sin error
+    if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
+      return {
+        equipo:          d.equipo,
+        equipoOriginal:  d.equipoOriginal || d.equipo,
+        equipoNombre:    d.equipoNombre,
+        productoId:      d.productoId,
+        producto:        d.producto || '',
+        segmento:        d.segmentoObjetivo || '',
+        demandaFormal:   0,
+        shareEstimado:   0,
+        demandaAsignada: 0,
+        inventario:      0,
+        ventasEstimadas: 0,
+        costoUnitario:   0,
+        confirmado:      false,
+        sinDecision:     true,
+      };
+    }
     const seg = segmentoPorNombre[d.segmentoObjetivo];
     if (!seg) return { equipo: d.equipo, equipoNombre: d.equipoNombre, error: 'Segmento no encontrado' };
 
