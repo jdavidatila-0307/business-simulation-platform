@@ -1190,7 +1190,7 @@ async function loadAdminDashboard() {
 }
 
 // ── KPI Analysis Panel — buildAdminKPIHTML ────────────────────────────────
-// Insertar en buildAdminResultsHTML como 3 tabs adicionales
+// 4 tabs por rol (mismos KPIs que ve el estudiante) en formato comparativo.
 // Dependencias: eqs (array de resultados consolidados por empresa), tc() (colores)
 
 function buildAdminKPIHTML(eqs, tc) {
@@ -1204,35 +1204,38 @@ function buildAdminKPIHTML(eqs, tc) {
     const n = Math.abs(Math.round(v)).toLocaleString('es-BO').replace(/,/g,'.');
     return v < 0 ? '(Bs. '+n+')' : 'Bs. '+n;
   };
-  const d2   = (v) => v != null ? v.toFixed(2) : '—';
-  const d0   = (v) => v != null ? Math.round(v).toLocaleString('es-BO').replace(/,/g,'.') : '—';
+  const num  = (v) => v != null ? Math.round(v).toLocaleString('es-BO').replace(/,/g,'.') : '—';
+  const d2   = (v) => v != null ? (+v).toFixed(2) : '—';
+  const d1   = (v) => v != null ? (+v).toFixed(1) : '—';
 
-  // Semáforo: thresholds = [{val, color}] descendente
-  const semaforo = (v, thresholds) => {
-    if (v === null || v === undefined) return '#6B7280';
-    for (const t of thresholds) {
-      if (v >= t.val) return t.color;
-    }
-    return thresholds[thresholds.length-1].color;
+  const S = { verde:'#10B981', ambar:'#F59E0B', rojo:'#EF4444', gris:'#6B7280' };
+
+  const semaforo = (v, ths) => {
+    if (v === null || v === undefined || isNaN(v)) return S.gris;
+    for (const t of ths) { if (v >= t.val) return t.color; }
+    return ths[ths.length-1].color;
   };
-  const S = { verde:'#10B981', ambar:'#F59E0B', rojo:'#EF4444' };
 
-  // Cabecera de columnas
+  // Cabecera de columnas (equipos)
   const cols = eqs.length;
-  const hdr = '<tr><th style="text-align:left;padding:7px 12px;font-size:.72rem;min-width:200px;position:sticky;left:0;background:var(--bg2);z-index:2">Indicador</th>'
+  const hdr = '<tr><th style="text-align:left;padding:7px 12px;font-size:.72rem;'
+    +'min-width:210px;position:sticky;left:0;background:var(--bg2);z-index:2">Indicador</th>'
     + eqs.map((r,i) => '<th style="text-align:center;padding:7px 10px;font-size:.72rem;min-width:120px">'
         + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(i)+';margin-right:4px;vertical-align:middle"></span>'
         + r.equipoNombre + '</th>').join('') + '</tr>';
 
-  // Fila KPI: label, valores[], formatos, thresholds por empresa
-  const kpiRow = (label, vals, fmt, thresholds, hint='') => {
+  const secRow = (label) => '<tr style="background:rgba(255,255,255,.04)">'
+    + '<td colspan="' + (cols+1) + '" style="padding:5px 12px;font-family:var(--font-mono);font-size:.62rem;'
+    + 'color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">' + label + '</td></tr>';
+
+  const kpiRow = (label, vals, fmtFn, ths, hint='') => {
     const cells = vals.map(v => {
-      const color = semaforo(v, thresholds);
-      const disp  = fmt(v);
+      const color = semaforo(v, ths);
+      const disp  = fmtFn(v);
       return '<td style="text-align:center;padding:6px 8px">'
         + '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">'
         + '<span style="font-family:var(--font-mono);font-size:.82rem;font-weight:700;color:'+color+'">' + disp + '</span>'
-        + '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block"></span>'
+        + '<span style="width:7px;height:7px;border-radius:50%;background:'+color+';display:inline-block"></span>'
         + '</div></td>';
     }).join('');
     const hintHtml = hint ? ' <span style="font-size:.68rem;color:var(--text3);cursor:help" title="'+hint+'">ⓘ</span>' : '';
@@ -1241,177 +1244,223 @@ function buildAdminKPIHTML(eqs, tc) {
       + label + hintHtml + '</td>' + cells + '</tr>';
   };
 
-  const secRow = (label) => '<tr style="background:rgba(255,255,255,.04)">'
-    + '<td colspan="'+(cols+1)+'" style="padding:5px 12px;font-family:var(--font-mono);font-size:.62rem;'
-    + 'color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">' + label + '</td></tr>';
+  const tableWrap = (body) =>
+    '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + '<thead>' + hdr + '</thead><tbody>' + body + '</tbody></table></div>';
 
   // ── Cálculos por empresa ──────────────────────────────────────────────────
   const v = eqs.map(r => {
-    const actCor = (r.cajaFinal||0) + (r.cxcFinal||0) + (r.invFinalValorizado||0);
-    const deuda  = r.deudaFinal || 0;
-    const gfijo  = (r.gastoAdminFijo||0) + (r.gastoFijoPlanta||0)
-                 + (r.costoVendedores||0) + (r.costoOperarios||0)
-                 + (r.depreciacion||0);
-    const interes = (r.interesesPrestamo||0) + (r.interesSobregiro||0);
-    const ebit   = r.ebit || 0;
-    const dep    = r.depreciacion || 0;
-    const ebitda = ebit + dep;
-    const vN     = r.ventasNetas || 0;
-    const vB     = r.ventasBrutas || 0;
-    const uN     = r.utilidadNeta || 0;
-    const uB     = r.utilidadBruta || 0;
-    const pat    = r.patrimonio || 1;
-    const totA   = r.totalActivos || 1;
-    const cap    = deuda + pat;
-    const ocf    = uN + dep - (r.cxcFinal||0) + (r.cxcInicial||0)
-                 - (r.invFinalValorizado||0) + ((r.inventarioInicial||0)*(r.costoUnitario||0));
-    const pe     = vN > 0 ? safe(gfijo / (1 - (r.costoVentas||0)/Math.max(vB,1))) : null;
+    const vN    = r.ventasNetas   || 0;
+    const vB    = r.ventasBrutas  || 0;
+    const uN    = r.utilidadNeta  || 0;
+    const uB    = r.utilidadBruta || 0;
+    const dep   = r.depreciacion  || 0;
+    const ebit  = r.ebit          || 0;
+    const deuda = r.deudaFinal    || 0;
+    const pat   = r.patrimonio    || 1;
+    const totA  = r.totalActivos  || 1;
+    const caja  = r.cajaFinal     || 0;
+    const cxc   = r.cxcFinal      || 0;
+    const inv   = r.invFinalValorizado || 0;
+    const actCor = caja + cxc + inv;
+    const vend  = r.vendedoresFinales || 0;
+    const prod  = r.produccion    || 0;
+    const invU  = r.inventarioFinal || 0;
+    const mktT  = r.pagoMktTotal  || 0;
+    const pub   = r.publicidad    || 0;
+    const demF  = r.demandaFormal || 0;
+    const demA  = r.demandaAsignada || 0;
+    const ventU = r.ventasReales  || 0;
 
     return {
-      // TAB 1 — Liquidez y Estructura
-      razCor:   deuda > 0 ? safe(actCor / deuda) : null,
-      pruAcid:  deuda > 0 ? safe(((r.cajaFinal||0)+(r.cxcFinal||0)) / deuda) : null,
-      iEndeud:  safe((r.deudaFinal||0) / totA),
-      razDE:    pat > 0 && deuda > 0 ? safe(deuda / pat) : null,
-      roa:      safe(uN / totA),
-      roe:      safe(uN / pat),
-      ctn:      actCor - deuda,
-      rotAct:   vN > 0 ? safe(vN / totA) : null,
-      ccc:      vB > 0 ? safe(((r.invFinalValorizado||0)/(Math.max(r.costoVentas||1,1)))*90
-                + ((r.cxcFinal||0)/Math.max(vN,1))*90) : null,
+      // ── TAB 1 MARKETING ───────────────────────────────────
+      shareReal:    r.shareReal ?? null,
+      demandaFormal: demF,
+      demandaAsign:  demA,
+      ventasReales:  ventU,
+      pctCapturada: demF > 0 ? safe(ventU / demF) : null,
+      ventasBrutas: vB,
+      ventasNetas:  vN,
+      mBruto:       vN > 0 ? safe(uB / vN) : null,
+      precioVenta:  r.precioVenta || 0,
+      costoUnit:    r.costoUnitario || 0,
+      margenUnit:   (r.precioVenta||0) - (r.costoUnitario||0),
+      pubGasto:     pub,
+      mktTotal:     mktT,
+      roiMkt:       r.roiMarketing ?? null,
+      brandEquity:  r.brandEquityFinal ?? 50,
+      atractivo:    r.atractivo ?? null,
 
-      // TAB 2 — Rentabilidad P&L
-      mBruto:   vN > 0 ? safe(uB / vN) : null,
-      mEbitda:  vN > 0 ? safe(ebitda / vN) : null,
-      mEbit:    vN > 0 ? safe(ebit / vN) : null,
-      mNeto:    vN > 0 ? safe(uN / vN) : null,
-      crecIng:  r.ventasNetasAnt ? safe((vN - r.ventasNetasAnt)/Math.abs(r.ventasNetasAnt)) : null,
-      cobInt:   interes > 0 ? safe(ebit / interes) : null,
-      roic:     cap > 0 ? safe(ebit / cap) : null,
-      pe,
-      ingresos: vN,
+      // ── TAB 2 PRODUCCIÓN ──────────────────────────────────
+      produccion:   prod,
+      invInicial:   r.inventarioInicial || 0,
+      invFinalU:    invU,
+      invPct:       prod > 0 ? safe(invU / prod * 100) : null,
+      capEfectiva:  r.capacidadEfectiva ?? null,
+      costoUnitP:   r.costoUnitario || 0,
+      stockMP:      r.stockMPFinal ?? null,
 
-      // TAB 3 — Flujo
-      ocf,
-      fcf:  ocf,  // CAPEX ≈ 0 en el simulador
-      cfcr: deuda > 0 ? safe(ocf / deuda) : null,
-      qoe:  uN !== 0 ? safe(ocf / uN) : null,
-      caja: r.cajaFinal || 0,
+      // ── TAB 3 RRHH ────────────────────────────────────────
+      vendFin:      vend,
+      ventasPorVend: vend > 0 ? safe(ventU / vend) : null,
+      ingPorVend:   vend > 0 ? safe(vN / vend) : null,
+      operarios:    r.operariosFinales ?? null,
+      costoOper:    r.costoOperarios ?? null,
+
+      // ── TAB 4 FINANCIERO ──────────────────────────────────
+      mNeto:        vN > 0 ? safe(uN / vN) : null,
+      utilNeta:     uN,
+      ebitVal:      ebit,
+      cajaFin:      caja,
+      sobregiro:    r.sobregiro || 0,
+      deudaTot:     deuda,
+      endeud:       totA > 0 ? safe(deuda / totA) : null,
+      liquidez:     deuda > 0 ? safe(actCor / deuda) : null,
+      roa:          safe(uN / totA),
+      roe:          safe(uN / pat),
+      ivaAPagar:    r.ivaAPagar ?? null,
+      impIT:        r.impuestoIT ?? null,
+      impIUE:       r.impuestoIUE ?? null,
+      provIUE:      r.provisionIUE ?? null,
     };
   });
 
-  // ── TAB 1 — Liquidez y Estructura ─────────────────────────────────────────
-  const tab1 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-    + '<thead>' + hdr + '</thead><tbody>'
-    + secRow('Liquidez')
-    + kpiRow('Razón Corriente',         v.map(e=>e.razCor),  x2,
-        [{val:1.5,color:S.verde},{val:1.0,color:S.ambar},{val:0,color:S.rojo}],
-        'AC/Pasivo corriente. >1.5 sólida · 1.0-1.5 aceptable · <1.0 riesgo')
-    + kpiRow('Prueba Ácida',            v.map(e=>e.pruAcid), x2,
-        [{val:1.0,color:S.verde},{val:0.5,color:S.ambar},{val:0,color:S.rojo}],
-        '(Caja+CxC)/Pasivo. >1.0 óptima · <0.5 riesgo inmediato')
-    + kpiRow('Capital de Trabajo Neto', v.map(e=>e.ctn),     bs,
-        [{val:50000,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'AC − Pasivo corriente. Positivo = capacidad operativa')
-    + secRow('Endeudamiento')
-    + kpiRow('Índice de Endeudamiento', v.map(e=>e.iEndeud), pct,
-        [{val:0,color:S.verde},{val:0.3,color:S.ambar},{val:0.5,color:S.rojo}].reverse(),
-        'Deuda/Activos. <30% bajo · 30-50% moderado · >50% alto')
-    + kpiRow('Razón D/E',              v.map(e=>e.razDE),   x2,
-        [{val:0,color:S.verde},{val:0.5,color:S.ambar},{val:1.0,color:S.rojo}].reverse(),
-        'Deuda/Patrimonio. <0.5 bajo · 0.5-1.0 moderado · >1.0 alto')
-    + secRow('Rentabilidad sobre Activos')
-    + kpiRow('ROA',                    v.map(e=>e.roa),     pct,
-        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'Utilidad Neta/Activos. >10% excelente · 0-10% aceptable · <0 pérdida')
-    + kpiRow('ROE',                    v.map(e=>e.roe),     pct,
-        [{val:0.15,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'Utilidad Neta/Patrimonio. >15% excelente · <0 destruye valor')
-    + secRow('Eficiencia')
-    + kpiRow('Rotación de Activos',    v.map(e=>e.rotAct),  x2,
-        [{val:0.8,color:S.verde},{val:0.4,color:S.ambar},{val:0,color:S.rojo}],
-        'Ventas Netas/Activos. >0.8x eficiente · <0.4x subutilización')
-    + kpiRow('CCC (días)',             v.map(e=>e.ccc),     d0,
-        [{val:0,color:S.verde},{val:45,color:S.ambar},{val:90,color:S.rojo}].reverse(),
-        'Ciclo de Conversión de Caja en días. Menor = mejor liquidez operativa')
-    + '</tbody></table></div>';
-
-  // ── TAB 2 — Rentabilidad P&L ──────────────────────────────────────────────
-  const tab2 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-    + '<thead>' + hdr + '</thead><tbody>'
-    + secRow('Ingresos')
-    + kpiRow('Ingresos Totales (Bs.)',  v.map(e=>e.ingresos), bs,
-        [{val:500000,color:S.verde},{val:100000,color:S.ambar},{val:0,color:S.rojo}],
-        'Ventas netas del trimestre')
-    + kpiRow('Crecimiento de Ingresos', v.map(e=>e.crecIng),  pct,
-        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'Variación vs ronda anterior. N/D si es la primera ronda')
-    + secRow('Márgenes')
-    + kpiRow('Margen Bruto',           v.map(e=>e.mBruto),  pct,
-        [{val:0.40,color:S.verde},{val:0.20,color:S.ambar},{val:0,color:S.rojo}],
+  // ── TAB 1 — Marketing ────────────────────────────────────────────────────
+  const tab1 = tableWrap(
+    secRow('🎯 Penetración y Posicionamiento')
+    + kpiRow('Market Share real', v.map(e=>e.shareReal), pct,
+        [{val:.30,color:S.verde},{val:.15,color:S.ambar},{val:0,color:S.rojo}],
+        '% del mercado capturado. >30% líder · 15-30% competitivo · <15% débil')
+    + kpiRow('Demanda formal del segmento (unid)', v.map(e=>e.demandaFormal), num,
+        [{val:0,color:S.gris}], 'Demanda total disponible en el segmento (incluye efecto shock)')
+    + kpiRow('Demanda asignada a la empresa (unid)', v.map(e=>e.demandaAsign), num,
+        [{val:0,color:S.ambar}], 'Demanda captada según atractivo competitivo')
+    + kpiRow('Unidades vendidas', v.map(e=>e.ventasReales), num,
+        [{val:0,color:S.ambar}], 'min(demanda asignada, inventario disponible)')
+    + kpiRow('% Demanda capturada', v.map(e=>e.pctCapturada), pct,
+        [{val:.80,color:S.verde},{val:.50,color:S.ambar},{val:0,color:S.rojo}],
+        'Ventas/Demanda formal. >80% excelente · <50% baja cobertura')
+    + secRow('💰 Rentabilidad Comercial')
+    + kpiRow('Ventas brutas (Bs)', v.map(e=>e.ventasBrutas), bs,
+        [{val:0,color:S.ambar}])
+    + kpiRow('Ventas netas (Bs)', v.map(e=>e.ventasNetas), bs,
+        [{val:0,color:S.ambar}])
+    + kpiRow('Margen bruto (%)', v.map(e=>e.mBruto), pct,
+        [{val:.40,color:S.verde},{val:.20,color:S.ambar},{val:0,color:S.rojo}],
         'Utilidad Bruta/Ventas Netas. >40% excelente · <20% bajo')
-    + kpiRow('Margen EBITDA',          v.map(e=>e.mEbitda), pct,
-        [{val:0.20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        '(EBIT+Depreciación)/Ventas. Proxy de generación de caja operativa')
-    + kpiRow('Margen Operativo (EBIT)', v.map(e=>e.mEbit),   pct,
-        [{val:0.15,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'EBIT/Ventas. >15% excelente · <0 pérdida operativa')
-    + kpiRow('Margen Neto',            v.map(e=>e.mNeto),   pct,
-        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'Utilidad Neta/Ventas. >10% excelente · <0 pérdida neta')
-    + secRow('Cobertura y Retorno')
-    + kpiRow('Cobertura de Intereses', v.map(e=>e.cobInt),  x2,
-        [{val:3.0,color:S.verde},{val:1.5,color:S.ambar},{val:0,color:S.rojo}],
-        'EBIT/Intereses. >3x cómoda · 1.5-3x ajustada · <1.5x riesgo. N/A sin deuda')
-    + kpiRow('ROIC',                   v.map(e=>e.roic),    pct,
-        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'EBIT/(Deuda+Patrimonio). Retorno sobre capital invertido')
-    + secRow('Punto de Equilibrio')
-    + kpiRow('Punto de Equilibrio (Bs.)', v.map(e=>e.pe),   bs,
-        [{val:0,color:S.verde},{val:Infinity,color:S.ambar}],
-        'Ventas mínimas para cubrir costos fijos. Comparar con ingresos reales')
-    + '</tbody></table></div>';
+    + kpiRow('Precio de venta (Bs)', v.map(e=>e.precioVenta), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('Costo unitario (Bs)', v.map(e=>e.costoUnit), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('Margen unitario (Bs)', v.map(e=>e.margenUnit), bs,
+        [{val:20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Precio − Costo unitario. Debe ser positivo para cubrir gastos fijos')
+    + secRow('📢 Marketing e Inversión')
+    + kpiRow('Gasto publicidad (Bs)', v.map(e=>e.pubGasto), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('Gasto total marketing (Bs)', v.map(e=>e.mktTotal), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('ROI Marketing (x)', v.map(e=>e.roiMkt), x2,
+        [{val:2,color:S.verde},{val:1,color:S.ambar},{val:0,color:S.rojo}],
+        'Retorno por Bs invertido en marketing. >2x excelente · <1x ineficiente')
+    + secRow('⭐ Marca y Posicionamiento')
+    + kpiRow('Brand Equity (pts)', v.map(e=>e.brandEquity), d1,
+        [{val:70,color:S.verde},{val:50,color:S.ambar},{val:0,color:S.rojo}],
+        'Valor acumulado de marca. >70 fuerte · 50-70 en construcción · <50 débil')
+    + kpiRow('Atractivo competitivo (pts)', v.map(e=>e.atractivo), d2,
+        [{val:10,color:S.verde},{val:5,color:S.ambar},{val:0,color:S.rojo}],
+        'Score logit de atractivo. Determina el market share')
+  );
 
-  // ── TAB 3 — Flujo de Efectivo ─────────────────────────────────────────────
-  const tab3 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-    + '<thead>' + hdr + '</thead><tbody>'
-    + secRow('Generación de Caja')
-    + kpiRow('OCF — Flujo Operativo (Bs.)',  v.map(e=>e.ocf),  bs,
-        [{val:0,color:S.verde},{val:-50000,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'Utilidad Neta + Depreciación ± ΔCxC ± ΔInventario. Caja generada por la operación')
-    + kpiRow('FCF — Flujo Libre (Bs.)',      v.map(e=>e.fcf),  bs,
-        [{val:0,color:S.verde},{val:-50000,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'OCF − CAPEX. CAPEX ≈ 0 en este simulador, por lo que FCF = OCF')
-    + secRow('Ratios de Flujo')
-    + kpiRow('CFCR — Cobertura de Deuda',   v.map(e=>e.cfcr), x2,
-        [{val:0.20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
-        'OCF/Deuda Total. >0.20x capacidad de repago · <0 riesgo de insolvencia')
-    + kpiRow('QoE — Calidad de Ganancias',  v.map(e=>e.qoe),  x2,
-        [{val:0.80,color:S.verde},{val:0.50,color:S.ambar},{val:0,color:S.rojo}],
-        'OCF/Utilidad Neta. >0.8x ganancias respaldadas en caja · <0.5x riesgo de accruals')
-    + secRow('Posición de Caja')
-    + (() => {
-        const checks = eqs.map((r,i) => {
-          const c = r.cajaFinal||0;
-          const color = c > 50000 ? S.verde : c >= 0 ? S.ambar : S.rojo;
-          return '<td style="text-align:center;padding:6px 8px">'
-            + '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">'
-            + '<span style="font-family:var(--font-mono);font-size:.82rem;font-weight:700;color:'+color+'">' + bs(c) + '</span>'
-            + '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block"></span>'
-            + (r.sobregiro ? '<span style="font-size:.65rem;color:'+S.rojo+'">⚠ Sobregiro</span>' : '')
-            + '</div></td>';
-        }).join('');
-        return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
-          + '<td style="padding:6px 12px;font-size:.79rem;color:var(--text2);position:sticky;left:0;background:var(--bg);z-index:1">Saldo Final de Caja</td>'
-          + checks + '</tr>';
-      })()
-    + '</tbody></table></div>';
+  // ── TAB 2 — Producción ───────────────────────────────────────────────────
+  const tab2 = tableWrap(
+    secRow('🏭 Volumen y Capacidad')
+    + kpiRow('Producción (pares)', v.map(e=>e.produccion), num,
+        [{val:0,color:S.ambar}])
+    + kpiRow('Inventario inicial (pares)', v.map(e=>e.invInicial), num,
+        [{val:0,color:S.gris}])
+    + kpiRow('Inventario final (pares)', v.map(e=>e.invFinalU), num,
+        [{val:0,color:S.verde},{val:100,color:S.ambar},{val:500,color:S.rojo}].reverse(),
+        'Inventario alto = sobreproducción o baja demanda')
+    + kpiRow('Inventario / Producción (%)', v.map(e=>e.invPct), d1,
+        [{val:0,color:S.verde},{val:20,color:S.ambar},{val:40,color:S.rojo}].reverse(),
+        '% no vendido. <20% eficiente · >40% sobreproducción preocupante')
+    + kpiRow('Capacidad efectiva (pares)', v.map(e=>e.capEfectiva), num,
+        [{val:0,color:S.gris}], 'Operarios × Productividad × Factor capacitación')
+    + secRow('💰 Costos de Producción')
+    + kpiRow('Costo unitario (Bs)', v.map(e=>e.costoUnitP), bs,
+        [{val:0,color:S.gris}], 'CostoBase + CalidadFactor + CostoCanal ± Innovación')
+    + kpiRow('Stock MP disponible (unid)', v.map(e=>e.stockMP), num,
+        [{val:0,color:S.gris}], 'Inventario de materia prima al cierre del trimestre')
+  );
 
-  // ── Ensamblado con tabs ───────────────────────────────────────────────────
-  const tabs = '<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
-    + '<button class="btn btn-primary btn-sm" id="btnKPI1" onclick="adminKPITab(1)">🏦 Liquidez y Estructura</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnKPI2" onclick="adminKPITab(2)">📋 Rentabilidad P&L</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnKPI3" onclick="adminKPITab(3)">💧 Flujo de Efectivo</button>'
+  // ── TAB 3 — RRHH ─────────────────────────────────────────────────────────
+  const tab3 = tableWrap(
+    secRow('👥 Fuerza de Ventas')
+    + kpiRow('Vendedores finales', v.map(e=>e.vendFin), num,
+        [{val:3,color:S.verde},{val:1,color:S.ambar},{val:0,color:S.rojo}])
+    + kpiRow('Ventas por vendedor (unid)', v.map(e=>e.ventasPorVend), num,
+        [{val:200,color:S.verde},{val:100,color:S.ambar},{val:0,color:S.rojo}],
+        'Productividad comercial: unidades vendidas / vendedores')
+    + kpiRow('Ingresos netos por vendedor (Bs)', v.map(e=>e.ingPorVend), bs,
+        [{val:50000,color:S.verde},{val:20000,color:S.ambar},{val:0,color:S.rojo}],
+        'Ventas netas / vendedores. Mide eficiencia de la fuerza de ventas')
+    + secRow('🏭 Personal de Planta')
+    + kpiRow('Operarios finales', v.map(e=>e.operarios), num,
+        [{val:0,color:S.gris}])
+    + kpiRow('Costo total operarios (Bs)', v.map(e=>e.costoOper), bs,
+        [{val:0,color:S.gris}], 'Sueldos + contratación + despidos + capacitación')
+  );
+
+  // ── TAB 4 — Financiero ───────────────────────────────────────────────────
+  const tab4 = tableWrap(
+    secRow('📊 Rentabilidad')
+    + kpiRow('Margen bruto (%)', v.map(e=>e.mBruto), pct,
+        [{val:.40,color:S.verde},{val:.20,color:S.ambar},{val:0,color:S.rojo}])
+    + kpiRow('Margen neto (%)', v.map(e=>e.mNeto), pct,
+        [{val:.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}])
+    + kpiRow('Utilidad neta (Bs)', v.map(e=>e.utilNeta), bs,
+        [{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}])
+    + kpiRow('EBIT (Bs)', v.map(e=>e.ebitVal), bs,
+        [{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Resultado operativo antes de intereses e impuestos')
+    + kpiRow('ROA (%)', v.map(e=>e.roa), pct,
+        [{val:.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta / Activos Totales. >10% excelente')
+    + kpiRow('ROE (%)', v.map(e=>e.roe), pct,
+        [{val:.15,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta / Patrimonio. >15% excelente')
+    + secRow('💧 Posición de Caja y Deuda')
+    + kpiRow('Caja final (Bs)', v.map(e=>e.cajaFin), bs,
+        [{val:50000,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}])
+    + kpiRow('Sobregiro (Bs)', v.map(e=>e.sobregiro), bs,
+        [{val:0,color:S.verde},{val:0,color:S.ambar}],
+        'Caja negativa → sobregiro automático con tasa de penalidad')
+    + kpiRow('Deuda total (Bs)', v.map(e=>e.deudaTot), bs,
+        [{val:0,color:S.verde},{val:50000,color:S.ambar},{val:200000,color:S.rojo}].reverse())
+    + kpiRow('Endeudamiento (Deuda/Activos)', v.map(e=>e.endeud), pct,
+        [{val:0,color:S.verde},{val:.30,color:S.ambar},{val:.50,color:S.rojo}].reverse(),
+        '<30% bajo · 30-50% moderado · >50% alto')
+    + kpiRow('Liquidez corriente (x)', v.map(e=>e.liquidez), x2,
+        [{val:1.5,color:S.verde},{val:1.0,color:S.ambar},{val:0,color:S.rojo}],
+        'Activo Corriente / Deuda. >1.5 sólida · <1.0 riesgo')
+    + secRow('🧾 Impuestos')
+    + kpiRow('IVA neto pagado (Bs)', v.map(e=>e.ivaAPagar), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('IT pagado (Bs)', v.map(e=>e.impIT), bs,
+        [{val:0,color:S.gris}])
+    + kpiRow('IUE pagado (Bs)', v.map(e=>e.impIUE), bs,
+        [{val:0,color:S.gris}], 'Pago anual — aparece cada 4 trimestres')
+    + kpiRow('Provisión IUE (Bs)', v.map(e=>e.provIUE), bs,
+        [{val:0,color:S.gris}], 'Acumulación trimestral del IUE estimado')
+  );
+
+  // ── Ensamblado con 4 tabs ─────────────────────────────────────────────────
+  const tabBar = '<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="btnKPI1" onclick="adminKPITab(1)">📣 Marketing</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnKPI2" onclick="adminKPITab(2)">🏭 Producción</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnKPI3" onclick="adminKPITab(3)">👥 RRHH</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnKPI4" onclick="adminKPITab(4)">💰 Financiero</button>'
     + '<div style="flex:1"></div>'
     + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminKPIContent\',\'Análisis KPI Financiero\',\'Ronda actual\')">🖨️ Imprimir</button>'
     + '</div>';
@@ -1423,15 +1472,16 @@ function buildAdminKPIHTML(eqs, tc) {
     + '<span style="margin-left:auto;font-style:italic">Hover en ⓘ para ver definición del indicador</span>'
     + '</div>';
 
-  return '<div id="adminKPIContent">' + leyenda + tabs
+  return '<div id="adminKPIContent">' + leyenda + tabBar
     + '<div id="adminKPIPane1">' + tab1 + '</div>'
     + '<div id="adminKPIPane2" style="display:none">' + tab2 + '</div>'
     + '<div id="adminKPIPane3" style="display:none">' + tab3 + '</div>'
+    + '<div id="adminKPIPane4" style="display:none">' + tab4 + '</div>'
     + '</div>';
 }
 
 window.adminKPITab = (n) => {
-  [1,2,3].forEach(i => {
+  [1,2,3,4].forEach(i => {
     const p = document.getElementById('adminKPIPane'+i);
     const b = document.getElementById('btnKPI'+i);
     if (p) p.style.display = i===n ? '' : 'none';
