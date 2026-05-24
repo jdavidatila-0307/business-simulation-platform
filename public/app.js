@@ -268,7 +268,10 @@ function setupNav(screenId) {
       if (btn.dataset.view === 'admin-competencia') loadAdminCompetencia();
       if (btn.dataset.view === 'admin-creditos') loadAdminCreditos();
       if (btn.dataset.view === 'admin-dashboard') loadAdminDashboard();
-      if (btn.dataset.view === 'admin-equipos') loadAdminEquipos();
+      if (btn.dataset.view === 'admin-equipos') {
+        if (typeof loadAdminEquipos === 'function') loadAdminEquipos();
+        else loadAdminSimulaciones(); // fallback
+      }
       if (btn.dataset.view === 'admin-rondas') loadAdminRondas();
       if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
       if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
@@ -518,6 +521,99 @@ async function initAdmin() {
 }
 
 // ── Admin Simulaciones ─────────────────────────────────────
+async function loadAdminEquipos() {
+  if (!requireSimSelected('equiposTableWrap')) return;
+  const el = document.getElementById('equiposTableWrap');
+  if (!el) return;
+  try {
+    const equipos = await api('GET', '/admin/equipos');
+    const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+    if (!equipos?.length) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin equipos registrados. Crea equipos desde esta sección.</p>';
+      return;
+    }
+    const rows = equipos.filter(eq => !eq.isBot).map((eq,i) => `
+      <tr>
+        <td>
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${palette[i%9]};margin-right:8px;vertical-align:middle"></span>
+          <strong>${eq.nombre}</strong>
+        </td>
+        <td style="font-family:var(--font-mono);font-size:.75rem;color:var(--text3)">${eq.id}</td>
+        <td style="text-align:center">
+          <span class="badge ${eq.activo !== false ? 'badge-ok' : 'badge-warn'}">${eq.activo !== false ? 'Activo' : 'Inactivo'}</span>
+        </td>
+      </tr>`).join('');
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Equipo</th><th>ID</th><th style="text-align:center">Estado</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    const el2 = document.getElementById('equiposTableWrap');
+    if (el2) el2.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
+  }
+}
+
+async function loadAdminRondas() {
+  if (!requireSimSelected('rondasContent')) return;
+  const el = document.getElementById('rondasContent');
+  if (!el) return;
+  try {
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando historial de rondas...</p>';
+    const raw  = await api('GET', '/admin/historial');
+    const hist = Array.isArray(raw) ? raw : (raw?.rondas || raw?.historial || []);
+    if (!hist?.length) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún. Las rondas aparecerán aquí una vez que el profesor ejecute la simulación.</p>';
+      return;
+    }
+    const rows = hist.map(h => `
+      <tr>
+        <td style="text-align:center;font-weight:700;color:var(--accent3)">T${h.ronda}</td>
+        <td style="text-align:center">
+          <span class="badge ${h.estado==='calculada'||h.estado==='simulated'?'badge-ok':'badge-warn'}">${h.estado}</span>
+        </td>
+        <td style="text-align:center">${h.enviados||'—'} / ${h.total||'—'}</td>
+        <td style="text-align:center;font-size:.78rem;color:var(--text3)">${h.ejecutadaAt ? new Date(h.ejecutadaAt).toLocaleString('es-BO') : '—'}</td>
+      </tr>`).join('');
+    el.innerHTML = '<div class="table-wrap"><table>'
+      + '<thead><tr>'
+      + '<th style="text-align:center">Trimestre</th>'
+      + '<th style="text-align:center">Estado</th>'
+      + '<th style="text-align:center">Decisiones enviadas</th>'
+      + '<th style="text-align:center">Ejecutada</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
+  }
+}
+
+async function loadAdminResultados() {
+  if (!requireSimSelected('adminResultadosContent')) return;
+  const el = document.getElementById('adminResultadosContent');
+  if (!el) return;
+  try {
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando resultados...</p>';
+    const ronda = await api('GET', '/admin/ronda');
+    const n = ronda?.currentRound || 0;
+    if (!n || ronda?.roundState === 'pending') {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
+      return;
+    }
+    const rd = await api('GET', '/admin/resultados/' + n);
+    if (!rd?.resultados?.length) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para el trimestre ' + n + '.</p>';
+      return;
+    }
+    el.innerHTML = buildAdminResultsHTML(rd);
+    if (typeof renderAdminCharts === 'function') setTimeout(renderAdminCharts, 200);
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
+    console.error('loadAdminResultados:', e);
+  }
+}
+
 async function loadAdminSimulaciones() {
 
   let plantillasDisponibles = [];
@@ -898,11 +994,268 @@ async function loadAdminDashboard() {
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
   document.getElementById('btnCerrarDash')?.addEventListener('click',  doCerrarRonda);
   document.getElementById('btnForzarTodosDash')?.addEventListener('click', doForzarTodos);
-  document.getElementById('btnSiguienteDash')?.addEventListener('click', doSiguienteRonda);
+  document.getElementById('btnSiguienteDash')?.addEventListener('click', async () => {
+    try {
+      await api('POST', '/admin/siguiente-ronda');
+      toast('✅ Ronda siguiente abierta', 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  });
   document.getElementById('btnRefreshDash')?.addEventListener('click', loadAdminDashboard);
 
   if (ronda.roundState === 'simulated') renderAdminCharts();
 }
+
+// ── KPI Analysis Panel — buildAdminKPIHTML ────────────────────────────────
+// Insertar en buildAdminResultsHTML como 3 tabs adicionales
+// Dependencias: eqs (array de resultados consolidados por empresa), tc() (colores)
+
+function buildAdminKPIHTML(eqs, tc) {
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const safe = (v) => (isNaN(v) || !isFinite(v) || v === null) ? null : v;
+  const pct  = (v) => v != null ? (v*100).toFixed(1)+'%' : '—';
+  const x2   = (v) => v != null ? v.toFixed(2)+'x' : '—';
+  const bs   = (v) => {
+    if (v === null || v === undefined) return '—';
+    const n = Math.abs(Math.round(v)).toLocaleString('es-BO').replace(/,/g,'.');
+    return v < 0 ? '(Bs. '+n+')' : 'Bs. '+n;
+  };
+  const d2   = (v) => v != null ? v.toFixed(2) : '—';
+  const d0   = (v) => v != null ? Math.round(v).toLocaleString('es-BO').replace(/,/g,'.') : '—';
+
+  // Semáforo: thresholds = [{val, color}] descendente
+  const semaforo = (v, thresholds) => {
+    if (v === null || v === undefined) return '#6B7280';
+    for (const t of thresholds) {
+      if (v >= t.val) return t.color;
+    }
+    return thresholds[thresholds.length-1].color;
+  };
+  const S = { verde:'#10B981', ambar:'#F59E0B', rojo:'#EF4444' };
+
+  // Cabecera de columnas
+  const cols = eqs.length;
+  const hdr = '<tr><th style="text-align:left;padding:7px 12px;font-size:.72rem;min-width:200px;position:sticky;left:0;background:var(--bg2);z-index:2">Indicador</th>'
+    + eqs.map((r,i) => '<th style="text-align:center;padding:7px 10px;font-size:.72rem;min-width:120px">'
+        + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(i)+';margin-right:4px;vertical-align:middle"></span>'
+        + r.equipoNombre + '</th>').join('') + '</tr>';
+
+  // Fila KPI: label, valores[], formatos, thresholds por empresa
+  const kpiRow = (label, vals, fmt, thresholds, hint='') => {
+    const cells = vals.map(v => {
+      const color = semaforo(v, thresholds);
+      const disp  = fmt(v);
+      return '<td style="text-align:center;padding:6px 8px">'
+        + '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">'
+        + '<span style="font-family:var(--font-mono);font-size:.82rem;font-weight:700;color:'+color+'">' + disp + '</span>'
+        + '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block"></span>'
+        + '</div></td>';
+    }).join('');
+    const hintHtml = hint ? ' <span style="font-size:.68rem;color:var(--text3);cursor:help" title="'+hint+'">ⓘ</span>' : '';
+    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+      + '<td style="padding:6px 12px;font-size:.79rem;color:var(--text2);position:sticky;left:0;background:var(--bg);z-index:1">'
+      + label + hintHtml + '</td>' + cells + '</tr>';
+  };
+
+  const secRow = (label) => '<tr style="background:rgba(255,255,255,.04)">'
+    + '<td colspan="'+(cols+1)+'" style="padding:5px 12px;font-family:var(--font-mono);font-size:.62rem;'
+    + 'color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">' + label + '</td></tr>';
+
+  // ── Cálculos por empresa ──────────────────────────────────────────────────
+  const v = eqs.map(r => {
+    const actCor = (r.cajaFinal||0) + (r.cxcFinal||0) + (r.invFinalValorizado||0);
+    const deuda  = r.deudaFinal || 0;
+    const gfijo  = (r.gastoAdminFijo||0) + (r.gastoFijoPlanta||0)
+                 + (r.costoVendedores||0) + (r.costoOperarios||0)
+                 + (r.depreciacion||0);
+    const interes = (r.interesesPrestamo||0) + (r.interesSobregiro||0);
+    const ebit   = r.ebit || 0;
+    const dep    = r.depreciacion || 0;
+    const ebitda = ebit + dep;
+    const vN     = r.ventasNetas || 0;
+    const vB     = r.ventasBrutas || 0;
+    const uN     = r.utilidadNeta || 0;
+    const uB     = r.utilidadBruta || 0;
+    const pat    = r.patrimonio || 1;
+    const totA   = r.totalActivos || 1;
+    const cap    = deuda + pat;
+    const ocf    = uN + dep - (r.cxcFinal||0) + (r.cxcInicial||0)
+                 - (r.invFinalValorizado||0) + ((r.inventarioInicial||0)*(r.costoUnitario||0));
+    const pe     = vN > 0 ? safe(gfijo / (1 - (r.costoVentas||0)/Math.max(vB,1))) : null;
+
+    return {
+      // TAB 1 — Liquidez y Estructura
+      razCor:   deuda > 0 ? safe(actCor / deuda) : null,
+      pruAcid:  deuda > 0 ? safe(((r.cajaFinal||0)+(r.cxcFinal||0)) / deuda) : null,
+      iEndeud:  safe((r.deudaFinal||0) / totA),
+      razDE:    pat > 0 && deuda > 0 ? safe(deuda / pat) : null,
+      roa:      safe(uN / totA),
+      roe:      safe(uN / pat),
+      ctn:      actCor - deuda,
+      rotAct:   vN > 0 ? safe(vN / totA) : null,
+      ccc:      vB > 0 ? safe(((r.invFinalValorizado||0)/(Math.max(r.costoVentas||1,1)))*90
+                + ((r.cxcFinal||0)/Math.max(vN,1))*90) : null,
+
+      // TAB 2 — Rentabilidad P&L
+      mBruto:   vN > 0 ? safe(uB / vN) : null,
+      mEbitda:  vN > 0 ? safe(ebitda / vN) : null,
+      mEbit:    vN > 0 ? safe(ebit / vN) : null,
+      mNeto:    vN > 0 ? safe(uN / vN) : null,
+      crecIng:  r.ventasNetasAnt ? safe((vN - r.ventasNetasAnt)/Math.abs(r.ventasNetasAnt)) : null,
+      cobInt:   interes > 0 ? safe(ebit / interes) : null,
+      roic:     cap > 0 ? safe(ebit / cap) : null,
+      pe,
+      ingresos: vN,
+
+      // TAB 3 — Flujo
+      ocf,
+      fcf:  ocf,  // CAPEX ≈ 0 en el simulador
+      cfcr: deuda > 0 ? safe(ocf / deuda) : null,
+      qoe:  uN !== 0 ? safe(ocf / uN) : null,
+      caja: r.cajaFinal || 0,
+    };
+  });
+
+  // ── TAB 1 — Liquidez y Estructura ─────────────────────────────────────────
+  const tab1 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + '<thead>' + hdr + '</thead><tbody>'
+    + secRow('Liquidez')
+    + kpiRow('Razón Corriente',         v.map(e=>e.razCor),  x2,
+        [{val:1.5,color:S.verde},{val:1.0,color:S.ambar},{val:0,color:S.rojo}],
+        'AC/Pasivo corriente. >1.5 sólida · 1.0-1.5 aceptable · <1.0 riesgo')
+    + kpiRow('Prueba Ácida',            v.map(e=>e.pruAcid), x2,
+        [{val:1.0,color:S.verde},{val:0.5,color:S.ambar},{val:0,color:S.rojo}],
+        '(Caja+CxC)/Pasivo. >1.0 óptima · <0.5 riesgo inmediato')
+    + kpiRow('Capital de Trabajo Neto', v.map(e=>e.ctn),     bs,
+        [{val:50000,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'AC − Pasivo corriente. Positivo = capacidad operativa')
+    + secRow('Endeudamiento')
+    + kpiRow('Índice de Endeudamiento', v.map(e=>e.iEndeud), pct,
+        [{val:0,color:S.verde},{val:0.3,color:S.ambar},{val:0.5,color:S.rojo}].reverse(),
+        'Deuda/Activos. <30% bajo · 30-50% moderado · >50% alto')
+    + kpiRow('Razón D/E',              v.map(e=>e.razDE),   x2,
+        [{val:0,color:S.verde},{val:0.5,color:S.ambar},{val:1.0,color:S.rojo}].reverse(),
+        'Deuda/Patrimonio. <0.5 bajo · 0.5-1.0 moderado · >1.0 alto')
+    + secRow('Rentabilidad sobre Activos')
+    + kpiRow('ROA',                    v.map(e=>e.roa),     pct,
+        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta/Activos. >10% excelente · 0-10% aceptable · <0 pérdida')
+    + kpiRow('ROE',                    v.map(e=>e.roe),     pct,
+        [{val:0.15,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta/Patrimonio. >15% excelente · <0 destruye valor')
+    + secRow('Eficiencia')
+    + kpiRow('Rotación de Activos',    v.map(e=>e.rotAct),  x2,
+        [{val:0.8,color:S.verde},{val:0.4,color:S.ambar},{val:0,color:S.rojo}],
+        'Ventas Netas/Activos. >0.8x eficiente · <0.4x subutilización')
+    + kpiRow('CCC (días)',             v.map(e=>e.ccc),     d0,
+        [{val:0,color:S.verde},{val:45,color:S.ambar},{val:90,color:S.rojo}].reverse(),
+        'Ciclo de Conversión de Caja en días. Menor = mejor liquidez operativa')
+    + '</tbody></table></div>';
+
+  // ── TAB 2 — Rentabilidad P&L ──────────────────────────────────────────────
+  const tab2 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + '<thead>' + hdr + '</thead><tbody>'
+    + secRow('Ingresos')
+    + kpiRow('Ingresos Totales (Bs.)',  v.map(e=>e.ingresos), bs,
+        [{val:500000,color:S.verde},{val:100000,color:S.ambar},{val:0,color:S.rojo}],
+        'Ventas netas del trimestre')
+    + kpiRow('Crecimiento de Ingresos', v.map(e=>e.crecIng),  pct,
+        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Variación vs ronda anterior. N/D si es la primera ronda')
+    + secRow('Márgenes')
+    + kpiRow('Margen Bruto',           v.map(e=>e.mBruto),  pct,
+        [{val:0.40,color:S.verde},{val:0.20,color:S.ambar},{val:0,color:S.rojo}],
+        'Utilidad Bruta/Ventas Netas. >40% excelente · <20% bajo')
+    + kpiRow('Margen EBITDA',          v.map(e=>e.mEbitda), pct,
+        [{val:0.20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        '(EBIT+Depreciación)/Ventas. Proxy de generación de caja operativa')
+    + kpiRow('Margen Operativo (EBIT)', v.map(e=>e.mEbit),   pct,
+        [{val:0.15,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'EBIT/Ventas. >15% excelente · <0 pérdida operativa')
+    + kpiRow('Margen Neto',            v.map(e=>e.mNeto),   pct,
+        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta/Ventas. >10% excelente · <0 pérdida neta')
+    + secRow('Cobertura y Retorno')
+    + kpiRow('Cobertura de Intereses', v.map(e=>e.cobInt),  x2,
+        [{val:3.0,color:S.verde},{val:1.5,color:S.ambar},{val:0,color:S.rojo}],
+        'EBIT/Intereses. >3x cómoda · 1.5-3x ajustada · <1.5x riesgo. N/A sin deuda')
+    + kpiRow('ROIC',                   v.map(e=>e.roic),    pct,
+        [{val:0.10,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'EBIT/(Deuda+Patrimonio). Retorno sobre capital invertido')
+    + secRow('Punto de Equilibrio')
+    + kpiRow('Punto de Equilibrio (Bs.)', v.map(e=>e.pe),   bs,
+        [{val:0,color:S.verde},{val:Infinity,color:S.ambar}],
+        'Ventas mínimas para cubrir costos fijos. Comparar con ingresos reales')
+    + '</tbody></table></div>';
+
+  // ── TAB 3 — Flujo de Efectivo ─────────────────────────────────────────────
+  const tab3 = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + '<thead>' + hdr + '</thead><tbody>'
+    + secRow('Generación de Caja')
+    + kpiRow('OCF — Flujo Operativo (Bs.)',  v.map(e=>e.ocf),  bs,
+        [{val:0,color:S.verde},{val:-50000,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'Utilidad Neta + Depreciación ± ΔCxC ± ΔInventario. Caja generada por la operación')
+    + kpiRow('FCF — Flujo Libre (Bs.)',      v.map(e=>e.fcf),  bs,
+        [{val:0,color:S.verde},{val:-50000,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'OCF − CAPEX. CAPEX ≈ 0 en este simulador, por lo que FCF = OCF')
+    + secRow('Ratios de Flujo')
+    + kpiRow('CFCR — Cobertura de Deuda',   v.map(e=>e.cfcr), x2,
+        [{val:0.20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        'OCF/Deuda Total. >0.20x capacidad de repago · <0 riesgo de insolvencia')
+    + kpiRow('QoE — Calidad de Ganancias',  v.map(e=>e.qoe),  x2,
+        [{val:0.80,color:S.verde},{val:0.50,color:S.ambar},{val:0,color:S.rojo}],
+        'OCF/Utilidad Neta. >0.8x ganancias respaldadas en caja · <0.5x riesgo de accruals')
+    + secRow('Posición de Caja')
+    + (() => {
+        const checks = eqs.map((r,i) => {
+          const c = r.cajaFinal||0;
+          const color = c > 50000 ? S.verde : c >= 0 ? S.ambar : S.rojo;
+          return '<td style="text-align:center;padding:6px 8px">'
+            + '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">'
+            + '<span style="font-family:var(--font-mono);font-size:.82rem;font-weight:700;color:'+color+'">' + bs(c) + '</span>'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block"></span>'
+            + (r.sobregiro ? '<span style="font-size:.65rem;color:'+S.rojo+'">⚠ Sobregiro</span>' : '')
+            + '</div></td>';
+        }).join('');
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+          + '<td style="padding:6px 12px;font-size:.79rem;color:var(--text2);position:sticky;left:0;background:var(--bg);z-index:1">Saldo Final de Caja</td>'
+          + checks + '</tr>';
+      })()
+    + '</tbody></table></div>';
+
+  // ── Ensamblado con tabs ───────────────────────────────────────────────────
+  const tabs = '<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="btnKPI1" onclick="adminKPITab(1)">🏦 Liquidez y Estructura</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnKPI2" onclick="adminKPITab(2)">📋 Rentabilidad P&L</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnKPI3" onclick="adminKPITab(3)">💧 Flujo de Efectivo</button>'
+    + '<div style="flex:1"></div>'
+    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminKPIContent\',\'Análisis KPI Financiero\',\'Ronda actual\')">🖨️ Imprimir</button>'
+    + '</div>';
+
+  const leyenda = '<div style="display:flex;gap:16px;margin-bottom:10px;font-size:.74rem;color:var(--text3)">'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10B981;margin-right:4px"></span>Óptimo</span>'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F59E0B;margin-right:4px"></span>Precaución</span>'
+    + '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EF4444;margin-right:4px"></span>Riesgo</span>'
+    + '<span style="margin-left:auto;font-style:italic">Hover en ⓘ para ver definición del indicador</span>'
+    + '</div>';
+
+  return '<div id="adminKPIContent">' + leyenda + tabs
+    + '<div id="adminKPIPane1">' + tab1 + '</div>'
+    + '<div id="adminKPIPane2" style="display:none">' + tab2 + '</div>'
+    + '<div id="adminKPIPane3" style="display:none">' + tab3 + '</div>'
+    + '</div>';
+}
+
+window.adminKPITab = (n) => {
+  [1,2,3].forEach(i => {
+    const p = document.getElementById('adminKPIPane'+i);
+    const b = document.getElementById('btnKPI'+i);
+    if (p) p.style.display = i===n ? '' : 'none';
+    if (b) b.className    = i===n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  });
+};
+
 
 function buildAdminResultsHTML(rd) {
   if (!rd.resultados?.length) return '';
@@ -1109,7 +1462,11 @@ function buildAdminResultsHTML(rd) {
     + '<button class="btn btn-ghost btn-sm"   id="btnEFT2" onclick="adminEFTab(2)">📋 Estado de Resultados</button>'
     + '<button class="btn btn-ghost btn-sm"   id="btnEFT3" onclick="adminEFTab(3)">🏦 Balance General</button>'
     + '<button class="btn btn-ghost btn-sm"   id="btnEFT4" onclick="adminEFTab(4)">💧 Flujo de Efectivo</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT5" onclick="adminEFTab(5)">📐 Análisis KPI</button>'
     + '</div>';
+
+  // Construir KPI panel (3 tabs de ratios financieros)
+  const kpiHTML = buildAdminKPIHTML(eqs, teamColor);
 
   return '<div id="adminEFContent">'
     + encabezado + tabs
@@ -1117,11 +1474,12 @@ function buildAdminResultsHTML(rd) {
     + '<div id="adminEFPane2" style="display:none">' + plHTML + '</div>'
     + '<div id="adminEFPane3" style="display:none">' + bgHTML + '</div>'
     + '<div id="adminEFPane4" style="display:none">' + feHTML + '</div>'
+    + '<div id="adminEFPane5" style="display:none">' + kpiHTML + '</div>'
     + '</div>';
 }
 
 window.adminEFTab = (n) => {
-  [1,2,3,4].forEach(i => {
+  [1,2,3,4,5].forEach(i => {
     const pane = document.getElementById('adminEFPane'+i);
     const btn  = document.getElementById('btnEFT'+i);
     if (pane) pane.style.display = i===n ? '' : 'none';
@@ -2492,12 +2850,19 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-label">👥 Vendedores actuales</td>
             <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
+          ${hojaProductoActivo === 0 ? `
           <tr><td class="hoja-label">➕ Contratar vendedores</td>
               <td>${inp('contratarVendedores',decision.contratarVendedores??0,'number','min="0" max="10" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
           <tr><td class="hoja-label">➖ Despedir vendedores</td>
               <td>${inp('despedirVendedores',decision.despedirVendedores??0,'number','min="0" step="1"')}</td>
               <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
+          ` : `
+          <tr><td colspan="4" style="padding:6px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
+            ℹ️ Contratar/despedir vendedores se gestiona en <strong>Producto 1</strong> · Aplica a toda la empresa.
+            Valor actual: ➕ ${decision.contratarVendedores??0} · ➖ ${decision.despedirVendedores??0}
+          </td></tr>
+          `}
         </tbody>
       </table>
     </div>
@@ -2515,6 +2880,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-ref">Propagado de ronda anterior</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
           </tr>
+          ${hojaProductoActivo === 0 ? `
           <tr>
             <td class="hoja-label">➕ Contratar operarios</td>
             <td>${inp('contratarOperarios', decision.contratarOperarios ?? 0, 'number', 'min="0" max="20" step="1"')}</td>
@@ -2533,6 +2899,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td class="hoja-ref">+${fmt.pct(p.factorCapacitacion ?? 0.05)} productividad por cada Bs 10.000</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. = operarios × ${p.productividadBase ?? 440} × (1 + factor)</td>
           </tr>
+          ` : `
+          <tr><td colspan="4" style="padding:6px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
+            ℹ️ Contratar/despedir operarios y capacitación se gestionan en <strong>Producto 1</strong> · Aplica a toda la empresa.
+            Valor actual: ➕ ${decision.contratarOperarios??0} operarios · ➖ ${decision.despedirOperarios??0} · Capacitación Bs ${fmt.num(decision.montoCapacitacion??0)}
+          </td></tr>
+          `}
         </tbody>
       </table>
     </div>
@@ -4053,3 +4425,4 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+ 
