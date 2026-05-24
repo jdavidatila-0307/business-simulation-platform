@@ -1072,7 +1072,7 @@ async function loadAdminDashboard() {
   document.getElementById('btnForzarTodosDash')?.addEventListener('click', doForzarTodos);
   document.getElementById('btnSiguienteDash')?.addEventListener('click', async () => {
     try {
-      await api('POST', '/admin/siguiente-ronda');
+      await api('POST', '/admin/ronda/siguiente');
       toast('✅ Ronda siguiente abierta', 'success');
       await loadAdminDashboard();
     } catch(e) { toast(e.message, 'error'); }
