@@ -581,9 +581,13 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
           // Buscar resultado de la ronda anterior para campos financieros
           // NOTA: resultados puede estar en prevRonda.resultados.resultados (estructura del motor)
           const resObj = prevRonda.resultados?.resultados || prevRonda.resultados || {};
-          const resPrev = Object.values(resObj).find(r =>
+          const resObjValues = Object.values(resObj).filter(v => v && typeof v === 'object' && v.equipoNombre);
+          console.log(`[storage] ensureRonda: eq=${eq.nombre} resObj keys=${Object.keys(resObj).length} validResults=${resObjValues.length}`);
+          const resPrev = resObjValues.find(r =>
             r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
           );
+          if (resPrev) console.log(`[storage] encontrado: caja=${resPrev.cajaFinal} vend=${resPrev.vendedoresFinales}`);
+          else console.log(`[storage] NO encontrado para ${eq.id}`);
 
           if (resPrev) {
             // Propagar SOLO el estado financiero acumulado de la empresa
