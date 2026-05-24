@@ -663,12 +663,13 @@ function ejecutarSimulador(decisiones, cfg) {
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
       const vend     = Math.max(1, d.vendedoresIniciales||2);
       const oper     = Math.max(1, d.operariosIniciales||4);
-      const dep      = params.depreciacionTrimestral || 2500;
-      const gFijo    = (params.gastoAdminFijo||165000)
-                     + (params.gastoFijoPlanta||45000)
-                     + (vend * (params.sueldoTrimestralVendedor||15000))
-                     + (oper * (params.costoOperario||9600))
-                     + dep;
+      // Usar parámetros reales de la industria — sin fallbacks hardcodeados
+      const dep      = params.depreciacionTrimestral || 0;
+      const gAdmin   = params.gastoAdminFijo         || 0;
+      const gPlanta  = params.gastoFijoPlanta         || 0;
+      const gVend    = vend * (params.sueldoTrimestralVendedor || 0);
+      const gOper    = oper * (params.costoOperario            || 0);
+      const gFijo    = gAdmin + gPlanta + gVend + gOper + dep;
       // Intereses sobre deuda existente
       const tasaTrim   = (params.tasaInteresTrimestral||0.055);
       const intDeuda   = Math.round((d.deudaInicial||0) * tasaTrim);
@@ -696,10 +697,10 @@ function ejecutarSimulador(decisiones, cfg) {
         ventasBrutas: 0, ventasNetas: 0, ventasReales: 0, costoVentas: 0,
         utilidadBruta: 0, comisiones: 0, precioVenta: 0, produccion: 0,
         // Estado de Resultados
-        gastoAdminFijo:   params.gastoAdminFijo || 165000,
-        gastoFijoPlanta:  params.gastoFijoPlanta || 45000,
-        costoVendedores:  vend * (params.sueldoTrimestralVendedor || 15000),
-        pagoOperarios:    oper * (params.costoOperario || 9600),
+        gastoAdminFijo:   gAdmin,
+        gastoFijoPlanta:  gPlanta,
+        costoVendedores:  gVend,
+        pagoOperarios:    gOper,
         depreciacion:     dep,
         costoAlmacenamiento: 0,
         gastosOp:         gFijo,
@@ -729,12 +730,21 @@ function ejecutarSimulador(decisiones, cfg) {
         totalPagos:       totalGastos,
         pagoProduccion:   0,
         pagoMktTotal:     0,
+        pagoGastosAdmin:  gAdmin,
+        pagoGastosPlanta: gPlanta,
+        pagoVendedores:   gVend,
+        pagoOperarios2:   gOper,
+        pagoIntereses:    intDeuda + intSobregiro,
+        pagoAlmacenamiento: 0,
         // RRHH
         vendedoresIniciales: d.vendedoresIniciales || vend,
         vendedoresFinales:   vend,
         operariosIniciales:  d.operariosIniciales || oper,
         operariosFinales:    oper,
         // Otros
+        capitalContable:  680000,  // capital inicial fijo del simulador
+        resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
+        resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,
         brandEquityFinal:    Math.max(0, (d.brandEquityInicial||50) - 2),
         costoUnitario:    0,
