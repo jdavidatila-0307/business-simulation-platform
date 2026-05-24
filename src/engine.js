@@ -674,14 +674,17 @@ function ejecutarSimulador(decisiones, cfg) {
       const gPlanta  = params.gastoFijoPlanta         || 0;
       const gVend    = vend * (params.sueldoTrimestralVendedor || 0);
       const gOper    = oper * (params.costoOperario            || 0);
-      const gFijo    = gAdmin + gPlanta + gVend + gOper + dep;
+      const gFijo       = gAdmin + gPlanta + gVend + gOper + dep;
       // Intereses sobre deuda existente
-      const tasaTrim   = (params.tasaInteresTrimestral||0.055);
-      const intDeuda   = Math.round((d.deudaInicial||0) * tasaTrim);
+      const tasaTrim    = (params.tasaInteresTrimestral||0.055);
+      const intDeuda    = Math.round((d.deudaInicial||0) * tasaTrim);
       const totalGastos = gFijo + intDeuda;
-      // Caja: inicial + CxC anterior - gastos fijos
+      // CONTABILIDAD: depreciación es gasto NO desembolsable
+      // Reduce utilidad y activos fijos pero NUNCA sale de caja
+      // totalPagosEfectivo excluye depreciación
+      const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda);
       const cobrosAnterior = d.cxcInicial || 0;
-      const cajaCalc = (d.cajaInicial||0) + cobrosAnterior - totalGastos;
+      const cajaCalc = (d.cajaInicial||0) + cobrosAnterior - totalPagosEfectivo;
       // Sobregiro si caja negativa
       const sobregiro   = cajaCalc < 0 ? Math.abs(cajaCalc) : 0;
       const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
@@ -732,7 +735,7 @@ function ejecutarSimulador(decisiones, cfg) {
         // Flujo de Efectivo
         cobrosContado:    cobrosAnterior,
         ingresoPrestamo:  sobregiro,
-        totalPagos:       totalGastos,
+        totalPagos:       totalPagosEfectivo,
         pagoProduccion:   0,
         pagoMktTotal:     0,
         pagoGastosAdmin:  gAdmin,
