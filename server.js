@@ -658,11 +658,7 @@ async function route(req, res, body) {
 
     // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
     // Verificar sim_decisiones directamente (no el JSONB legado)
-    const simDecsCheck = await pool.query(
-      'SELECT COUNT(*) FROM sim_decisiones WHERE simulacion_id=$1 AND ronda_numero=$2',
-      [sim.id, n]
-    );
-    const nSimDecs = parseInt(simDecsCheck.rows[0].count);
+    const nSimDecs = await storage.countDecisiones(sim.id, n);
     console.log(`[server] activar R${n}: ronda=${!!ronda} sim_decisiones=${nSimDecs}`);
     if (!ronda || nSimDecs === 0) {
       console.log(`[server] Ronda ${n} sin decisiones — propagando desde R${n-1}`);

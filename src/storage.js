@@ -656,8 +656,18 @@ function genCodigo() {
   return 'MKT-' + Array.from({length:4}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+async function countDecisiones(simulacionId, rondaNumero) {
+  try {
+    const r = await pool.query(
+      'SELECT COUNT(*) FROM sim_decisiones WHERE simulacion_id=$1 AND ronda_numero=$2',
+      [simulacionId, rondaNumero]
+    );
+    return parseInt(r.rows[0].count);
+  } catch(e) { return 0; }
+}
+
 module.exports = {
-  findUserById, findUserByEmailOrId, findEquipoByNombre,
+  findUserById, findUserByEmailOrId, findEquipoByNombre, countDecisiones,
   createUser, listUsers, deleteUser,
   createSimulacion, getSimulacion, listSimulaciones, updateSimulacion, deleteSimulacion,
   getEquipos, addEquipo, findUserInSimulacion,
