@@ -658,27 +658,58 @@ function ejecutarSimulador(decisiones, cfg) {
 
   // Calcular resultados financieros completos
   const resultados = decisiones.map(d => {
-    // Producto vacío = equipo no decidió — retornar resultado en cero sin error
+    // Producto vacío = equipo no decidió
+    // Se cobran costos fijos pero no hay ventas
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
+      const vend     = Math.max(1, d.vendedoresIniciales||2);
+      const oper     = Math.max(1, d.operariosIniciales||4);
+      const dep      = params.depreciacionTrimestral || 2500;
+      const gFijo    = (params.gastoAdminFijo||165000)
+                     + (params.gastoFijoPlanta||45000)
+                     + (vend * (params.sueldoTrimestralVendedor||15000))
+                     + (oper * (params.costoOperario||9600))
+                     + dep;
+      // Intereses sobre deuda existente
+      const tasaTrim   = (params.tasaInteresTrimestral||0.055);
+      const intDeuda   = Math.round((d.deudaInicial||0) * tasaTrim);
+      const totalGastos = gFijo + intDeuda;
+      // Caja: inicial + CxC anterior - gastos fijos
+      const cobrosAnterior = d.cxcInicial || 0;
+      const cajaCalc = (d.cajaInicial||0) + cobrosAnterior - totalGastos;
+      // Sobregiro si caja negativa
+      const sobregiro   = cajaCalc < 0 ? Math.abs(cajaCalc) : 0;
+      const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
+      const intSobregiro= Math.round(sobregiro * tasaTrim);
+      const deudaFinal  = (d.deudaInicial||0) + sobregiro + intDeuda + intSobregiro;
+      const afNetos     = Math.max(0, (d.activosFijosIniciales||80000) - dep);
+      const totalActivos= cajaFinal + afNetos;
+      const utilidadNeta= -(totalGastos + intSobregiro);
+      const patrimonio  = (d.cajaInicial||0) + (d.activosFijosIniciales||80000)
+                         + (d.resultadoAcumuladoAnterior||0) + utilidadNeta - (d.deudaInicial||0);
       return {
         equipo:          d.equipo,
         equipoOriginal:  d.equipoOriginal || d.equipo,
         equipoNombre:    d.equipoNombre,
+        equipoNombre:    d.equipoNombre,
         productoId:      d.productoId || 'prod_1',
         ventasBrutas: 0, ventasNetas: 0, ventasReales: 0, costoVentas: 0,
-        utilidadBruta: 0, utilidadNeta: 0, ebit: 0,
-        gastoFinanciero: 0, gastosOp: 0, totalImpuestos: 0,
-        cajaFinal:       Math.max(0, d.cajaInicial||0),
-        deudaFinal:      d.deudaInicial||0,
-        cxcFinal:        0,
+        utilidadBruta: 0,
+        gastosOp:      gFijo,
+        gastoFinanciero: intDeuda + intSobregiro,
+        ebit:          -gFijo,
+        totalImpuestos: 0,
+        utilidadNeta,
+        cajaFinal,      deudaFinal,
+        cxcFinal:       0,
         invFinalValorizado: 0, inventarioFinal: 0,
-        afNetos:         Math.max(0, (d.activosFijosIniciales||80000) - 2500),
-        totalActivos:    Math.max(0, (d.cajaInicial||0) + (d.activosFijosIniciales||80000) - 2500),
-        patrimonio:      Math.max(0, (d.cajaInicial||0) + (d.activosFijosIniciales||80000) - 2500 - (d.deudaInicial||0)),
-        vendedoresFinales: d.vendedoresIniciales||2,
-        operariosFinales:  d.operariosIniciales||4,
-        brandEquityFinal:  d.brandEquityInicial||50,
-        shareReal: 0, sinDecision: true,
+        afNetos, totalActivos,
+        patrimonio:    Math.max(0, patrimonio),
+        cobrosContado: cobrosAnterior,
+        totalPagos:    totalGastos,
+        vendedoresFinales: vend,
+        operariosFinales:  oper,
+        brandEquityFinal:  Math.max(0, (d.brandEquityInicial||50) - 2),
+        shareReal: 0, sinDecision: true, sobregiro,
       };
     }
     const seg        = segmentoPorNombre[d.segmentoObjetivo];
