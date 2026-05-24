@@ -675,11 +675,8 @@ async function loadAdminRondas() {
       + '<th style="text-align:center">Decisiones enviadas</th>'
       + '<th style="text-align:center">Ejecutada</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
-    // Botón Recalcular Balance al final del panel
-    const btnDiv = document.createElement('div');
-    btnDiv.style.cssText = 'margin-top:16px;padding:0 4px';
-    btnDiv.innerHTML = '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">🔄 Recalcular Balance General — todas las rondas</button>';
-    el.appendChild(btnDiv);
+    // Botón Recalcular Estados Financieros
+    el.innerHTML += '<div style="margin-top:16px;padding:0 4px"><button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">🔄 Recalcular Estados Financieros — todas las rondas</button></div>';
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
   }
