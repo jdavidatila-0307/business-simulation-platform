@@ -657,11 +657,14 @@ async function route(req, res, body) {
     let ronda = await storage.getRonda(sim.id, n);
 
     // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
-    const decsActuales = ronda?.decisiones || {};
-    // Verificar si las decisiones tienen datos financieros reales (cajaInicial propagado)
-    const tienenFinancieros = Object.values(decsActuales).some(d => d?.cajaInicial !== undefined);
-    console.log(`[server] activar R${n}: ronda=${!!ronda} decs=${Object.keys(decsActuales).length} financieros=${tienenFinancieros}`);
-    if (!ronda || !tienenFinancieros) {
+    // Verificar sim_decisiones directamente (no el JSONB legado)
+    const simDecsCheck = await pool.query(
+      'SELECT COUNT(*) FROM sim_decisiones WHERE simulacion_id=$1 AND ronda_numero=$2',
+      [sim.id, n]
+    );
+    const nSimDecs = parseInt(simDecsCheck.rows[0].count);
+    console.log(`[server] activar R${n}: ronda=${!!ronda} sim_decisiones=${nSimDecs}`);
+    if (!ronda || nSimDecs === 0) {
       console.log(`[server] Ronda ${n} sin decisiones — propagando desde R${n-1}`);
       const equipos = await storage.getEquipos(sim.id);
       const prevRonda = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
