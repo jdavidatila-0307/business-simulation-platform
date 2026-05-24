@@ -1115,11 +1115,12 @@ async function loadAdminDashboard() {
   }
 
   async function doForzarTodos() {
-    if (!confirm('¿Forzar confirmación de pre-simulación para todos los equipos pendientes?')) return;
+    if (!confirm('¿Forzar confirmación de pre-simulación para todos los equipos pendientes?\n\nLos equipos que no confirmaron serán marcados como confirmados.')) return;
     try {
       await api('POST', '/admin/presim/forzar-todos');
-      toast('✅ Confirmaciones forzadas', 'success');
-      await loadAdminDashboard();
+      toast('✅ Todas las confirmaciones forzadas', 'success');
+      // Recargar dashboard para actualizar barra y habilitar botón Ejecutar
+      setTimeout(async () => { await loadAdminDashboard(); }, 500);
     } catch(e) { toast(e.message, 'error'); }
   }
 
