@@ -538,14 +538,19 @@ async function loadAdminEquipos() {
       const nMiemb   = miembros.length;
 
       const miembrosHTML = miembros.length
-        ? miembros.map(m => `
-            <div style="margin-bottom:6px">
-              <strong>${m.apellidos||''}, ${m.nombre||m.name||'—'}</strong>
+        ? miembros.map(m => {
+            const ap = [m.apellidoPaterno, m.apellidoMaterno].filter(Boolean).join(' ');
+            const nm = m.nombres || m.nombre || m.name || '—';
+            const ci = m.nroRegistro || m.ci || '';
+            const tel = m.telefono || m.phone || '';
+            return `<div style="margin-bottom:6px">
+              <strong>${ap ? ap + ', ' : ''}${nm}</strong>
               <div style="font-size:.75rem;color:var(--text3);margin-top:2px">
-                ${m.ci ? `<span style="margin-right:10px">🪪 ${m.ci}</span>` : ''}
-                ${m.telefono||m.phone ? `<span>📞 ${m.telefono||m.phone}</span>` : ''}
+                ${ci  ? `<span style="margin-right:10px">🪪 ${ci}</span>` : ''}
+                ${tel ? `<span>📞 ${tel}</span>` : ''}
               </div>
-            </div>`).join('')
+            </div>`;
+          }).join('')
         : '<span style="color:var(--text3);font-size:.8rem">Sin integrantes</span>';
 
       const estadoBadge = eq.submitted
