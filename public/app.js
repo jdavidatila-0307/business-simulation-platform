@@ -682,24 +682,46 @@ async function loadAdminRondas() {
   }
 }
 
-async function loadAdminResultados() {
+async function loadAdminResultados(rondaVer) {
   if (!requireSimSelected('adminResultadosContent')) return;
   const el = document.getElementById('adminResultadosContent');
   if (!el) return;
   try {
     el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando resultados...</p>';
     const ronda = await api('GET', '/admin/ronda');
-    const n = ronda?.currentRound || 0;
-    if (!n || ronda?.roundState === 'pending') {
+    let current = ronda?.currentRound || 0;
+
+    // Si la ronda actual está pending, la última simulada es current-1
+    const ultimaSimulada = (ronda?.roundState === 'pending') ? current - 1 : current;
+
+    if (!ultimaSimulada || ultimaSimulada < 1) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
       return;
     }
+
+    // Ronda a visualizar (por selector o la última por defecto)
+    const n = (rondaVer && rondaVer >= 1 && rondaVer <= ultimaSimulada) ? rondaVer : ultimaSimulada;
+
     const rd = await api('GET', '/admin/resultados/' + n);
     if (!rd?.resultados?.length) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para el trimestre ' + n + '.</p>';
       return;
     }
-    el.innerHTML = buildAdminResultsHTML(rd);
+
+    // Selector de rondas
+    const opcionesRondas = Array.from({length: ultimaSimulada}, (_,i) => i+1)
+      .map(r => `<option value="${r}" ${r===n?'selected':''}>Ronda ${r}</option>`)
+      .join('');
+    const selector = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <label style="font-size:.82rem;color:var(--text3)">Ver resultados de:</label>
+      <select id="selectorRondaResultados" class="form-input" style="width:auto;padding:4px 10px;font-size:.85rem"
+        onchange="loadAdminResultados(+this.value)">
+        ${opcionesRondas}
+      </select>
+      <span style="font-size:.78rem;color:var(--text3)">Última simulada: Ronda ${ultimaSimulada}</span>
+    </div>`;
+
+    el.innerHTML = selector + buildAdminResultsHTML(rd);
     if (typeof renderAdminCharts === 'function') setTimeout(renderAdminCharts, 200);
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
