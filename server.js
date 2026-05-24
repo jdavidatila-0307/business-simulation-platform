@@ -657,6 +657,7 @@ async function route(req, res, body) {
     let ronda = await storage.getRonda(sim.id, n);
 
     // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
+    console.log(`[server] activar R${n}: ronda existe=${!!ronda} decs=${Object.keys(ronda?.decisiones||{}).length}`);
     if (!ronda || !Object.keys(ronda.decisiones||{}).length) {
       console.log(`[server] Ronda ${n} sin decisiones — propagando desde R${n-1}`);
       const equipos = await storage.getEquipos(sim.id);
@@ -687,15 +688,17 @@ async function route(req, res, body) {
         decisiones[eq.id] = dec;
       }
 
-      if (!ronda) {
-        await storage.updateRonda(sim.id, n, { estado:'open', decisiones, resultados:{}, mercadoSegmentos:[], atractivoEquipos:{}, dashboard:{} });
-      } else {
-        await storage.updateRonda(sim.id, n, { decisiones });
-      }
+      // Guardar decisiones + estado en una sola llamada
+      await storage.updateRonda(sim.id, n, {
+        estado: 'open',
+        decisiones,
+        resultados: {}, mercadoSegmentos: [], atractivoEquipos: {}, dashboard: {}
+      });
       console.log(`[server] Ronda ${n} poblada con ${Object.keys(decisiones).length} decisiones`);
+    } else {
+      // Ronda ya tiene decisiones — solo actualizar estado
+      await storage.updateRonda(sim.id, n, { estado: 'open' });
     }
-
-    await storage.updateRonda(sim.id, n, { estado: 'open' });
     return send(res, 200, { ok: true, currentRound: n });
   }
 
