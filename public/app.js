@@ -967,14 +967,23 @@ async function loadAdminDashboard() {
               <th style="text-align:center">Acción</th>
             </tr></thead>
             <tbody>
-              ${psData.detalle.map(r => `
-                <tr>
-                  <td><strong>${r.equipoNombre||r.equipo}</strong></td>
-                  <td style="font-size:.78rem">${r.segmento}</td>
-                  <td style="font-size:.78rem">${r.producto}</td>
-                  <td class="num">${fmt.num(r.demandaAsignada)}</td>
-                  <td class="num">${fmt.num(r.ventasEstimadas)}</td>
-                  <td class="num">${fmt.pct(r.shareEstimado)}</td>
+              ${psData.detalle.map(r => {
+                  // Consolidado por empresa — campos por producto en r.productos[]
+                  const p0 = r.productos?.[0] || r;
+                  const segmento        = p0.segmento || r.segmento || '—';
+                  const producto        = p0.producto  || r.producto  || '—';
+                  const demandaAsignada = (r.productos||[]).reduce((s,p) => s+(p.demandaAsignada||0), 0) || r.demandaAsignada || 0;
+                  const ventasEstimadas = (r.productos||[]).reduce((s,p) => s+(p.ventasEstimadas||0), 0) || r.ventasEstimadas || 0;
+                  const shareEstimado   = (r.productos||[]).reduce((s,p) => s+(p.shareEstimado||0), 0)   || r.shareEstimado   || 0;
+                  const nombre          = r.equipoNombre || r.nombre || r.equipo || '—';
+                  const nProds          = r.productos?.length || 1;
+                  return `<tr>
+                  <td><strong>${nombre}</strong>${nProds>1?` <span style="font-size:.7rem;color:var(--text3)">(${nProds} prod.)</span>`:''}</td>
+                  <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.segmento||'—').join(', '):segmento}</td>
+                  <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.producto||'—').join('<br>'):producto}</td>
+                  <td class="num">${fmt.num(demandaAsignada)}</td>
+                  <td class="num">${fmt.num(ventasEstimadas)}</td>
+                  <td class="num">${fmt.pct(shareEstimado)}</td>
                   <td style="text-align:center">
                     ${r.confirmado
                       ? `<span class="badge badge-ok">✓ ${r.forzadoPor==='admin'?'Forzado':'Confirmado'}</span>`
@@ -985,7 +994,7 @@ async function loadAdminDashboard() {
                       ? `<button class="btn btn-ghost btn-sm" onclick="forzarConfirmacion('${r.equipo}')">Forzar</button>`
                       : '—'}
                   </td>
-                </tr>`).join('')}
+                </tr>`; }).join('')}
             </tbody>
           </table>
         </div>`;
