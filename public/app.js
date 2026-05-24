@@ -1119,8 +1119,9 @@ async function loadAdminDashboard() {
     try {
       await api('POST', '/admin/presim/forzar-todos');
       toast('✅ Todas las confirmaciones forzadas', 'success');
-      // Recargar dashboard para actualizar barra y habilitar botón Ejecutar
-      setTimeout(async () => { await loadAdminDashboard(); }, 500);
+      // Esperar que BD persista y recargar
+      await new Promise(r => setTimeout(r, 1000));
+      await loadAdminDashboard();
     } catch(e) { toast(e.message, 'error'); }
   }
 
