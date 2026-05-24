@@ -653,15 +653,49 @@ async function route(req, res, body) {
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
     sim.config.roundState = 'open';
     await storage.updateSimulacion(sim.id, { config: sim.config });
-    // Crear la ronda si no existe — ensureRonda propaga datos financieros de ronda anterior
     const n = sim.config.currentRound;
     let ronda = await storage.getRonda(sim.id, n);
-    if (!ronda) {
-      console.log(`[server] Ronda ${n} no existe — creando con ensureRonda`);
-      ronda = await storage.ensureRonda(sim.id, n);
+
+    // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
+    if (!ronda || !Object.keys(ronda.decisiones||{}).length) {
+      console.log(`[server] Ronda ${n} sin decisiones — propagando desde R${n-1}`);
+      const equipos = await storage.getEquipos(sim.id);
+      const prevRonda = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
+      const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
+
+      const decisiones = {};
+      for (const eq of equipos.filter(e => !e.isBot)) {
+        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        const resPrev = Object.values(resObj)
+          .filter(v => v && typeof v === 'object' && v.equipoNombre)
+          .find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id));
+
+        if (resPrev) {
+          dec.cajaInicial           = Math.max(0, resPrev.cajaFinal   ?? 0);
+          dec.cxcInicial            = Math.max(0, resPrev.cxcFinal    ?? 0);
+          dec.deudaInicial          = Math.max(0, resPrev.deudaFinal  ?? 0);
+          dec.activosFijosIniciales = Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? 80000);
+          dec.brandEquityInicial    = resPrev.brandEquityFinal ?? 50;
+          dec.vendedoresIniciales   = Math.max(1, resPrev.vendedoresFinales ?? 2);
+          dec.operariosIniciales    = Math.max(1, resPrev.operariosFinales  ?? 4);
+          dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
+          dec.inventarioInicial     = 0;
+          console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales}`);
+        } else {
+          console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
+        }
+        decisiones[eq.id] = dec;
+      }
+
+      if (!ronda) {
+        await storage.updateRonda(sim.id, n, { estado:'open', decisiones, resultados:{}, mercadoSegmentos:[], atractivoEquipos:{}, dashboard:{} });
+      } else {
+        await storage.updateRonda(sim.id, n, { decisiones });
+      }
+      console.log(`[server] Ronda ${n} poblada con ${Object.keys(decisiones).length} decisiones`);
     }
+
     await storage.updateRonda(sim.id, n, { estado: 'open' });
-    console.log(`[server] Ronda ${n} activada — decisiones: ${Object.keys(ronda?.decisiones||{}).length}`);
     return send(res, 200, { ok: true, currentRound: n });
   }
 
