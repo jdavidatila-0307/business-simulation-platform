@@ -579,7 +579,9 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
           const decNueva = defaultDecision(eq.id, eq.nombre, sim.parametros);
 
           // Buscar resultado de la ronda anterior para campos financieros
-          const resPrev = Object.values(prevRonda.resultados || {}).find(r =>
+          // NOTA: resultados puede estar en prevRonda.resultados.resultados (estructura del motor)
+          const resObj = prevRonda.resultados?.resultados || prevRonda.resultados || {};
+          const resPrev = Object.values(resObj).find(r =>
             r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
           );
 
@@ -597,7 +599,7 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             decNueva.vendedoresIniciales        = Math.max(1, resPrev.vendedoresFinales ?? 2);
             decNueva.operariosIniciales         = Math.max(1, resPrev.operariosFinales ?? 4);
             // Inventario: sumar todos los productos de la empresa
-            const todosRes = Object.values(prevRonda.resultados || {}).filter(r =>
+            const todosRes = Object.values(resObj).filter(r =>
               r.equipoOriginal === eq.id || (r.equipo||'').startsWith(eq.id)
             );
             decNueva.inventarioInicial = todosRes.reduce((s,r) => s + Math.max(0, r.inventarioFinal||0), 0);
