@@ -3627,27 +3627,51 @@ window.mostrarFinanciero = (n) => {
         ${finRow('(−) Costo de ventas',        -r.costoVentas,         false, 'neg')}
         ${finRowSub('= Utilidad bruta',        r.utilidadBruta,        true)}
         <div style="height:6px"></div>
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Gastos Operativos</div>
+        <!-- GASTOS COMERCIALES -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Comerciales</div>
         ${finRow('Publicidad',                 -r.publicidad,          false,'neg')}
         ${finRow('Promoción',                  -r.promocion,           false,'neg')}
         ${finRow('Eventos',                    -r.eventos,             false,'neg')}
         ${finRow('Marketing en redes',         -r.marketingRedes,      false,'neg')}
         ${finRow('Relaciones públicas',        -r.relacionesPublicas,  false,'neg')}
         ${finRow('Fuerza de ventas',           -r.costoVendedores,     false,'neg')}
-        ${finRow('Gasto administrativo fijo',  -r.gastoAdminFijo,      false,'neg')}
+        ${finRow('Comisiones de canal',        -r.comisiones,          false,'neg')}
+
+        <!-- GASTOS ADMINISTRATIVOS -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Administrativos</div>
+        ${finRow('Sueldos administrativos (operarios)', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')}
+        ${finRow('Gastos administrativos fijos',        -r.gastoAdminFijo,      false,'neg')}
+
+        <!-- GASTOS OPERATIVOS DE PLANTA -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Operativos de Planta</div>
         ${finRow('Gasto fijo de planta',       -r.gastoFijoPlanta,     false,'neg')}
-        ${finRow('Depreciación',               -r.depreciacion,        false,'neg')}
         ${finRow('Almacenamiento inventario',  -r.costoAlmacenamiento, false,'neg')}
-        ${r.gastoInnovacion>0 ? finRow('Innovación',-(r.gastoInnovacion), false,'neg') : ''}
+        ${r.gastoInnovacion>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacion), false,'neg') : ''}
+
+        <!-- EBITDA -->
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${finRowSub('= EBITDA', (r.ebit??0)+(r.depreciacion??0), true, 'var(--accent3)')}
+
+        <!-- DEPRECIACIÓN -->
+        <div style="height:2px"></div>
+        ${finRow('(-) Depreciación',           -r.depreciacion,        false,'neg')}
+
+        <!-- EBIT -->
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${finRowSub('= EBIT / Utilidad Operativa', r.ebit??0, true)}
+        <div style="height:6px"></div>
+
+        <!-- GASTOS FINANCIEROS -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Financieros</div>
         ${finRow('Intereses préstamo',         -r.interesesPrestamo,   false,'neg')}
         ${r.interesSobregiro>0 ? finRow('Intereses sobregiro',-(r.interesSobregiro), false,'neg') : ''}
-        ${finRow('Comisión apertura préstamo', -r.comisionApertura,    false,'neg')}
+        ${(r.comisionApertura||0)>0 ? finRow('Comisión apertura devengada',-(r.comisionApertura), false,'neg') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
-        ${finRowSub('= EBIT (Resultado operativo antes de impuestos)', r.ebit??0, true)}
-        ${finRowSub('= EBITDA (EBIT + Depreciación)', (r.ebit??0)+(r.depreciacion??0), true, 'var(--accent3)')}
+        ${finRowSub('= Utilidad antes de impuestos', (r.ebit??0)-(r.gastoFinanciero??0), true)}
         <div style="height:6px"></div>
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Impuestos</div>
-        ${finRow('IVA a pagar',                -r.ivaAPagar,           false,'neg')}
+
+        <!-- IMPUESTOS -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Impuestos</div>
         ${finRow('IT (3% ventas brutas)',       -r.impuestoIT,          false,'neg')}
         ${r.impuestoIUE>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE), false,'neg') : ''}
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
@@ -3659,38 +3683,78 @@ window.mostrarFinanciero = (n) => {
   <!-- Balance General -->
   <div id="finBG" style="display:none">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="result-round-card">
-        <div class="result-round-header"><h3>Activos</h3></div>
-        <div style="padding:16px 20px">
-          ${finRow('Caja',                    r.cajaFinal,           false,'pos')}
-          ${finRow('Cuentas por cobrar (CxC)', r.cxcFinal,           false,'neutral')}
-          ${finRow('Inventarios',              r.invFinalValorizado,  false,'neutral')}
-          ${finRow('Activos fijos netos',      r.afNetos,            false,'neutral')}
-          <div style="height:4px;border-top:2px solid var(--border2)"></div>
-          ${finRowSub('= Total Activos',       r.totalActivos,        true)}
+
+      <!-- ACTIVOS -->
+      <div>
+        <div class="result-round-card" style="margin-bottom:12px">
+          <div class="result-round-header"><h3>Activos</h3></div>
+          <div style="padding:16px 20px">
+
+            <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Activo Corriente</div>
+            ${finRow('Caja y bancos',              r.cajaFinal,           false,'pos')}
+            ${finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')}
+            ${finRow('Inventarios',                r.invFinalValorizado,  false,'neutral')}
+            <div style="height:4px;border-top:1px dashed var(--border)"></div>
+            ${finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0), false)}
+
+            <div style="height:8px"></div>
+            <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Activo No Corriente</div>
+            ${finRow('Activos fijos (valor inicial)', r.activosFijosIniciales||0, false,'neutral')}
+            ${finRow('(-) Depreciación del período',  -(r.depreciacion||0),        false,'neg')}
+            <div style="height:4px;border-top:1px dashed var(--border)"></div>
+            ${finRowSub('= Activos fijos netos',     r.afNetos,                   false)}
+
+            <div style="height:8px"></div>
+            <div style="height:4px;border-top:2px solid var(--border2)"></div>
+            ${finRowSub('= TOTAL ACTIVOS',           r.totalActivos,              true)}
+          </div>
         </div>
       </div>
+
+      <!-- PASIVOS + PATRIMONIO -->
       <div>
         <div class="result-round-card" style="margin-bottom:12px">
           <div class="result-round-header"><h3>Pasivos</h3></div>
           <div style="padding:16px 20px">
-            ${finRow('Deuda total (préstamos)', r.deudaFinal,        false,'neg')}
+
+            <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo Corriente</div>
+            ${(r.ivaAPagar||0)>0 ? finRow('Impuestos por pagar (IVA)', r.ivaAPagar, false,'neg') : ''}
+            ${(r.sobregiro||0)>0 ? finRow('Sobregiro bancario',        r.sobregiro, false,'neg') : ''}
+            ${finRow('Préstamos y deuda total',    r.deudaFinal,        false,'neg')}
+            <div style="height:4px;border-top:1px dashed var(--border)"></div>
+            ${finRowSub('= Total Pasivo Corriente', r.deudaFinal+(r.ivaAPagar||0)+(r.sobregiro||0), false)}
+
+            <div style="height:8px"></div>
+            <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo No Corriente</div>
+            ${finRow('Deuda largo plazo',           0,                   false,'neutral')}
+            <div style="height:4px;border-top:1px dashed var(--border)"></div>
+            ${finRowSub('= Total Pasivo No Corriente', 0,               false)}
+
+            <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= Total Pasivos',      r.deudaFinal,         true)}
+            ${finRowSub('= TOTAL PASIVOS',          r.deudaFinal,        true)}
           </div>
         </div>
-        <div class="result-round-card">
+
+        <div class="result-round-card" style="margin-bottom:12px">
           <div class="result-round-header"><h3>Patrimonio</h3></div>
           <div style="padding:16px 20px">
-            ${finRow('Capital contable',        r.capitalContable,    false,'neutral')}
-            ${finRow('Resultado acumulado',     r.resultadoAcumulado, false, r.resultadoAcumulado>=0?'pos':'neg')}
+            ${finRow('Capital contable / social',   r.capitalContable||680000,          false,'neutral')}
+            ${finRow('Resultados acumulados',       r.resultadoAcumuladoAnterior||0,    false, (r.resultadoAcumuladoAnterior||0)>=0?'pos':'neg')}
+            ${finRow('Utilidad / pérdida del período', r.utilidadNeta||0,               false, (r.utilidadNeta||0)>=0?'pos':'neg')}
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= Patrimonio',         r.patrimonio,         true)}
+            ${finRowSub('= TOTAL PATRIMONIO',       r.patrimonio,                       true)}
           </div>
         </div>
-        <div style="margin-top:8px;padding:8px 12px;background:${Math.abs(r.totalActivos-r.deudaFinal-r.patrimonio)<1?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)'};border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">
-          ${Math.abs(r.totalActivos-r.deudaFinal-r.patrimonio)<1?'✓ Balance cuadra':'⚠ Verificar balance'}
-          (Activos = ${fmt.bs(r.totalActivos)} | P+P = ${fmt.bs(r.deudaFinal + r.patrimonio)})
+
+        <div class="result-round-card">
+          <div style="padding:12px 16px">
+            ${finRowSub('TOTAL PASIVOS + PATRIMONIO', r.deudaFinal + r.patrimonio, true)}
+            <div style="margin-top:8px;padding:8px 12px;background:${Math.abs(r.totalActivos-(r.deudaFinal+r.patrimonio))<1?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)'};border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">
+              ${Math.abs(r.totalActivos-(r.deudaFinal+r.patrimonio))<1?'✓ Balance cuadra':'⚠ Verificar balance'}
+              (Activos = ${fmt.bs(r.totalActivos)} | P+P = ${fmt.bs(r.deudaFinal + r.patrimonio)})
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -3699,27 +3763,91 @@ window.mostrarFinanciero = (n) => {
   <!-- Flujo de Efectivo -->
   <div id="finFC" style="display:none">
     <div class="result-round-card">
-      <div class="result-round-header"><h3>Flujo de Efectivo — Ronda ${n}</h3></div>
+      <div class="result-round-header"><h3>Estado de Flujo de Efectivo — Ronda ${n}</h3></div>
       <div style="padding:16px 20px">
-        ${finRow('Caja inicial',               r.cajaInicial,          false,'neutral')}
-        <div style="height:6px"></div>
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Entradas</div>
-        ${finRow('Cobros al contado + CxC cobrado', r.cobrosContado,   false,'pos')}
-        ${r.ingresoPrestamo>0 ? finRow('Ingreso préstamo', r.ingresoPrestamo, false,'pos') : ''}
-        ${r.sobregiro>0 ? finRow('Sobregiro tomado', r.sobregiro, false,'pos') : ''}
-        <div style="height:6px"></div>
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas</div>
-        ${finRow('Pago producción',            -r.pagoProduccion,       false,'neg')}
-        ${finRow('Pago marketing total',       -r.pagoMktTotal,         false,'neg')}
-        ${r.pagoInnovacion>0 ? finRow('Pago innovación', -r.pagoInnovacion, false,'neg') : ''}
-        ${finRow('Pago gastos administrativos',-r.pagoAdmin,            false,'neg')}
-        ${finRow('Pago gastos de planta',      -r.pagoPlanta,           false,'neg')}
-        ${finRow('Pago intereses',             -r.pagoIntereses,        false,'neg')}
-        ${r.pagoApertura>0 ? finRow('Pago comisión apertura', -r.pagoApertura, false,'neg') : ''}
-        ${finRow('Pago almacenamiento',        -r.pagoAlmacen,          false,'neg')}
+
+        ${finRow('Caja inicial', r.cajaInicial, false, 'neutral')}
+        <div style="height:12px"></div>
+
+        <!-- ── ACTIVIDADES DE OPERACIÓN ── -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0;border-bottom:2px solid var(--border2);margin-bottom:4px">
+          Flujo de Efectivo por Actividades de Operación
+        </div>
+
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Entradas Operativas</div>
+        ${finRow('Cobros por ventas al contado',      r.cobrosContado||0,                        false,'pos')}
+        <div style="height:4px"></div>
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas Operativas</div>
+        ${(r.pagoProduccion||0)>0    ? finRow('Pago de producción',           -(r.pagoProduccion||0),      false,'neg') : ''}
+        ${(r.pagoOperarios2||r.pagoOperarios||0)>0 ? finRow('Pago de operarios', -(r.pagoOperarios2||r.pagoOperarios||0), false,'neg') : ''}
+        ${(r.pagoMktTotal||0)>0      ? finRow('Pago de marketing total',      -(r.pagoMktTotal||0),        false,'neg') : ''}
+        ${(r.pagoInnovacion||0)>0    ? finRow('Pago de innovación operativa', -(r.pagoInnovacion||0),      false,'neg') : ''}
+        ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0 ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0), false,'neg') : ''}
+        ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta', -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
+        ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0 ? finRow('Pago de almacenamiento', -(r.pagoAlmacenamiento||r.pagoAlmacen||0), false,'neg') : ''}
+        ${(r.totalImpuestos||0)>0    ? finRow('Pago de impuestos',            -(r.totalImpuestos||0),      false,'neg') : ''}
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${(() => {
+          const entOp = (r.cobrosContado||0);
+          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
+                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
+                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
+          return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
+        })()}
+        <div style="height:12px"></div>
+
+        <!-- ── ACTIVIDADES DE INVERSIÓN ── -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0;border-bottom:2px solid var(--border2);margin-bottom:4px">
+          Flujo de Efectivo por Actividades de Inversión
+        </div>
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Entradas de Inversión</div>
+        ${finRow('Venta de activos fijos', r.ventaActivosFijos||0, false,'pos')}
+        <div style="height:4px"></div>
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas de Inversión</div>
+        ${finRow('Compra de activos fijos / maquinaria', -(r.compraActivosFijos||0), false,'neg')}
+        ${(r.pagoInnovacionCapital||0)>0 ? finRow('Innovación capitalizable', -(r.pagoInnovacionCapital||0), false,'neg') : ''}
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${finRowSub('= Flujo Neto de Actividades de Inversión', (r.ventaActivosFijos||0)-(r.compraActivosFijos||0)-(r.pagoInnovacionCapital||0), false)}
+        <div style="height:12px"></div>
+
+        <!-- ── ACTIVIDADES DE FINANCIAMIENTO ── -->
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0;border-bottom:2px solid var(--border2);margin-bottom:4px">
+          Flujo de Efectivo por Actividades de Financiamiento
+        </div>
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Entradas de Financiamiento</div>
+        ${(r.ingresoPrestamo||0)>0 ? finRow('Ingreso por préstamo',   r.ingresoPrestamo||0, false,'pos') : ''}
+        ${(r.sobregiro||0)>0       ? finRow('Sobregiro tomado',        r.sobregiro||0,       false,'pos') : ''}
+        <div style="height:4px"></div>
+        <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas de Financiamiento</div>
+        ${(r.pagoCapitalPrestamo||0)>0    ? finRow('Pago de capital préstamo',      -(r.pagoCapitalPrestamo||0),   false,'neg') : ''}
+        ${(r.pagoIntereses||r.interesesPrestamo||0)>0 ? finRow('Pago de intereses préstamo', -(r.pagoIntereses||r.interesesPrestamo||0), false,'neg') : ''}
+        ${(r.interesSobregiro||0)>0       ? finRow('Pago de intereses sobregiro',  -(r.interesSobregiro||0),      false,'neg') : ''}
+        ${(r.comisionApertura||0)>0       ? finRow('Pago de comisión de apertura', -(r.comisionApertura||0),      false,'neg') : ''}
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${(() => {
+          const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
+          const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
+          return finRowSub('= Flujo Neto de Actividades de Financiamiento', entFin - salFin, false);
+        })()}
+        <div style="height:12px"></div>
+
+        <!-- ── RESUMEN ── -->
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
-        ${finRowSub('= Caja final',            r.cajaFinal,             true)}
-        ${r.sobregiro>0 ? `<div style="padding:6px 0;font-size:.76rem;color:var(--accent4)">⚠ Sobregiro activado: Bs ${fmt.num(r.sobregiro)} · Interés: Bs ${fmt.num(r.interesSobregiro||0)}</div>` : ''}
+        ${(() => {
+          const entOp = (r.cobrosContado||0);
+          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
+                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
+                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
+          const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
+          const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
+          const entInv = (r.ventaActivosFijos||0);
+          const salInv = (r.compraActivosFijos||0)+(r.pagoInnovacionCapital||0);
+          const varNeta = (entOp - salOp) + (entInv - salInv) + (entFin - salFin);
+          return finRowSub('Aumento / Disminución Neta de Caja', varNeta, false);
+        })()}
+        <div style="height:4px"></div>
+        ${finRowSub('= CAJA FINAL', r.cajaFinal, true)}
+        ${(r.sobregiro||0)>0 ? '<div style="padding:6px 0;font-size:.76rem;color:var(--accent4)">⚠ Sobregiro activado: Bs ' + fmt.num(r.sobregiro) + ' · Interés: Bs ' + fmt.num(r.interesSobregiro||0) + '</div>' : ''}
       </div>
     </div>
   </div>`;
