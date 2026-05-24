@@ -1077,6 +1077,24 @@ async function loadAdminDashboard() {
   document.getElementById('btnActivarDash')?.addEventListener('click', doActivarRonda);
   document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
+  async function doCerrarRonda() {
+    if (!confirm('¿Cerrar envíos de la Ronda ' + ronda.currentRound + '?\n\nLos equipos ya no podrán modificar ni enviar decisiones.')) return;
+    try {
+      await api('POST', '/admin/ronda/cerrar');
+      toast('✅ Envíos cerrados — Ronda ' + ronda.currentRound, 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  async function doForzarTodos() {
+    if (!confirm('¿Forzar confirmación de pre-simulación para todos los equipos pendientes?')) return;
+    try {
+      await api('POST', '/admin/presim/forzar-todos');
+      toast('✅ Confirmaciones forzadas', 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
   document.getElementById('btnCerrarDash')?.addEventListener('click',  doCerrarRonda);
   document.getElementById('btnForzarTodosDash')?.addEventListener('click', doForzarTodos);
   document.getElementById('btnSiguienteDash')?.addEventListener('click', async () => {
