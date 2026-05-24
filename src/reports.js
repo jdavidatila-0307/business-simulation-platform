@@ -213,3 +213,4 @@ function generarReportes(decision, mercadoSegmentos, atractivoEquipos, resultado
 }
 
 module.exports = { generarReportes, generarReporteBasico, generarReportePremium, generarReporteEstrategico };
+ 
