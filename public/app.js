@@ -1075,6 +1075,15 @@ async function loadAdminDashboard() {
   }
 
   document.getElementById('btnActivarDash')?.addEventListener('click', doActivarRonda);
+  async function doPreSimular() {
+    if (!confirm('¿Ejecutar pre-simulación para la Ronda ' + ronda.currentRound + '?\n\nSe calculará la demanda estimada y los equipos podrán confirmar.')) return;
+    try {
+      await api('POST', '/admin/ronda/pre-simular');
+      toast('✅ Pre-simulación ejecutada', 'success');
+      await loadAdminDashboard();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
   document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
   document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
   async function doCerrarRonda() {
@@ -3803,6 +3812,15 @@ async function loadEquipoReportes() {
   el.innerHTML = sel + `<div id="reporteDetalle"></div>`;
   mostrarReporteRonda(rondas[rondas.length-1].ronda, data.historial);
 }
+
+window.forzarConfirmacion = async (equipoId) => {
+  if (!confirm('¿Forzar confirmación de pre-simulación para este equipo?')) return;
+  try {
+    await api('POST', '/admin/presim/forzar', { equipoId });
+    toast('✅ Confirmación forzada', 'success');
+    await loadAdminDashboard();
+  } catch(e) { toast(e.message, 'error'); }
+};
 
 window.mostrarReporteRonda = async (n, historialCache) => {
   document.querySelectorAll('#reportesContent .ronda-btn').forEach(b => {
