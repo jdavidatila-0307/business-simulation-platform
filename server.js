@@ -23,6 +23,193 @@ const storage  = require('./src/storage');
 const { ejecutarSimulador, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 
+// ════════════════════════════════════════════════════════════════
+//  SHOCKS ALEATORIOS DE MERCADO
+//  Catálogo de eventos externos que afectan la demanda por ronda.
+//  probabilidadShock configurable en parametros admin (default 0.35)
+// ════════════════════════════════════════════════════════════════
+const SHOCKS_CATALOGO = [
+  // ── Booms (mercado favorable) ────────────────────────────────
+  { id:'boom_macro',   tipo:'boom',   icono:'📈', color:'#10B981',
+    descripcion:'Crecimiento económico regional impulsa el consumo familiar',
+    factorDemanda: 1.18, segmentosAfectados:'todos' },
+  { id:'boom_feria',   tipo:'boom',   icono:'🏪', color:'#10B981',
+    descripcion:'Feria comercial internacional amplía la demanda del mercado',
+    factorDemanda: 1.12, segmentosAfectados:'todos' },
+  { id:'boom_tend',    tipo:'boom',   icono:'🚀', color:'#10B981',
+    descripcion:'Tendencia viral en redes sociales impulsa demanda en segmentos jóvenes',
+    factorDemanda: 1.25, segmentosAfectados:[0, 1] },
+  { id:'boom_export',  tipo:'boom',   icono:'🌍', color:'#10B981',
+    descripcion:'Acuerdo comercial regional abre nuevos canales de distribución',
+    factorDemanda: 1.15, segmentosAfectados:'todos' },
+  // ── Crisis (mercado adverso) ─────────────────────────────────
+  { id:'crisis_rec',   tipo:'crisis', icono:'📉', color:'#EF4444',
+    descripcion:'Recesión económica contrae el gasto de los hogares',
+    factorDemanda: 0.82, segmentosAfectados:'todos' },
+  { id:'crisis_imp',   tipo:'crisis', icono:'⚠️',  color:'#EF4444',
+    descripcion:'Incremento de importaciones ilegales desplaza demanda formal',
+    factorDemanda: 0.87, segmentosAfectados:'todos' },
+  { id:'crisis_reg',   tipo:'crisis', icono:'🏛️', color:'#EF4444',
+    descripcion:'Nueva regulación sectorial restringe el volumen de compras',
+    factorDemanda: 0.88, segmentosAfectados:'todos' },
+  { id:'crisis_inf',   tipo:'crisis', icono:'💸', color:'#EF4444',
+    descripcion:'Inflación aguda contrae el poder adquisitivo en segmentos premium',
+    factorDemanda: 0.80, segmentosAfectados:[2, 3] },
+];
+
+/**
+ * Genera un shock determinista para la ronda indicada.
+ * Usa LCG seeded con simId+ronda → mismo resultado si se re-simula.
+ * @param {string} simId
+ * @param {number} rondaNumero
+ * @param {number} probabilidad  0-1, default 0.35
+ * @returns {Object} shock
+ */
+
+// ════════════════════════════════════════════════════════════════
+//  CATÁLOGO DE NOTICIAS DEL MACROENTORNO
+//  Cada shock tiene: senales[] (antes de decidir) y noticia (después)
+//  Las señales son AMBIGUAS — no revelan magnitud ni certeza del evento
+// ════════════════════════════════════════════════════════════════
+const NOTICIAS_CATALOGO = {
+  boom_macro: {
+    senales: [
+      { icono:'📊', fuente:'Banco Central de Bolivia', fecha:'hace 3 días',
+        titulo:'Indicadores económicos superan expectativas del trimestre',
+        cuerpo:'El Banco Central registra crecimiento del PIB por encima de lo proyectado. Analistas señalan que la expansión podría trasladarse al consumo de bienes no esenciales en los próximos meses. El impacto sectorial aún no es uniforme.' },
+      { icono:'🏠', fuente:'INE Bolivia', fecha:'hace 5 días',
+        titulo:'Índice de confianza del consumidor alcanza nivel más alto en seis trimestres',
+        cuerpo:'La encuesta de hogares muestra mayor disposición al gasto en familias bolivianas. El ingreso disponible per cápita creció en la región oriental, aunque los especialistas advierten que no todos los sectores se beneficiarán por igual.' }
+    ],
+    noticia: { icono:'📈', fuente:'Cámara de Industria — Santa Cruz', fecha:'Trimestre actual',
+      titulo:'Expansión económica confirmó aumento del 18% en demanda del sector calzado',
+      cuerpo:'El crecimiento del PIB regional se tradujo en un incremento significativo de la demanda formal en todos los segmentos. Las empresas con inventario suficiente capitalizaron plenamente la expansión. La demanda aumentó un 18% respecto a las proyecciones base.' }
+  },
+  boom_feria: {
+    senales: [
+      { icono:'🏪', fuente:'Fexpocruz', fecha:'hace 1 semana',
+        titulo:'Feria internacional anuncia participación récord de compradores regionales',
+        cuerpo:'La organización reporta un incremento del 30% en compradores registrados. El sector calzado figura entre los rubros con mayor número de expositores y reuniones de negocios programadas. Los volúmenes finales dependerán de la capacidad de entrega de cada empresa.' },
+      { icono:'🤝', fuente:'Cámara de Comercio Bolivia', fecha:'hace 4 días',
+        titulo:'Distribuidores regionales anticipan dinamismo comercial para el período',
+        cuerpo:'Representantes del sector se reunieron con importadores de Argentina, Perú y Chile. Los acuerdos preliminares sugieren un incremento en pedidos, aunque los empresarios esperan confirmaciones formales antes de ajustar sus proyecciones de producción.' }
+    ],
+    noticia: { icono:'🏪', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Feria comercial amplió la demanda un 12% en todos los segmentos del sector',
+      cuerpo:'El evento internacional dinamizó los canales de distribución. Los distribuidores regionales incrementaron sus pedidos de manera uniforme en todos los segmentos. Las empresas con red de vendedores consolidada capitalizaron mejor los nuevos contactos comerciales generados.' }
+  },
+  boom_tend: {
+    senales: [
+      { icono:'📱', fuente:'Agencia Digital Bolivia', fecha:'hace 2 días',
+        titulo:'Tendencia de calzado urbano se viraliza en plataformas de redes sociales',
+        cuerpo:'Influencers con alta audiencia comenzaron a compartir contenido sobre calzado urbano y deportivo. Las búsquedas en plataformas de e-commerce aumentaron significativamente en algunos segmentos demográficos. No todos los productos ni segmentos muestran la misma dinámica.' },
+      { icono:'🚀', fuente:'Observatorio de Consumo Joven', fecha:'hace 3 días',
+        titulo:'Consumo de calzado de moda entre jóvenes muestra aceleración en zonas urbanas',
+        cuerpo:'Encuestas rápidas en centros comerciales de Santa Cruz revelan mayor frecuencia de compra entre consumidores de 18 a 30 años. La influencia digital aparece como principal detonante, concentrándose en segmentos específicos del mercado.' }
+    ],
+    noticia: { icono:'🚀', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Tendencia viral disparó la demanda un 25% en segmentos jóvenes urbanos',
+      cuerpo:'El fenómeno en redes sociales se materializó en demanda extraordinaria en segmentos urbanos jóvenes (0 y 1). Los segmentos de mayor edad y el mercado institucional no reportaron variación. Empresas posicionadas en estos segmentos lograron capturas superiores al promedio del mercado.' }
+  },
+  boom_export: {
+    senales: [
+      { icono:'🌍', fuente:'Ministerio de Desarrollo Productivo', fecha:'hace 1 semana',
+        titulo:'Bolivia avanza en acuerdo de complementación comercial con países de la región',
+        cuerpo:'Las negociaciones con contrapartes regionales entraron en fase final. De concretarse, el acuerdo reduciría barreras para manufactureros nacionales. Se espera un anuncio formal próximamente, aunque el impacto sectorial dependerá de los términos definitivos.' },
+      { icono:'📦', fuente:'Cámara de Exportadores de Santa Cruz', fecha:'hace 5 días',
+        titulo:'Distribuidores del cono sur amplían búsqueda de proveedores nacionales de calzado',
+        cuerpo:'Importadores de Argentina y Chile contactaron empresas manufactureras bolivianas. El interés coincide con tensiones de abastecimiento en sus mercados locales, abriendo oportunidad para empresas con capacidad de producción disponible este trimestre.' }
+    ],
+    noticia: { icono:'🌍', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Acuerdo comercial regional expandió canales: demanda sube un 15% en todos los segmentos',
+      cuerpo:'La firma del acuerdo abrió nuevos circuitos de distribución formal, incrementando la demanda accesible en todos los segmentos. Los beneficios se distribuyeron de manera uniforme. Las empresas con mayor capacidad de entrega capturaron proporcionalmente mayor cuota de mercado.' }
+  },
+  crisis_rec: {
+    senales: [
+      { icono:'📉', fuente:'CEPAL Bolivia', fecha:'hace 4 días',
+        titulo:'Organismos internacionales revisan a la baja el crecimiento económico regional',
+        cuerpo:'El FMI y la CEPAL ajustaron sus proyecciones para la región andina. Los analistas advierten que la desaceleración podría afectar el consumo de bienes no esenciales. El impacto sectorial dependerá del segmento y nivel de precio de cada empresa.' },
+      { icono:'🏠', fuente:'INE Bolivia', fecha:'hace 1 semana',
+        titulo:'Hogares reducen gasto discrecional ante perspectivas de incertidumbre económica',
+        cuerpo:'La encuesta de presupuestos familiares muestra postergación de compras de calzado y vestimenta. El efecto es más pronunciado en familias de ingreso medio. Los analistas no coinciden sobre la duración ni la profundidad del ajuste esperado.' }
+    ],
+    noticia: { icono:'📉', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Recesión económica contrajo la demanda un 18% en todos los segmentos del mercado',
+      cuerpo:'La desaceleración se tradujo en caída uniforme de la demanda formal en todos los segmentos. Las empresas con menor estructura de costos fijos absorbieron mejor el impacto. Los equipos que habían sobreproducido enfrentan acumulación de inventario y presión sobre la caja disponible.' }
+  },
+  crisis_imp: {
+    senales: [
+      { icono:'⚠️', fuente:'Aduana Nacional Bolivia', fecha:'hace 3 días',
+        titulo:'Aduana reporta incremento de decomisos de calzado en fronteras norte y oeste',
+        cuerpo:'Las autoridades registraron aumento en el ingreso no arancelado de calzado proveniente de Perú y China. Los fabricantes expresan preocupación por competencia desleal. El fenómeno afecta principalmente puntos de venta minoristas compartidos con productos sin arancel.' },
+      { icono:'🏭', fuente:'FEDECOBOL', fecha:'hace 5 días',
+        titulo:'Asociación de fabricantes alerta sobre presión de importaciones informales en el mercado',
+        cuerpo:'La Federación de Empresas de Cuero y Calzado emitió un comunicado señalando que el contrabando desplaza parte de la demanda formal. El impacto varía por segmento: los productos diferenciados resisten mejor la presión del mercado informal.' }
+    ],
+    noticia: { icono:'⚠️', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Contrabando desplazó demanda formal: caída del 13% en todos los segmentos',
+      cuerpo:'El incremento de importaciones ilegales comprimió el mercado formal de manera uniforme. Distribuidores reportaron mayor presión de precio en puntos de venta compartidos con productos informales. Las empresas con canales exclusivos o especializados resistieron mejor la competencia desleal.' }
+  },
+  crisis_reg: {
+    senales: [
+      { icono:'🏛️', fuente:'Gaceta Oficial Bolivia', fecha:'hace 1 semana',
+        titulo:'Gobierno anuncia revisión de normativas de comercialización para el sector manufacturero',
+        cuerpo:'El Ministerio de Producción informó que se encuentra en revisión el reglamento de comercialización de bienes de consumo no alimentario. Las nuevas disposiciones incluirían requisitos de certificación. La fecha de vigencia y el alcance exacto aún no han sido confirmados oficialmente.' },
+      { icono:'📋', fuente:'Cámara de Industria', fecha:'hace 4 días',
+        titulo:'Empresas del sector en reuniones de emergencia por posibles cambios regulatorios',
+        cuerpo:'Directivos se reunieron con representantes del ministerio para evaluar el impacto de las nuevas normativas. Los empresarios piden un período de transición adecuado. La incertidumbre genera cautela en los pedidos de distribuidores para el período actual.' }
+    ],
+    noticia: { icono:'🏛️', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Nueva regulación restringió operaciones comerciales: demanda formal cae un 12%',
+      cuerpo:'La implementación de nuevos requisitos de comercialización generó fricciones en canales de distribución y postergó decisiones de compra. El impacto fue uniforme en todos los segmentos. Las empresas con documentación y certificaciones actualizadas tuvieron menor disrupción operativa.' }
+  },
+  crisis_inf: {
+    senales: [
+      { icono:'💸', fuente:'INE Bolivia', fecha:'hace 3 días',
+        titulo:'Inflación acumulada presiona el poder adquisitivo en segmentos de ingreso medio-alto',
+        cuerpo:'El IPC acumulado supera las proyecciones iniciales del BCB. El efecto es más pronunciado en bienes de consumo no esencial de precio elevado. Analistas advierten que segmentos de mayor valor adquisitivo están postergando compras de calzado de precio superior.' },
+      { icono:'📊', fuente:'Consultora Datum Bolivia', fecha:'hace 1 semana',
+        titulo:'Ventas de bienes de consumo premium caen por tercer mes consecutivo en zonas urbanas',
+        cuerpo:'Un estudio en puntos comerciales de Santa Cruz y La Paz muestra que productos de precio superior a Bs 200 registran caídas en volumen. Los segmentos masivos y de precio accesible muestran mayor resiliencia ante el entorno inflacionario.' }
+    ],
+    noticia: { icono:'💸', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Inflación erosionó mercado premium: caída del 20% en segmentos de alto valor',
+      cuerpo:'La presión inflacionaria afectó selectivamente los segmentos de mayor precio (2 y 3). Los segmentos masivos y de bajo precio se mantuvieron estables. Las empresas posicionadas en segmentos premium debieron absorber la contracción con mayor inventario y menor rotación de caja.' }
+  },
+  neutral: {
+    senales: [
+      { icono:'⚖️', fuente:'Cámara de Comercio Bolivia', fecha:'hace 2 días',
+        titulo:'Mercado de calzado muestra estabilidad en indicadores del período',
+        cuerpo:'Los índices de actividad comercial del sector se mantienen dentro de los rangos esperados. No se registran disrupciones significativas en cadenas de abastecimiento ni variaciones extraordinarias en la demanda de los principales segmentos del mercado nacional.' },
+      { icono:'📋', fuente:'INE Bolivia', fecha:'hace 4 días',
+        titulo:'Confianza empresarial en niveles moderados: sin señales de aceleración ni contracción',
+        cuerpo:'La encuesta de clima empresarial no muestra señales pronunciadas en ninguna dirección. Los empresarios del sector manufacturero reportan condiciones operativas normales y expectativas de demanda alineadas con el promedio histórico del sector.' }
+    ],
+    noticia: { icono:'⚖️', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
+      titulo:'Mercado estable: demanda dentro de proyecciones base, sin eventos externos este trimestre',
+      cuerpo:'El período transcurrió sin eventos macroeconómicos disruptivos. La demanda formal se comportó conforme a las proyecciones de crecimiento de cada segmento. Los resultados diferenciales entre empresas responden exclusivamente a decisiones estratégicas y calidad de ejecución operativa.' }
+  }
+};
+
+function generarShock(simId, rondaNumero, probabilidad = 0.35) {
+  // Semilla determinista: simId hash + número de ronda
+  let seed = simId.split('').reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0x7fffffff, 1)
+             + rondaNumero * 97;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  rand(); rand(); // warm-up
+
+  if (rand() > probabilidad) {
+    return { id:'neutral', tipo:'neutral', icono:'⚖️', color:'#6B7280',
+             descripcion:'Mercado estable — sin eventos externos esta ronda',
+             factorDemanda:1.00, segmentosAfectados:'todos' };
+  }
+  const shocks = SHOCKS_CATALOGO;
+  return shocks[Math.floor(rand() * shocks.length)];
+}
+
 const PORT = process.env.PORT || 3000;
 console.log('[server] DATABASE_URL definida?', process.env.DATABASE_URL ? 'Sí' : 'No');
 const PUB_DIR = path.join(__dirname, 'public');
@@ -913,6 +1100,11 @@ async function route(req, res, body) {
       }
     }
 
+    // Generar shock de mercado para esta ronda (determinista por simId+ronda)
+    const probabilidadShock = sim.parametros.probabilidadShock ?? 0.35;
+    const shock = generarShock(sim.id, n, probabilidadShock);
+    console.log(`[server] Shock R${n}: [${shock.tipo}] ${shock.descripcion} (factor=${shock.factorDemanda})`);
+
     const simCfg = {
       meta:                  sim.config.industria ? { nombre: sim.config.industria } : {},
       params:                sim.parametros,
@@ -924,6 +1116,7 @@ async function route(req, res, body) {
       demandaBaseAnteriorMap,  // Etapa 2.2: demanda dinámica
       rondaNumero:    n,         // Etapa 3.1: número de ronda para lead time
       proveedores:    sim.proveedores || [],  // Etapa 3.1: catálogo de proveedores
+      shock,                   // Shock de mercado: afecta demandaFormal de segmentos
     };
 
     // ── Generar decisiones de bots ─────────────────────────────────────────
@@ -1004,6 +1197,7 @@ async function route(req, res, body) {
       rondaActualizada.atractivoEquipos = result.atractivoEquipos;
       rondaActualizada.dashboard        = result.dashboard;
       rondaActualizada.empresas         = result.empresas;
+      rondaActualizada.shock            = shock;
 
       result.resultados.forEach(r => { rondaActualizada.resultados[r.equipo] = r; });
 
@@ -1026,6 +1220,7 @@ async function route(req, res, body) {
         empresas:         rondaActualizada.empresas,
         resultados:       rondaActualizada.resultados,
         reportes:         rondaActualizada.reportes,
+        shock:            rondaActualizada.shock,
       });
 
       // ── Notificación WebSocket a todos los clientes de esta simulación ──
@@ -1208,7 +1403,7 @@ async function route(req, res, body) {
 
     return send(res, 200, { ronda: n, estado: ronda.estado, ejecutadaAt: ronda.ejecutadaAt,
       resultados, mercadoSegmentos: ronda.mercadoSegmentos, dashboard: ronda.dashboard,
-      dashboardFiscal });  // Etapa 3.5
+      dashboardFiscal, shock: ronda.shock || null });  // Etapa 3.5
   }
 
   if (url === '/admin/historial' && method === 'GET') {
@@ -1480,6 +1675,44 @@ async function route(req, res, body) {
     ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: true, submittedAt: new Date().toISOString() };
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     return send(res, 200, { ok: true });
+  }
+
+  // ── Noticias del Macroentorno (panel estudiante) ───────────────
+  if (url === '/api/noticias' && method === 'GET') {
+    if (needEquipo()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+
+    const n          = sim.config.currentRound;
+    const roundState = sim.config.roundState;
+    const probShock  = sim.parametros.probabilidadShock ?? 0.35;
+
+    // Determinar fase y ronda de referencia
+    let rondaRef, fase;
+    if (roundState === 'simulated') {
+      rondaRef = n; fase = 'post';
+    } else if (roundState === 'pending' && n > 1) {
+      rondaRef = n - 1; fase = 'post';
+    } else if (['open','locked','pre-sim'].includes(roundState)) {
+      rondaRef = n; fase = 'pre';
+    } else {
+      return send(res, 200, { fase:'espera', ronda:n, noticias:[], shock:null });
+    }
+
+    const shockGen  = generarShock(sim.id, rondaRef, probShock);
+
+    if (fase === 'post') {
+      // Usar shock guardado en BD (más fiable que regenerar)
+      const rondaData = await storage.getRonda(sim.id, rondaRef);
+      const shockReal = rondaData?.shock || shockGen;
+      const datos     = NOTICIAS_CATALOGO[shockReal.id] || NOTICIAS_CATALOGO['neutral'];
+      return send(res, 200, { fase:'post', ronda:rondaRef,
+        noticias:[datos.noticia], shock:shockReal });
+    } else {
+      // Pre-fase: solo señales, sin revelar el shock
+      const datos = NOTICIAS_CATALOGO[shockGen.id] || NOTICIAS_CATALOGO['neutral'];
+      return send(res, 200, { fase:'pre', ronda:rondaRef,
+        noticias:datos.senales, shock:null });
+    }
   }
 
   if (url === '/api/resultados' && method === 'GET') {

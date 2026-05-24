@@ -253,6 +253,7 @@ function setupNav(screenId) {
         'admin-segmentos':'Segmentos',
         'eq-hoja':'Hoja de Decisión', 'eq-financiero':'Estados Financieros',
         'eq-resultados':'KPIs', 'eq-creditos':'Mis Créditos', 'eq-reportes':'Investigación y Ranking',
+        'eq-noticias':'Noticias del Macroentorno',
         'admin-creditos':'Reporte de Créditos', 'admin-afinidad':'Matriz de Afinidad', 'admin-competencia':'Competencia Externa',
       };
       const tt = document.getElementById(screenId === 'screen-admin' ? 'adminTopTitle' : 'equipoTopTitle');
@@ -263,6 +264,7 @@ function setupNav(screenId) {
       if (btn.dataset.view === 'eq-resultados') loadEquipoResultados();
       if (btn.dataset.view === 'eq-creditos') loadEquipoCreditos();
       if (btn.dataset.view === 'eq-reportes') loadEquipoReportes();
+      if (btn.dataset.view === 'eq-noticias') loadEquipoNoticias();
       if (btn.dataset.view === 'eq-dashboard') loadEquipoDashboard();
       if (btn.dataset.view === 'admin-afinidad') loadAdminAfinidad();
       if (btn.dataset.view === 'admin-competencia') loadAdminCompetencia();
@@ -1649,8 +1651,31 @@ function buildAdminResultsHTML(rd) {
   // Construir KPI panel (3 tabs de ratios financieros)
   const kpiHTML = buildAdminKPIHTML(eqs, tc);
 
+  // ── Banner de Shock de Mercado ────────────────────────────
+  const shockBanner = (() => {
+    const sh = rd.shock;
+    if (!sh) return '';
+    const colores = { boom:'#10B981', crisis:'#EF4444', neutral:'#6B7280', sectorial:'#F59E0B' };
+    const fondos  = { boom:'rgba(16,185,129,.10)', crisis:'rgba(239,68,68,.10)', neutral:'rgba(107,114,128,.08)', sectorial:'rgba(245,158,11,.10)' };
+    const color   = sh.color || colores[sh.tipo] || '#6B7280';
+    const fondo   = fondos[sh.tipo] || 'rgba(107,114,128,.08)';
+    const factor  = sh.factorDemanda !== 1.0
+      ? ' · Demanda ' + (sh.factorDemanda > 1 ? '+' : '') + Math.round((sh.factorDemanda - 1) * 100) + '%'
+      : '';
+    const segs = sh.segmentosAfectados === 'todos' ? 'Todos los segmentos' : 'Segmentos específicos';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;'
+      + 'background:' + fondo + ';border:1px solid ' + color + '33;border-radius:var(--r);border-left:4px solid ' + color + '">'
+      + '<span style="font-size:1.4rem">' + (sh.icono || '⚡') + '</span>'
+      + '<div style="flex:1">'
+      + '<div style="font-weight:700;font-size:.82rem;color:' + color + ';text-transform:uppercase;letter-spacing:1px">'
+      + 'SHOCK DE MERCADO · Ronda ' + (rd.ronda || '') + ' · ' + (sh.tipo?.toUpperCase() || 'EVENTO') + '</div>'
+      + '<div style="font-size:.85rem;color:var(--text1);margin-top:2px">' + sh.descripcion + '</div>'
+      + '<div style="font-size:.75rem;color:var(--text3);margin-top:3px">' + segs + factor + '</div>'
+      + '</div></div>';
+  })();
+
   return '<div id="adminEFContent">'
-    + encabezado + tabs
+    + shockBanner + encabezado + tabs
     + '<div id="adminEFPane1">' + dashHTML + '</div>'
     + '<div id="adminEFPane2" style="display:none">' + plHTML + '</div>'
     + '<div id="adminEFPane3" style="display:none">' + bgHTML + '</div>'
@@ -4010,6 +4035,117 @@ function renderEvoCharts(historial) {
 }
 
 // ── Equipo Reportes ────────────────────────────────────────
+async function loadEquipoNoticias() {
+  const el = document.getElementById('noticiasContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando noticias...</p>';
+  try {
+    const data = await api('GET', '/api/noticias');
+
+    if (data.fase === 'espera') {
+      el.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">📰</div>
+        <p>Las noticias del macroentorno estarán disponibles cuando el profesor active la primera ronda.</p>
+      </div>`;
+      return;
+    }
+
+    const esPre  = data.fase === 'pre';
+    const esPost = data.fase === 'post';
+
+    // ── Badge de impacto (solo en post con shock real) ────────
+    let impactBadge = '';
+    if (esPost && data.shock && data.shock.tipo !== 'neutral') {
+      const colores = { boom:'#10B981', crisis:'#EF4444' };
+      const color   = data.shock.color || colores[data.shock.tipo] || '#6B7280';
+      const factor  = Math.round((data.shock.factorDemanda - 1) * 100);
+      const signo   = factor >= 0 ? '+' : '';
+      const segs    = data.shock.segmentosAfectados === 'todos'
+        ? 'Todos los segmentos' : 'Segmentos específicos';
+      impactBadge = `<div style="display:inline-flex;align-items:center;gap:10px;margin-top:14px;
+        padding:10px 18px;border-radius:24px;background:${color}15;border:1px solid ${color}40">
+        <span style="font-size:1.4rem">${data.shock.icono || '⚡'}</span>
+        <div>
+          <div style="font-size:.7rem;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:1.5px">
+            ${(data.shock.tipo||'').toUpperCase()} · Impacto confirmado</div>
+          <div style="font-size:.88rem;color:var(--text1);margin-top:2px;font-weight:600">
+            ${signo}${factor}% en demanda formal &nbsp;·&nbsp; ${segs}</div>
+        </div>
+      </div>`;
+    }
+
+    // ── Cards de noticias ──────────────────────────────────────
+    const cards = (data.noticias || []).map(n => `
+      <div style="padding:20px 24px;border:1px solid var(--border);border-radius:var(--r);
+        margin-bottom:14px;background:var(--bg2);transition:box-shadow .2s"
+        onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.15)'"
+        onmouseleave="this.style.boxShadow=''">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <span style="font-size:1.6rem;margin-top:2px;flex-shrink:0">${n.icono || '📰'}</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:.95rem;color:var(--text1);line-height:1.35;margin-bottom:8px">
+              ${n.titulo}</div>
+            <div style="font-size:.83rem;color:var(--text2);line-height:1.65;margin-bottom:12px">
+              ${n.cuerpo}</div>
+            <div style="display:flex;gap:18px;font-size:.72rem;color:var(--text3);flex-wrap:wrap">
+              <span>📌 ${n.fuente}</span>
+              <span>🕐 ${n.fecha}</span>
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
+
+    // ── Aviso de fase ──────────────────────────────────────────
+    const avisoColor = esPre ? 'var(--accent3)' : 'var(--accent5)';
+    const avisoIcono = esPre ? '⚡' : '✅';
+    const avisoTexto = esPre
+      ? '<strong style="color:var(--accent3)">Señales previas</strong> — Esta información está disponible ANTES de que el profesor ejecute la simulación. Considera estas señales al preparar tus decisiones de producción, precio y marketing.'
+      : '<strong style="color:var(--accent5)">Informe confirmado</strong> — El evento ya ocurrió este trimestre. Analiza cómo afectó tu demanda asignada y compara con tus resultados financieros.';
+
+    const titulo = esPre
+      ? `Señales del Macroentorno · Trimestre ${data.ronda}`
+      : `Informe Confirmado del Macroentorno · Trimestre ${data.ronda}`;
+
+    el.innerHTML = `
+      <div style="max-width:780px">
+
+        <!-- Encabezado -->
+        <div style="margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid var(--border)">
+          <div style="font-family:var(--font-mono);font-size:.62rem;color:var(--text3);
+            text-transform:uppercase;letter-spacing:2.5px;margin-bottom:5px">
+            📰 Noticias del Macroentorno · SimNego UAGRM</div>
+          <div style="font-size:1.1rem;font-weight:700;color:var(--text1);margin-bottom:4px">
+            ${titulo}</div>
+          <div style="font-size:.82rem;color:var(--text3)">
+            ${esPre
+              ? 'Analiza estas señales del entorno económico antes de tomar tus decisiones del trimestre.'
+              : 'Informe del evento macroeconómico que impactó el mercado durante este período.'}</div>
+          ${impactBadge}
+        </div>
+
+        <!-- Aviso de fase -->
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;margin-bottom:18px;
+          background:var(--bg2);border-radius:var(--r);border-left:3px solid ${avisoColor};
+          font-size:.78rem;color:var(--text2);line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0;margin-top:1px">${avisoIcono}</span>
+          <span>${avisoTexto}</span>
+        </div>
+
+        <!-- Noticias -->
+        ${cards}
+
+        ${esPre ? `<div style="margin-top:18px;padding:12px 16px;background:var(--bg2);
+          border-radius:var(--r);font-size:.76rem;color:var(--text3);text-align:center">
+          🔒 El impacto real del entorno se revelará cuando el profesor ejecute la simulación.
+          Usa estas señales para anticiparte — pero recuerda que el mercado puede sorprenderte.
+          </div>` : ''}
+      </div>`;
+
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--accent4);padding:20px">Error: ${e.message}</p>`;
+  }
+}
+
 async function loadEquipoReportes() {
   const data = await api('GET','/api/resultados');
   const el = document.getElementById('reportesContent');
