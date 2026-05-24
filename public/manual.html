@@ -1426,7 +1426,7 @@
             <div class="dc-icon dc-blue">🔍</div>
             <h4>3.12 Investigación de Mercado</h4>
           </div>
-          <p class="insight">Básica (Bs 5.000): tamaño de mercado, precios observados y alertas. Premium (Bs 12.000): añade participación por segmento, sensibilidad del consumidor y recomendaciones genéricas.</p>
+          <p class="insight"><strong>Básica (Bs 5.000):</strong> demanda formal, precios observados y alertas dinámicas. <strong>Premium (Bs 12.000):</strong> añade participación por segmento, sensibilidad del consumidor y empresas anónimas en el mercado. <strong>Estratégico (Bs 20.000):</strong> revela el nombre de todas las empresas competidoras, sus productos, precios y calidad, más la elasticidad precio empírica calculada con datos reales de las últimas 2 rondas.</p>
           <div class="tip">La información reduce asimetría (Akerlof, 1970). Invierte en premium cuando la incertidumbre es alta o el mercado cambia rápidamente.</div>
           <p class="dc-refs">Akerlof (1970) · Simchi-Levi et al. (2014)</p>
         </div>
@@ -2061,7 +2061,8 @@
             <thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th></tr></thead>
             <tbody>
               <tr><td>Costo reporte Básico</td><td class="mono">Bs 5,000</td><td>Deducido de caja en el trimestre en que se compra.</td></tr>
-              <tr><td>Costo reporte Premium</td><td class="mono">Bs 12,000</td><td>Incluye todo el Básico más participación de mercado y sensibilidad.</td></tr>
+              <tr><td>Costo reporte Premium</td><td class="mono">Bs 12,000</td><td>Incluye todo el Básico más participación de mercado, sensibilidad y empresas anónimas.</td></tr>
+              <tr><td>Costo reporte Estratégico</td><td class="mono">Bs 20,000</td><td>Incluye todo el Premium más nombres de empresas rivales, sus productos y elasticidad precio empírica.</td></tr>
               <tr><td>Factor innovación Producto</td><td class="mono">0.333</td><td>Multiplicador del cociente (Monto/Producción) para el incremento del CU.</td></tr>
               <tr><td>Factor innovación Proceso</td><td class="mono">0.333</td><td>Mismo multiplicador, pero para la reducción del CU.</td></tr>
             </tbody>
@@ -2175,19 +2176,20 @@
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
-            <thead><tr><th>Dimensión de análisis</th><th>Sin reporte (Bs 0)</th><th>Básico (Bs 4,000)</th><th>Premium (Bs 7,500)</th></tr></thead>
+            <thead><tr><th>Dimensión de análisis</th><th>Sin reporte (Bs 0)</th><th>Básico (Bs 5,000)</th><th>Premium (Bs 12,000)</th><th>Estratégico (Bs 20,000)</th></tr></thead>
             <tbody>
-              <tr><td>Demanda base por segmento</td><td class="center val-neg">❌</td><td class="center val-pos">✅ 7 segmentos</td><td class="center val-pos">✅ 7 segmentos</td></tr>
-              <tr><td>% Contrabando por segmento</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
-              <tr><td>Demanda formal por segmento</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
-              <tr><td>Tendencia de mercado</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
-              <tr><td>Precios observados (mín/prom/máx)</td><td class="center val-neg">❌</td><td class="center val-pos">✅ por segmento</td><td class="center val-pos">✅ por segmento</td></tr>
-              <tr><td>Alertas estratégicas generales</td><td class="center val-neg">❌</td><td class="center val-pos">✅ 4 alertas</td><td class="center val-pos">✅ 4 alertas</td></tr>
-              <tr><td>Nº de equipos por segmento</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td></tr>
-              <tr><td>Market share máximo (anónimo)</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td></tr>
-              <tr><td>Sensibilidad del consumidor</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ por segmento</td></tr>
-              <tr><td>Recomendaciones estratégicas</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ rangos orientativos</td></tr>
-              <tr><td>Ranking anónimo</td><td class="center val-pos">✅ SIEMPRE</td><td class="center val-pos">✅ SIEMPRE</td><td class="center val-pos">✅ SIEMPRE</td></tr>
+              <tr><td>Demanda base por segmento (6)</td><td class="center val-neg">❌</td><td class="center val-pos">✅ 6 segmentos</td><td class="center val-pos">✅ 6 segmentos</td><td class="center val-pos">✅ 6 segmentos</td></tr>
+              <tr><td>Demanda formal por segmento</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
+              <tr><td>Tendencia de mercado</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
+              <tr><td>Precios observados (mín/prom/máx)</td><td class="center val-neg">❌</td><td class="center val-pos">✅ por segmento</td><td class="center val-pos">✅ por segmento</td><td class="center val-pos">✅ por segmento</td></tr>
+              <tr><td>Alertas estratégicas dinámicas</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
+              <tr><td>Nº de equipos por segmento</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
+              <tr><td>Market share máx. y promedio</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅</td><td class="center val-pos">✅</td></tr>
+              <tr><td>Sensibilidad del consumidor</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ por segmento</td><td class="center val-pos">✅ por segmento</td></tr>
+              <tr><td>Empresas en el mercado (anónimas)</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ Empresa A, B…</td><td class="center val-pos">✅ con nombre</td></tr>
+              <tr><td>Productos de la competencia</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ anónimo</td><td class="center val-pos">✅ con nombre</td></tr>
+              <tr><td>Elasticidad precio empírica</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-neg">❌</td><td class="center val-pos">✅ por empresa</td></tr>
+              <tr><td>Ranking anónimo</td><td class="center val-pos">✅ SIEMPRE</td><td class="center val-pos">✅ SIEMPRE</td><td class="center val-pos">✅ SIEMPRE</td><td class="center val-pos">✅ SIEMPRE</td></tr>
             </tbody>
           </table>
         </div>

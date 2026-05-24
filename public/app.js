@@ -2818,7 +2818,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   const canal2Opts = ['Ninguno', ..._canalNames].map(c => `<option ${c===productoActivo.canalSecundario?'selected':''}>${c}</option>`).join('');
   const tipoPresOpts = ['Ninguno','Operativo','Inversión'].map(t=>`<option ${t===decision.tipoPrestamo?'selected':''}>${t}</option>`).join('');
   const tipoInnOpts = ['Producto','Proceso','Canal'].map(t=>`<option ${t===productoActivo.tipoInnovacion?'selected':''}>${t}</option>`).join('');
-  const tipoInvOpts  = ['No','Básica','Premium'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
+  const tipoInvOpts  = ['No','Básica','Premium','Estratégico'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
 
   const p = ref.parametros || {};
   const estadoBadge = roundState==='simulated' ? '<span class="badge badge-simulated">🔒 Simulada</span>'
@@ -3832,7 +3832,7 @@ window.mostrarReporteRonda = async (n, historialCache) => {
         <div style="padding:24px;text-align:center;color:var(--text3)">
           <div style="font-size:2rem;margin-bottom:10px">📭</div>
           <p style="margin-bottom:10px">No compraste reporte de investigación en la ronda ${n}.</p>
-          <p style="font-size:.78rem">Puedes comprar <strong>Básico (Bs 4,000)</strong> o <strong>Premium (Bs 7,500)</strong> en tu próxima hoja de decisión.</p>
+          <p style="font-size:.78rem">Puedes comprar <strong>Básico (Bs 5,000)</strong>, <strong>Premium (Bs 12,000)</strong> o <strong>Estratégico (Bs 20,000)</strong> en tu próxima hoja de decisión.</p>
         </div>
       </div>`;
     } else {
@@ -3905,6 +3905,87 @@ window.mostrarReporteRonda = async (n, historialCache) => {
               </div>`).join('')}`;
       }
       html += `</div></div>`;
+      }
+
+      // PREMIUM — Sección 1: Empresas anónimas
+      if ((inv.tipo === 'Premium' || inv.tipo === 'Estratégico') && inv.empresasAnonimas?.length) {
+        const empRows = inv.empresasAnonimas.map(e =>
+          '<tr>'
+          + '<td><strong>' + e.etiqueta + '</strong></td>'
+          + '<td style="text-align:center">' + e.nProductos + '</td>'
+          + '<td style="font-size:.8rem">' + (e.segmentos||[]).join('<br>') + '</td>'
+          + '<td class="num">Bs ' + (e.precioMin||0) + ' – Bs ' + (e.precioMax||0) + '</td>'
+          + '<td class="num pos">' + fmt.pct(e.shareTotal||0) + '</td>'
+          + '<td class="num">' + fmt.num(e.ventasTotales||0) + '</td>'
+          + '</tr>'
+        ).join('');
+        html += '<div class="result-round-card" style="margin-bottom:16px">'
+          + '<div class="result-round-header"><h3>🏢 Sección 1 · Empresas en el Mercado (Anónimas)</h3></div>'
+          + '<div style="padding:14px 18px">'
+          + '<p style="font-size:.78rem;color:var(--text3);margin-bottom:10px">Los nombres se revelan en el Reporte Estratégico.</p>'
+          + '<div class="table-wrap"><table>'
+          + '<thead><tr><th>Empresa</th><th>Productos</th><th>Segmentos</th><th>Rango precio</th><th>Share total</th><th>Ventas</th></tr></thead>'
+          + '<tbody>' + empRows + '</tbody>'
+          + '</table></div></div></div>';
+      }
+
+      // ESTRATÉGICO — Sección 1: Empresas CON NOMBRE
+      if (inv.tipo === 'Estratégico' && inv.empresasConNombre?.length) {
+        const empNomRows = inv.empresasConNombre.map(e => {
+          const prods = (e.productos||[]).map(p =>
+            '<div style="margin-bottom:5px"><strong>' + (p.producto||'—') + '</strong>'
+            + ' <span style="color:var(--text3);font-size:.74rem">· ' + (p.segmento||'—') + '</span>'
+            + '<div style="font-size:.73rem;color:var(--text3)">Bs ' + (p.precio||0)
+            + ' · Cal ' + (p.calidad||0)
+            + ' · ' + fmt.pct(p.share||0) + ' share'
+            + ' · ' + fmt.num(p.ventas||0) + ' unid</div></div>'
+          ).join('');
+          return '<tr>'
+            + '<td><strong>' + (e.empresa||'—') + '</strong></td>'
+            + '<td>' + prods + '</td>'
+            + '<td class="num pos">' + fmt.pct(e.shareTotal||0) + '</td>'
+            + '<td class="num">' + fmt.num(e.ventasTotales||0) + '</td>'
+            + '<td class="num ' + ((e.utilidadNeta||0)>=0?'pos':'neg') + '">' + fmt.bs(e.utilidadNeta||0) + '</td>'
+            + '</tr>';
+        }).join('');
+        html += '<div class="result-round-card" style="margin-bottom:16px">'
+          + '<div class="result-round-header" style="background:linear-gradient(135deg,#2a1f6e,#4a2080)">'
+          + '<h3>🔍 Estratégico · Sección 1 — Empresas y Productos con Nombre</h3></div>'
+          + '<div style="padding:14px 18px">'
+          + '<div class="table-wrap"><table>'
+          + '<thead><tr><th>Empresa</th><th>Productos en el mercado</th><th>Share total</th><th>Ventas</th><th>Utilidad neta</th></tr></thead>'
+          + '<tbody>' + empNomRows + '</tbody>'
+          + '</table></div></div></div>';
+      }
+
+      // ESTRATÉGICO — Sección 2: Elasticidad precio
+      if (inv.tipo === 'Estratégico') {
+        const colores = { verde:'var(--accent5)', ambar:'var(--accent3)', roja:'var(--accent4)' };
+        let elHTML = '';
+        if (inv.elasticidades?.length) {
+          const elRows = inv.elasticidades.map(e =>
+            '<tr>'
+            + '<td><strong>' + e.empresa + '</strong></td>'
+            + '<td>' + e.producto + '</td>'
+            + '<td style="font-size:.75rem">' + e.segmento + '</td>'
+            + '<td class="num">Bs ' + e.precioAnt + ' → ' + e.precioAct + '</td>'
+            + '<td class="num">' + fmt.num(e.ventasAnt) + ' → ' + fmt.num(e.ventasAct) + '</td>'
+            + '<td class="num" style="font-weight:700;color:' + (colores[e.color]||'var(--text)') + '">' + e.elasticidad + '</td>'
+            + '<td><span style="color:' + (colores[e.color]||'var(--text)') + ';font-size:.78rem">' + e.interpretacion + '</span></td>'
+            + '</tr>'
+          ).join('');
+          elHTML = '<div class="table-wrap"><table>'
+            + '<thead><tr><th>Empresa</th><th>Producto</th><th>Segmento</th><th>Precio ant→act</th><th>Ventas ant→act</th><th>ε</th><th>Interpretación</th></tr></thead>'
+            + '<tbody>' + elRows + '</tbody></table></div>'
+            + '<div style="padding:8px 14px;background:rgba(255,209,102,.07);border:1px solid rgba(255,209,102,.2);border-radius:var(--r);font-size:.76rem;color:var(--text2);margin-top:10px">'
+            + '⚠ Solo válido cuando el <strong>único cambio</strong> entre rondas fue el precio. Cambios en publicidad, calidad o canal distorsionan el cálculo.</div>';
+        } else {
+          elHTML = '<p style="color:var(--text3);font-size:.8rem;padding:10px 0">Elasticidad no disponible — requiere al menos 2 rondas con cambio de precio en el mismo producto.</p>';
+        }
+        html += '<div class="result-round-card" style="margin-bottom:16px">'
+          + '<div class="result-round-header" style="background:linear-gradient(135deg,#2a1f6e,#4a2080)">'
+          + '<h3>📐 Estratégico · Sección 2 — Elasticidad Precio Empírica</h3></div>'
+          + '<div style="padding:14px 18px">' + elHTML + '</div></div>';
     }
 
     document.getElementById('reporteDetalle').innerHTML = html;

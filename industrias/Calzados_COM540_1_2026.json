@@ -60,7 +60,8 @@
     "tasaDecaimiento": 0.05,
     "lambdaLogit": 1.0,
     "factorCanibalizacion": 0.15,
-    "coefPrecio": -0.005
+    "coefPrecio": -0.005,
+    "costoInvestigacionEstrategico": 20000
   },
   "tiposProducto": {
     "Sandalia Infantil Ajustable": {
