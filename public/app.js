@@ -1647,7 +1647,7 @@ function buildAdminResultsHTML(rd) {
     + '</div>';
 
   // Construir KPI panel (3 tabs de ratios financieros)
-  const kpiHTML = buildAdminKPIHTML(eqs, teamColor);
+  const kpiHTML = buildAdminKPIHTML(eqs, tc);
 
   return '<div id="adminEFContent">'
     + encabezado + tabs
