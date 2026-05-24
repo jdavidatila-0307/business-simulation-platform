@@ -522,7 +522,7 @@ async function initAdmin() {
 
 // ── Admin Simulaciones ─────────────────────────────────────
 async function loadAdminEquipos() {
-  const el = document.getElementById('admin-equipos-content');
+  const el = document.getElementById('equiposTableWrap');
   if (!el) return;
   if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
   try {
@@ -538,12 +538,14 @@ async function loadAdminEquipos() {
 }
 
 async function loadAdminRondas() {
-  const el = document.getElementById('admin-rondas-content');
+  const el = document.getElementById('rondasContent');
   if (!el) return;
   if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
   try {
     el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando historial de rondas...</p>';
-    const hist = await api('GET', '/admin/historial');
+    // historial devuelve array de rondas o puede ser objeto {rondas:[...]}
+    const raw  = await api('GET', '/admin/historial');
+    const hist = Array.isArray(raw) ? raw : (raw?.rondas || raw?.historial || []);
     if (!hist?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>'; return; }
     const rows = hist.map(h => `
       <tr>
@@ -563,18 +565,35 @@ async function loadAdminRondas() {
 }
 
 async function loadAdminResultados() {
-  const el = document.getElementById('admin-resultados-content');
+  const el = document.getElementById('adminResultadosContent');
   if (!el) return;
-  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  if (!state.simId) {
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>';
+    return;
+  }
   try {
-    const sim = await api('GET', '/admin/config');
-    const n = sim?.config?.currentRound || sim?.currentRound || 1;
-    if (!n) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>'; return; }
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando resultados...</p>';
+    // Obtener ronda actual desde state o desde el servidor
+    let n = state.simConfig?.currentRound || state.currentRound || 0;
+    if (!n) {
+      const sim = await api('GET', '/admin/config');
+      n = sim?.config?.currentRound || sim?.currentRound || 0;
+    }
+    if (!n) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
+      return;
+    }
     const rd = await api('GET', '/admin/resultados/' + n);
-    if (!rd?.resultados?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para la ronda ' + n + '.</p>'; return; }
+    if (!rd?.resultados?.length) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para la ronda ' + n + '. ¿Se ejecutó la simulación?</p>';
+      return;
+    }
     el.innerHTML = buildAdminResultsHTML(rd);
-    if (typeof renderAdminCharts === 'function') setTimeout(renderAdminCharts, 100);
-  } catch(e) { el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>'; }
+    if (typeof renderAdminCharts === 'function') setTimeout(renderAdminCharts, 200);
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error al cargar resultados: ' + e.message + '</p>';
+    console.error('loadAdminResultados error:', e);
+  }
 }
 
 async function loadAdminSimulaciones() {
