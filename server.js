@@ -1064,6 +1064,63 @@ async function route(req, res, body) {
 
 
 
+  if (url === '/admin/recalcular-balance' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+
+    const CAPITAL_CONTABLE = 680000;
+    const rondas = await storage.getRondasAll(sim.id);
+    const equipos = (sim.users || []).filter(e => !e.isBot);
+    const acumulado = {};
+    equipos.forEach(eq => { acumulado[eq.id] = 0; });
+
+    let totalCorregidos = 0;
+
+    for (const ronda of rondas) {
+      const resObj = ronda.resultados?.resultados || {};
+      if (!Object.keys(resObj).length) continue;
+
+      // Agrupar por empresa
+      const porEmpresa = {};
+      Object.entries(resObj).forEach(([k, r]) => {
+        const eqId = r.equipoOriginal || r.equipo;
+        if (!porEmpresa[eqId]) porEmpresa[eqId] = [];
+        porEmpresa[eqId].push({ k, r });
+      });
+
+      for (const [eqId, prods] of Object.entries(porEmpresa)) {
+        const p0             = prods[0].r;
+        const utilidadNeta   = prods.reduce((s,p) => s+(p.r.utilidadNeta||0), 0);
+        const cajaFinal      = p0.cajaFinal      ?? 0;
+        const cxcFinal       = p0.cxcFinal       ?? 0;
+        const invFinal       = prods.reduce((s,p) => s+(p.r.invFinalValorizado||0), 0);
+        const afNetos        = p0.afNetos         ?? 0;
+        const deudaFinal     = p0.deudaFinal      ?? 0;
+        const resAcumAnt     = acumulado[eqId]    ?? 0;
+        const resAcum        = resAcumAnt + utilidadNeta;
+        const totalActivos   = cajaFinal + cxcFinal + invFinal + afNetos;
+        const patrimonio     = CAPITAL_CONTABLE + resAcumAnt + utilidadNeta;
+
+        prods.forEach(({ k }) => {
+          resObj[k].capitalContable            = CAPITAL_CONTABLE;
+          resObj[k].resultadoAcumuladoAnterior = resAcumAnt;
+          resObj[k].resultadoAcumulado         = resAcum;
+          resObj[k].totalActivos               = totalActivos;
+          resObj[k].patrimonio                 = patrimonio;
+        });
+        acumulado[eqId] = resAcum;
+        totalCorregidos++;
+      }
+
+      await storage.updateRonda(sim.id, ronda.numero, {
+        resultados: resObj
+      });
+    }
+
+    console.log(`[server] Balance recalculado: ${totalCorregidos} empresas en ${rondas.length} rondas`);
+    return send(res, 200, { ok: true, rondas: rondas.length, empresas: totalCorregidos });
+  }
+
   if (url === '/admin/ronda/siguiente' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });

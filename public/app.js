@@ -632,6 +632,21 @@ async function loadAdminEquipos() {
   }
 }
 
+async function doRecalcularBalance() {
+  if (!confirm('¿Recalcular Balance General para todas las rondas?\n\nEsto corregirá capitalContable, resultadoAcumulado y patrimonio en todas las rondas simuladas.')) return;
+  try {
+    const btn = document.getElementById('btnRecalcularBalance');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Recalculando...'; }
+    const r = await api('POST', '/admin/recalcular-balance');
+    toast(`✅ Balance recalculado: ${r.rondas} rondas · ${r.empresas} registros`, 'success');
+    await loadAdminRondas();
+  } catch(e) {
+    toast(e.message, 'error');
+    const btn = document.getElementById('btnRecalcularBalance');
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Recalcular Balance General'; }
+  }
+}
+
 async function loadAdminRondas() {
   if (!requireSimSelected('rondasContent')) return;
   const el = document.getElementById('rondasContent');
@@ -660,6 +675,11 @@ async function loadAdminRondas() {
       + '<th style="text-align:center">Decisiones enviadas</th>'
       + '<th style="text-align:center">Ejecutada</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    // Botón Recalcular Balance al final del panel
+    const btnDiv = document.createElement('div');
+    btnDiv.style.cssText = 'margin-top:16px;padding:0 4px';
+    btnDiv.innerHTML = '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">🔄 Recalcular Balance General — todas las rondas</button>';
+    el.appendChild(btnDiv);
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
   }

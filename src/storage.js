@@ -656,6 +656,20 @@ function genCodigo() {
   return 'MKT-' + Array.from({length:4}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+async function getRondasAll(simulacionId) {
+  try {
+    const r = await pool.query(
+      "SELECT numero, estado, resultados FROM sim_rondas WHERE simulacion_id=$1 ORDER BY numero",
+      [simulacionId]
+    );
+    return r.rows.map(row => ({
+      numero:     row.numero,
+      estado:     row.estado,
+      resultados: row.resultados || {},
+    }));
+  } catch(e) { return []; }
+}
+
 async function countDecisiones(simulacionId, rondaNumero) {
   try {
     const r = await pool.query(
@@ -671,7 +685,7 @@ module.exports = {
   createUser, listUsers, deleteUser,
   createSimulacion, getSimulacion, listSimulaciones, updateSimulacion, deleteSimulacion,
   getEquipos, addEquipo, findUserInSimulacion,
-  getRonda, updateRonda, ensureRonda, defaultDecision,
+  getRonda, updateRonda, ensureRonda, defaultDecision, getRondasAll,
   saveDecision,
   getSimConfig, updateSimConfig,
   genSimId, genCodigo
