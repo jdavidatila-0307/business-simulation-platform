@@ -527,29 +527,100 @@ async function loadAdminEquipos() {
   if (!el) return;
   try {
     const equipos = await api('GET', '/admin/equipos');
-    const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
     if (!equipos?.length) {
-      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin equipos registrados. Crea equipos desde esta sección.</p>';
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin equipos registrados.</p>';
       return;
     }
-    const rows = equipos.filter(eq => !eq.isBot).map((eq,i) => `
-      <tr>
-        <td>
-          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${palette[i%9]};margin-right:8px;vertical-align:middle"></span>
-          <strong>${eq.nombre}</strong>
+
+    const rows = equipos.filter(eq => !eq.isBot).map((eq, i) => {
+      const miembros = Array.isArray(eq.miembros) ? eq.miembros : [];
+      const fecha    = eq.registradoAt ? new Date(eq.registradoAt).toLocaleString('es-BO',{dateStyle:'short',timeStyle:'short'}) : '—';
+      const nMiemb   = miembros.length;
+
+      const miembrosHTML = miembros.length
+        ? miembros.map(m => `
+            <div style="margin-bottom:6px">
+              <strong>${m.apellidos||''}, ${m.nombre||m.name||'—'}</strong>
+              <div style="font-size:.75rem;color:var(--text3);margin-top:2px">
+                ${m.ci ? `<span style="margin-right:10px">🪪 ${m.ci}</span>` : ''}
+                ${m.telefono||m.phone ? `<span>📞 ${m.telefono||m.phone}</span>` : ''}
+              </div>
+            </div>`).join('')
+        : '<span style="color:var(--text3);font-size:.8rem">Sin integrantes</span>';
+
+      const estadoBadge = eq.submitted
+        ? '<span class="badge badge-ok">✓ Enviado</span>'
+        : '<span class="badge badge-warn">Pendiente</span>';
+
+      return `<tr style="vertical-align:top;border-bottom:1px solid var(--border)">
+        <td style="padding:14px 16px;min-width:180px">
+          <div style="font-weight:700;font-size:.92rem">${eq.nombre}</div>
+          <div style="font-family:var(--font-mono);font-size:.68rem;color:var(--text3);margin-top:3px">${eq.id}</div>
         </td>
-        <td style="font-family:var(--font-mono);font-size:.75rem;color:var(--text3)">${eq.id}</td>
-        <td style="text-align:center">
-          <span class="badge ${eq.activo !== false ? 'badge-ok' : 'badge-warn'}">${eq.activo !== false ? 'Activo' : 'Inactivo'}</span>
+        <td style="padding:14px 16px">
+          <span style="font-family:var(--font-mono);color:var(--accent3);font-size:.85rem">${eq.passwordPlain || '••••••'}</span>
+          <button onclick="togglePassVis(this,'${eq.passwordPlain||''}')" style="background:none;border:none;cursor:pointer;color:var(--text3);margin-left:6px;font-size:.8rem">👁</button>
         </td>
-      </tr>`).join('');
+        <td style="padding:14px 16px;min-width:220px">${miembrosHTML}</td>
+        <td style="padding:14px 16px;text-align:center;font-family:var(--font-mono);font-size:.85rem">${nMiemb}</td>
+        <td style="padding:14px 16px;text-align:center">${estadoBadge}</td>
+        <td style="padding:14px 16px;font-size:.78rem;color:var(--text3)">${fecha}</td>
+        <td style="padding:14px 16px;white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="cambiarClave('${eq.id}','${eq.nombre}')">🔑 Clave</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="resetearEnvio('${eq.id}','${eq.nombre}')">↺ Resetear</button>
+          <button class="btn btn-sm" style="background:#EF4444;color:#fff;margin-left:4px" onclick="eliminarEquipo('${eq.id}','${eq.nombre}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+
     el.innerHTML = `
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Equipo</th><th>ID</th><th style="text-align:center">Estado</th></tr></thead>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg2);font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">
+              <th style="padding:10px 16px;text-align:left">Equipo / ID de Acceso</th>
+              <th style="padding:10px 16px;text-align:left">Contraseña</th>
+              <th style="padding:10px 16px;text-align:left">Integrantes</th>
+              <th style="padding:10px 16px;text-align:center">#</th>
+              <th style="padding:10px 16px;text-align:center">Estado Ronda</th>
+              <th style="padding:10px 16px;text-align:left">Registrado</th>
+              <th style="padding:10px 16px;text-align:left">Acciones</th>
+            </tr>
+          </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+
+    // Helpers locales
+    window.togglePassVis = (btn, pass) => {
+      const sp = btn.previousElementSibling;
+      sp.textContent = sp.textContent.includes('•') ? pass : '••••••';
+    };
+    window.cambiarClave = async (id, nombre) => {
+      const nueva = prompt('Nueva contraseña para ' + nombre + ':');
+      if (!nueva) return;
+      try {
+        await api('POST', '/admin/equipos/' + id + '/clave', { password: nueva });
+        toast('✅ Contraseña actualizada', 'success');
+        loadAdminEquipos();
+      } catch(e) { toast(e.message, 'error'); }
+    };
+    window.resetearEnvio = async (id, nombre) => {
+      if (!confirm('¿Resetear el envío de decisiones de ' + nombre + '? El equipo podrá editar y reenviar.')) return;
+      try {
+        await api('POST', '/admin/equipos/' + id + '/reset-envio');
+        toast('✅ Envío reseteado — el equipo puede volver a enviar', 'success');
+        loadAdminEquipos();
+      } catch(e) { toast(e.message, 'error'); }
+    };
+    window.eliminarEquipo = async (id, nombre) => {
+      if (!confirm('¿Eliminar el equipo "' + nombre + '"? Esta acción no se puede deshacer.')) return;
+      try {
+        await api('DELETE', '/admin/equipos/' + id);
+        toast('✅ Equipo eliminado', 'success');
+        loadAdminEquipos();
+      } catch(e) { toast(e.message, 'error'); }
+    };
   } catch(e) {
     const el2 = document.getElementById('equiposTableWrap');
     if (el2) el2.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
