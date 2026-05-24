@@ -489,10 +489,19 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
     const ronda = await storage.getRonda(sim.id, sim.config.currentRound);
     const equipos = await storage.getEquipos(sim.id);
+    // FIX multiproducto: buscar submitted en ronda.decisiones con IDs expandidos
     const out = equipos.map(eq => {
-      const dec = ronda?.decisiones[eq.id];
+      // Primero buscar por ID exacto
+      let dec = ronda?.decisiones?.[eq.id];
+      // Si no encontrado, buscar por prefijo (multiproducto: eq_xxx__prod_1)
+      if (!dec && ronda?.decisiones) {
+        const key = Object.keys(ronda.decisiones).find(k => k.startsWith(eq.id + '__'));
+        if (key) dec = ronda.decisiones[key];
+      }
+      const submitted    = dec?.submitted || false;
+      const submittedAt  = dec?.submittedAt || null;
       return { id:eq.id, nombre:eq.nombre, miembros:eq.miembros||[],
-        submitted:dec?.submitted||false, submittedAt:dec?.submittedAt||null,
+        submitted, submittedAt,
         registradoAt:eq.registradoAt||null, passwordPlain:eq.passwordPlain||null };
     });
     return send(res, 200, out);

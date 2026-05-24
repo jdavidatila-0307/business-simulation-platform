@@ -43,12 +43,12 @@ function expandirDecisionesMultiproducto(decisiones) {
     // Soporte tanto para formato nuevo (productos[]) como legado (campos planos)
     const productos =
       Array.isArray(decisionEmpresa.productos) && decisionEmpresa.productos.length
-        ? decisionEmpresa.productos.filter(p =>
+        ? decisionEmpresa.productos.filter((p, pidx) =>
             p.activo !== false &&
             (
               (p.produccion || 0) > 0 ||        // produjo algo
               (p.precioVenta || 0) > 0 ||       // fijó un precio
-              idx === 0                           // siempre incluir Producto 1
+              pidx === 0                          // siempre incluir Producto 1
             )
           )
         : [decisionEmpresa];   // legado: la propia decisión actúa como un solo producto
