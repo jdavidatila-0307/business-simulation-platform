@@ -3825,90 +3825,92 @@ window.mostrarReporteRonda = async (n, historialCache) => {
         </div>`;
     }
 
-    // ── INVESTIGACIÓN COMPRADA ─────────────────────────────
+    // ── INVESTIGACIÓN COMPRADA ─────────────────────────
     if (!rep.investigacion) {
-      html += `<div class="result-round-card">
-        <div class="result-round-header"><h3>📊 Investigación de Mercado — Ronda ${n}</h3></div>
-        <div style="padding:24px;text-align:center;color:var(--text3)">
-          <div style="font-size:2rem;margin-bottom:10px">📭</div>
-          <p style="margin-bottom:10px">No compraste reporte de investigación en la ronda ${n}.</p>
-          <p style="font-size:.78rem">Puedes comprar <strong>Básico (Bs 5,000)</strong>, <strong>Premium (Bs 12,000)</strong> o <strong>Estratégico (Bs 20,000)</strong> en tu próxima hoja de decisión.</p>
-        </div>
-      </div>`;
+      html += '<div class="result-round-card">'
+        + '<div class="result-round-header"><h3>📊 Investigación de Mercado — Ronda ' + n + '</h3></div>'
+        + '<div style="padding:24px;text-align:center;color:var(--text3)">'
+        + '<div style="font-size:2rem;margin-bottom:10px">📭</div>'
+        + '<p style="margin-bottom:10px">No compraste reporte de investigación en la ronda ' + n + '.</p>'
+        + '<p style="font-size:.78rem">Puedes comprar <strong>Básico (Bs 5,000)</strong>, '
+        + '<strong>Premium (Bs 12,000)</strong> o <strong>Estratégico (Bs 20,000)</strong> en tu próxima hoja de decisión.</p>'
+        + '</div></div>';
     } else {
       const inv = rep.investigacion;
-      // Mercado
-      const mktRows = (inv.mercado||[]).map(s=>`<tr>
-        <td><strong>${s.segmento}</strong></td>
-        <td class="num">${fmt.num(s.demandaBase||0)}</td>
-        <td class="num pos">${fmt.num(s.mercadoFormal||s.demandaFormal||0)}</td>
-        <td><span class="badge ${s.tendencia==='Alto crecimiento'?'badge-high':s.tendencia==='Creciente'?'badge-grow':'badge-stable'}">${s.tendencia||'Estable'}</span></td>
-      </tr>`).join('');
-      const precRows = (inv.precios||[]).map(s=>`<tr>
-        <td><strong>${s.segmento}</strong></td>
-        <td class="num">${s.precioMin!=null?'Bs '+s.precioMin:'—'}</td>
-        <td class="num">${s.precioProm!=null?'Bs '+s.precioProm:'—'}</td>
-        <td class="num">${s.precioMax!=null?'Bs '+s.precioMax:'—'}</td>
-      </tr>`).join('');
 
-      html += `
-        <div class="result-round-card" style="margin-bottom:16px">
-          <div class="result-round-header"><h3>📊 ${inv.titulo} — Ronda ${n}</h3></div>
-          <div style="padding:16px 20px">
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Tamaño de Mercado</p>
-            <div class="table-wrap" style="margin-bottom:16px">
-              <table><thead><tr><th>Segmento</th><th>Demanda base</th><th>Mercado formal</th><th>Tendencia</th></tr></thead>
-              <tbody>${mktRows}</tbody></table>
-            </div>
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Precios Observados</p>
-            <div class="table-wrap" style="margin-bottom:16px">
-              <table><thead><tr><th>Segmento</th><th>Precio mínimo</th><th>Precio promedio</th><th>Precio máximo</th></tr></thead>
-              <tbody>${precRows}</tbody></table>
-            </div>
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Alertas</p>
-            <ul style="list-style:none;padding:0">
-              ${(inv.alertas||[]).map(a=>`<li style="padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--accent3)">⚠ ${a}</li>`).join('')}
-            </ul>`;
+      // Tabla de mercado
+      const mktRows = (inv.mercado||[]).map(s =>
+        '<tr>'
+        + '<td><strong>' + s.segmento + '</strong></td>'
+        + '<td class="num">' + fmt.num(s.demandaBase||0) + '</td>'
+        + '<td class="num pos">' + fmt.num(s.mercadoFormal||s.demandaFormal||0) + '</td>'
+        + '<td><span class="badge ' + (s.tendencia==='Alto crecimiento'?'badge-high':s.tendencia==='Creciente'?'badge-grow':'badge-stable') + '">'
+        + (s.tendencia||'Estable') + '</span></td>'
+        + '</tr>'
+      ).join('');
 
-      // Premium additions
+      const precRows = (inv.precios||[]).map(s =>
+        '<tr>'
+        + '<td><strong>' + s.segmento + '</strong></td>'
+        + '<td class="num">' + (s.precioMin!=null?'Bs '+s.precioMin:'—') + '</td>'
+        + '<td class="num">' + (s.precioProm!=null?'Bs '+s.precioProm:'—') + '</td>'
+        + '<td class="num">' + (s.precioMax!=null?'Bs '+s.precioMax:'—') + '</td>'
+        + '</tr>'
+      ).join('');
+
+      const alertasHTML = (inv.alertas||[]).map(a =>
+        '<li style="padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--accent3)">⚠ ' + a + '</li>'
+      ).join('');
+
+      html += '<div class="result-round-card" style="margin-bottom:16px">'
+        + '<div class="result-round-header"><h3>📊 ' + (inv.titulo||'Reporte') + ' — Ronda ' + n + '</h3></div>'
+        + '<div style="padding:16px 20px">'
+        + '<p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Tamaño de Mercado</p>'
+        + '<div class="table-wrap" style="margin-bottom:16px"><table>'
+        + '<thead><tr><th>Segmento</th><th>Demanda base</th><th>Mercado formal</th><th>Tendencia</th></tr></thead>'
+        + '<tbody>' + mktRows + '</tbody></table></div>'
+        + '<p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Precios Observados</p>'
+        + '<div class="table-wrap" style="margin-bottom:16px"><table>'
+        + '<thead><tr><th>Segmento</th><th>Precio mínimo</th><th>Precio promedio</th><th>Precio máximo</th></tr></thead>'
+        + '<tbody>' + precRows + '</tbody></table></div>'
+        + '<p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Alertas</p>'
+        + '<ul style="list-style:none;padding:0">' + alertasHTML + '</ul>'
+        + '</div></div>';
+
+      // PREMIUM — participación y sensibilidad
       if (inv.tipo === 'Premium' || inv.tipo === 'Estratégico') {
-        const partRows = (inv.participacion||[]).map(p=>`<tr>
-          <td><strong>${p.segmento}</strong></td>
-          <td class="num">${p.equiposCompitiendo}</td>
-          <td class="num">${fmt.pct(p.shareMaximo)}</td>
-          <td class="num">${fmt.pct(p.sharePromedio)}</td>
-        </tr>`).join('');
-        const sensRows = (inv.sensibilidad||[]).map(s=>`<tr>
-          <td><strong>${s.segmento}</strong></td>
-          <td>${s.precio}</td><td>${s.calidad}</td><td>${s.redes}</td><td>${s.canal}</td>
-        </tr>`).join('');
-
-        html += `
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:16px 0 8px">PREMIUM — Participación de Mercado</p>
-            <div class="table-wrap" style="margin-bottom:16px">
-              <table><thead><tr><th>Segmento</th><th>Equipos</th><th>Share máx.</th><th>Share prom.</th></tr></thead>
-              <tbody>${partRows}</tbody></table>
-            </div>
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">Sensibilidad del Consumidor</p>
-            <div class="table-wrap" style="margin-bottom:16px">
-              <table><thead><tr><th>Segmento</th><th>Precio</th><th>Calidad</th><th>Redes</th><th>Canal</th></tr></thead>
-              <tbody>${sensRows}</tbody></table>
-            </div>
-            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">Recomendaciones Estratégicas</p>
-            ${(inv.recomendaciones||[]).map(rec=>`
-              <div style="background:var(--bg3);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 var(--r) var(--r) 0;margin-bottom:8px;font-size:.82rem">
-                <strong style="color:var(--accent2)">${rec.estrategia}</strong><br>
-                Precio: ${rec.precio} · Prioridad: ${rec.prioridad}<br>
-                Producción: ${rec.produccion}<br>
-                Meta inventario: ${rec.meta}
-              </div>`).join('')}`;
-      }
-      html += `</div></div>`;
+        const partRows = (inv.participacion||[]).map(p =>
+          '<tr>'
+          + '<td><strong>' + p.segmento + '</strong></td>'
+          + '<td class="num">' + p.equiposCompitiendo + '</td>'
+          + '<td class="num">' + fmt.pct(p.shareMaximo) + '</td>'
+          + '<td class="num">' + fmt.pct(p.sharePromedio) + '</td>'
+          + '</tr>'
+        ).join('');
+        const sensRows = (inv.sensibilidad||[]).map(s =>
+          '<tr>'
+          + '<td><strong>' + s.segmento + '</strong></td>'
+          + '<td>' + s.precio + '</td><td>' + s.calidad + '</td>'
+          + '<td>' + s.publicidad + '</td><td>' + s.canal + '</td>'
+          + '</tr>'
+        ).join('');
+        html += '<div class="result-round-card" style="margin-bottom:16px">'
+          + '<div class="result-round-header"><h3>📊 Premium — Participación y Sensibilidad</h3></div>'
+          + '<div style="padding:14px 18px">'
+          + '<p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;color:var(--accent);margin-bottom:8px">Participación de Mercado</p>'
+          + '<div class="table-wrap" style="margin-bottom:14px"><table>'
+          + '<thead><tr><th>Segmento</th><th>Equipos</th><th>Share máx.</th><th>Share prom.</th></tr></thead>'
+          + '<tbody>' + partRows + '</tbody></table></div>'
+          + '<p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;color:var(--accent);margin-bottom:8px">Sensibilidad del Consumidor</p>'
+          + '<div class="table-wrap"><table>'
+          + '<thead><tr><th>Segmento</th><th>Precio</th><th>Calidad</th><th>Publicidad</th><th>Canal</th></tr></thead>'
+          + '<tbody>' + sensRows + '</tbody></table></div>'
+          + '</div></div>';
       }
 
-      // PREMIUM — Sección 1: Empresas anónimas
-      if ((inv.tipo === 'Premium' || inv.tipo === 'Estratégico') && inv.empresasAnonimas?.length) {
-        const empRows = inv.empresasAnonimas.map(e =>
+      // PREMIUM — Sección 1: empresas anónimas
+      if ((inv.tipo === 'Premium' || inv.tipo === 'Estratégico') && (inv.empresasAnonimas||[]).length) {
+        const empAnonRows = (inv.empresasAnonimas||[]).map(e =>
           '<tr>'
           + '<td><strong>' + e.etiqueta + '</strong></td>'
           + '<td style="text-align:center">' + e.nProductos + '</td>'
@@ -3924,13 +3926,13 @@ window.mostrarReporteRonda = async (n, historialCache) => {
           + '<p style="font-size:.78rem;color:var(--text3);margin-bottom:10px">Los nombres se revelan en el Reporte Estratégico.</p>'
           + '<div class="table-wrap"><table>'
           + '<thead><tr><th>Empresa</th><th>Productos</th><th>Segmentos</th><th>Rango precio</th><th>Share total</th><th>Ventas</th></tr></thead>'
-          + '<tbody>' + empRows + '</tbody>'
-          + '</table></div></div></div>';
+          + '<tbody>' + empAnonRows + '</tbody></table></div>'
+          + '</div></div>';
       }
 
-      // ESTRATÉGICO — Sección 1: Empresas CON NOMBRE
-      if (inv.tipo === 'Estratégico' && inv.empresasConNombre?.length) {
-        const empNomRows = inv.empresasConNombre.map(e => {
+      // ESTRATÉGICO — Sección 1: empresas con nombre
+      if (inv.tipo === 'Estratégico' && (inv.empresasConNombre||[]).length) {
+        const empNomRows = (inv.empresasConNombre||[]).map(e => {
           const prods = (e.productos||[]).map(p =>
             '<div style="margin-bottom:5px"><strong>' + (p.producto||'—') + '</strong>'
             + ' <span style="color:var(--text3);font-size:.74rem">· ' + (p.segmento||'—') + '</span>'
@@ -3950,19 +3952,17 @@ window.mostrarReporteRonda = async (n, historialCache) => {
         html += '<div class="result-round-card" style="margin-bottom:16px">'
           + '<div class="result-round-header" style="background:linear-gradient(135deg,#2a1f6e,#4a2080)">'
           + '<h3>🔍 Estratégico · Sección 1 — Empresas y Productos con Nombre</h3></div>'
-          + '<div style="padding:14px 18px">'
-          + '<div class="table-wrap"><table>'
-          + '<thead><tr><th>Empresa</th><th>Productos en el mercado</th><th>Share total</th><th>Ventas</th><th>Utilidad neta</th></tr></thead>'
-          + '<tbody>' + empNomRows + '</tbody>'
-          + '</table></div></div></div>';
+          + '<div style="padding:14px 18px"><div class="table-wrap"><table>'
+          + '<thead><tr><th>Empresa</th><th>Productos</th><th>Share total</th><th>Ventas</th><th>Utilidad neta</th></tr></thead>'
+          + '<tbody>' + empNomRows + '</tbody></table></div></div></div>';
       }
 
-      // ESTRATÉGICO — Sección 2: Elasticidad precio
+      // ESTRATÉGICO — Sección 2: elasticidad precio
       if (inv.tipo === 'Estratégico') {
         const colores = { verde:'var(--accent5)', ambar:'var(--accent3)', roja:'var(--accent4)' };
         let elHTML = '';
-        if (inv.elasticidades?.length) {
-          const elRows = inv.elasticidades.map(e =>
+        if ((inv.elasticidades||[]).length) {
+          const elRows = (inv.elasticidades||[]).map(e =>
             '<tr>'
             + '<td><strong>' + e.empresa + '</strong></td>'
             + '<td>' + e.producto + '</td>'
@@ -3970,23 +3970,21 @@ window.mostrarReporteRonda = async (n, historialCache) => {
             + '<td class="num">Bs ' + e.precioAnt + ' → ' + e.precioAct + '</td>'
             + '<td class="num">' + fmt.num(e.ventasAnt) + ' → ' + fmt.num(e.ventasAct) + '</td>'
             + '<td class="num" style="font-weight:700;color:' + (colores[e.color]||'var(--text)') + '">' + e.elasticidad + '</td>'
-            + '<td><span style="color:' + (colores[e.color]||'var(--text)') + ';font-size:.78rem">' + e.interpretacion + '</span></td>'
+            + '<td style="color:' + (colores[e.color]||'var(--text)') + ';font-size:.78rem">' + e.interpretacion + '</td>'
             + '</tr>'
           ).join('');
           elHTML = '<div class="table-wrap"><table>'
-            + '<thead><tr><th>Empresa</th><th>Producto</th><th>Segmento</th><th>Precio ant→act</th><th>Ventas ant→act</th><th>ε</th><th>Interpretación</th></tr></thead>'
-            + '<tbody>' + elRows + '</tbody></table></div>'
-            + '<div style="padding:8px 14px;background:rgba(255,209,102,.07);border:1px solid rgba(255,209,102,.2);border-radius:var(--r);font-size:.76rem;color:var(--text2);margin-top:10px">'
-            + '⚠ Solo válido cuando el <strong>único cambio</strong> entre rondas fue el precio. Cambios en publicidad, calidad o canal distorsionan el cálculo.</div>';
+            + '<thead><tr><th>Empresa</th><th>Producto</th><th>Segmento</th><th>Precio</th><th>Ventas</th><th>ε</th><th>Interpretación</th></tr></thead>'
+            + '<tbody>' + elRows + '</tbody></table></div>';
         } else {
-          elHTML = '<p style="color:var(--text3);font-size:.8rem;padding:10px 0">Elasticidad no disponible — requiere al menos 2 rondas con cambio de precio en el mismo producto.</p>';
+          elHTML = '<p style="color:var(--text3);font-size:.8rem;padding:10px 0">Elasticidad no disponible — requiere al menos 2 rondas con cambio de precio.</p>';
         }
         html += '<div class="result-round-card" style="margin-bottom:16px">'
           + '<div class="result-round-header" style="background:linear-gradient(135deg,#2a1f6e,#4a2080)">'
           + '<h3>📐 Estratégico · Sección 2 — Elasticidad Precio Empírica</h3></div>'
           + '<div style="padding:14px 18px">' + elHTML + '</div></div>';
-    }
-
+      }
+    } // cierra else investigacion comprada
     document.getElementById('reporteDetalle').innerHTML = html;
   } catch(e) {
     document.getElementById('reporteDetalle').innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
