@@ -524,7 +524,7 @@ async function initAdmin() {
 async function loadAdminEquipos() {
   const el = document.getElementById('equiposTableWrap');
   if (!el) return;
-  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  if (!state.currentSimId && !state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
   try {
     const equipos = await api('GET', '/admin/equipos');
     if (!equipos?.length) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin equipos registrados.</p>'; return; }
@@ -540,7 +540,7 @@ async function loadAdminEquipos() {
 async function loadAdminRondas() {
   const el = document.getElementById('rondasContent');
   if (!el) return;
-  if (!state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
+  if (!state.currentSimId && !state.simId) { el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>'; return; }
   try {
     el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando historial de rondas...</p>';
     // historial devuelve array de rondas o puede ser objeto {rondas:[...]}
@@ -567,7 +567,7 @@ async function loadAdminRondas() {
 async function loadAdminResultados() {
   const el = document.getElementById('adminResultadosContent');
   if (!el) return;
-  if (!state.simId) {
+  if (!state.currentSimId && !state.simId) {
     el.innerHTML = '<p style="color:var(--text3);padding:20px">Selecciona una simulación primero.</p>';
     return;
   }
