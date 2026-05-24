@@ -657,8 +657,11 @@ async function route(req, res, body) {
     let ronda = await storage.getRonda(sim.id, n);
 
     // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
-    console.log(`[server] activar R${n}: ronda existe=${!!ronda} decs=${Object.keys(ronda?.decisiones||{}).length}`);
-    if (!ronda || !Object.keys(ronda.decisiones||{}).length) {
+    const decsActuales = ronda?.decisiones || {};
+    // Verificar si las decisiones tienen datos financieros reales (cajaInicial propagado)
+    const tienenFinancieros = Object.values(decsActuales).some(d => d?.cajaInicial !== undefined);
+    console.log(`[server] activar R${n}: ronda=${!!ronda} decs=${Object.keys(decsActuales).length} financieros=${tienenFinancieros}`);
+    if (!ronda || !tienenFinancieros) {
       console.log(`[server] Ronda ${n} sin decisiones — propagando desde R${n-1}`);
       const equipos = await storage.getEquipos(sim.id);
       const prevRonda = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
