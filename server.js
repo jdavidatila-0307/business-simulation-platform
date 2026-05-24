@@ -836,9 +836,21 @@ async function route(req, res, body) {
     if (!['open', 'locked', 'pre-sim'].includes(sim.config.roundState))
       return send(res, 400, { error: 'Estado incorrecto' });
     if (sim.config.roundState === 'pre-sim') {
-      const pendientes = Object.values(ronda.preSimulacion || {}).filter(r => !r.confirmado);
-      if (pendientes.length > 0)
-        return send(res, 400, { error: `Faltan ${pendientes.length} equipo(s) por confirmar.` });
+      // Auto-forzar confirmaciones pendientes antes de ejecutar
+      const preSimulacion = ronda.preSimulacion || {};
+      let forzados = 0;
+      Object.values(preSimulacion).forEach(r => {
+        if (!r.confirmado) {
+          r.confirmado = true;
+          r.forzadoPor = 'auto-simular';
+          r.confirmadoAt = new Date().toISOString();
+          forzados++;
+        }
+      });
+      if (forzados > 0) {
+        await storage.updateRonda(sim.id, n, { preSimulacion });
+        console.log(`[server] Auto-forzadas ${forzados} confirmaciones antes de simular`);
+      }
     }
 
     const equipos = await storage.getEquipos(sim.id);
