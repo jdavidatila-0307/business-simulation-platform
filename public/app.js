@@ -3719,14 +3719,13 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Activo No Corriente</div>
-            ${finRow('Activos fijos (valor inicial)', r.activosFijosIniciales||0, false,'neutral')}
-            ${finRow('(-) Depreciación del período',  -(r.depreciacion||0),        false,'neg')}
+            ${finRow('Activos fijos netos', r.afNetos||0, false,'neutral')}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
-            ${finRowSub('= Activos fijos netos',     r.afNetos,                   false)}
+            ${finRowSub('= Total Activo No Corriente', r.afNetos||0, false)}
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL ACTIVOS',           r.totalActivos,              true)}
+            ${finRowSub('= TOTAL ACTIVOS', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0), true)}
           </div>
         </div>
       </div>
@@ -3769,11 +3768,17 @@ window.mostrarFinanciero = (n) => {
 
         <div class="result-round-card">
           <div style="padding:12px 16px">
-            ${finRowSub('TOTAL PASIVOS + PATRIMONIO', r.deudaFinal + r.patrimonio, true)}
-            <div style="margin-top:8px;padding:8px 12px;background:${Math.abs(r.totalActivos-(r.deudaFinal+r.patrimonio))<1?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)'};border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">
-              ${Math.abs(r.totalActivos-(r.deudaFinal+r.patrimonio))<1?'✓ Balance cuadra':'⚠ Verificar balance'}
-              (Activos = ${fmt.bs(r.totalActivos)} | P+P = ${fmt.bs(r.deudaFinal + r.patrimonio)})
-            </div>
+            ${(() => {
+              const totalA = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
+              const totalPP = (r.deudaFinal||0) + r.patrimonio;
+              const cuadra = Math.abs(totalA - totalPP) < 2;
+              return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
+                + '<div style="margin-top:8px;padding:8px 12px;background:'
+                + (cuadra?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)')
+                + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
+                + (cuadra?'✓ Balance cuadra':'⚠ Verificar balance')
+                + ' (Activos = ' + fmt.bs(totalA) + ' | P+P = ' + fmt.bs(totalPP) + ')</div>';
+            })()}
           </div>
         </div>
       </div>
