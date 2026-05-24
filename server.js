@@ -620,7 +620,20 @@ async function route(req, res, body) {
     const cfg = sim.config;
     const ronda = await storage.getRonda(sim.id, cfg.currentRound);
     const equipos = await storage.getEquipos(sim.id);
-    const enviados = ronda ? equipos.filter(eq => ronda.decisiones[eq.id]?.submitted).length : 0;
+    // FIX multiproducto: contar equipos únicos con al menos 1 decisión submitted
+    // Las decisiones están en sim_decisiones, no en ronda.decisiones
+    const decRows = await pool.query(
+      "SELECT DISTINCT equipo_id FROM sim_decisiones WHERE simulacion_id=$1 AND ronda_numero=$2 AND (decisiones->>'submitted')='true'",
+      [sim.id, cfg.currentRound]
+    );
+    // Mapear equipo_id expandidos (multiproducto) a equipoOriginal
+    const equipoIdsEnviados = new Set();
+    decRows.rows.forEach(d => {
+      // eq_xxx__prod_1 → extraer equipoOriginal buscando en equipos
+      const eq = equipos.find(e => d.equipo_id.startsWith(e.id) || d.equipo_id === e.id);
+      if (eq) equipoIdsEnviados.add(eq.id);
+    });
+    const enviados = equipoIdsEnviados.size;
     return send(res, 200, { currentRound:cfg.currentRound, totalRounds:cfg.totalRounds,
       roundState:cfg.roundState, total:equipos.length, enviados,
       abiertaAt:ronda?.abiertaAt, ejecutadaAt:ronda?.ejecutadaAt });
@@ -1011,7 +1024,16 @@ async function route(req, res, body) {
       if (!r) continue;
       const equipos = await storage.getEquipos(sim.id);
       hist.push({ ronda:i, estado:r.estado, ejecutadaAt:r.ejecutadaAt,
-        enviados: equipos.filter(e => r.decisiones[e.id]?.submitted).length, total: equipos.length });
+        enviados: (() => {
+              const ids = new Set();
+              Object.keys(r.decisiones||{}).forEach(k => {
+                if (r.decisiones[k]?.submitted) {
+                  const eq = equipos.find(e => k.startsWith(e.id) || k===e.id);
+                  if (eq) ids.add(eq.id);
+                }
+              });
+              return ids.size;
+            })(), total: equipos.length });
     }
     return send(res, 200, hist);
   }
