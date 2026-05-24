@@ -652,11 +652,17 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
     sim.config.roundState = 'open';
-    const ronda = await storage.getRonda(sim.id, sim.config.currentRound);
-    if (ronda) ronda.estado = 'open';
     await storage.updateSimulacion(sim.id, { config: sim.config });
-    await storage.updateRonda(sim.id, sim.config.currentRound, { estado: 'open' });
-    return send(res, 200, { ok: true, currentRound: sim.config.currentRound });
+    // Crear la ronda si no existe — ensureRonda propaga datos financieros de ronda anterior
+    const n = sim.config.currentRound;
+    let ronda = await storage.getRonda(sim.id, n);
+    if (!ronda) {
+      console.log(`[server] Ronda ${n} no existe — creando con ensureRonda`);
+      ronda = await storage.ensureRonda(sim.id, n);
+    }
+    await storage.updateRonda(sim.id, n, { estado: 'open' });
+    console.log(`[server] Ronda ${n} activada — decisiones: ${Object.keys(ronda?.decisiones||{}).length}`);
+    return send(res, 200, { ok: true, currentRound: n });
   }
 
   if (url === '/admin/ronda/cerrar' && method === 'POST') {
