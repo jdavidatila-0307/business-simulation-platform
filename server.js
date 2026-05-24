@@ -677,8 +677,31 @@ async function route(req, res, body) {
     if (!['open','locked'].includes(sim.config.roundState)) return send(res, 400, { error: 'Estado incorrecto' });
     if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
     const equipos = await storage.getEquipos(sim.id);
-    const decisiones = equipos.filter(eq => ronda.decisiones[eq.id]).map(eq => ({...ronda.decisiones[eq.id]}));
-    if (!decisiones.length) return send(res, 400, { error: 'Sin decisiones' });
+    // Si no hay decisiones en ronda.decisiones, usar defaultDecision para todos
+    let decisiones = equipos.filter(eq => ronda.decisiones[eq.id]).map(eq => ({...ronda.decisiones[eq.id]}));
+    if (!decisiones.length) {
+      // Generar defaultDecision con datos financieros de ronda anterior
+      const prevRonda = await storage.getRonda(sim.id, n-1);
+      const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
+      decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
+        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        const resPrev = Object.values(resObj).find(r =>
+          r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
+        );
+        if (resPrev) {
+          dec.cajaInicial           = Math.max(0, resPrev.cajaFinal ?? 0);
+          dec.cxcInicial            = Math.max(0, resPrev.cxcFinal ?? 0);
+          dec.deudaInicial          = Math.max(0, resPrev.deudaFinal ?? 0);
+          dec.activosFijosIniciales = Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? 80000);
+          dec.brandEquityInicial    = resPrev.brandEquityFinal ?? 50;
+          dec.vendedoresIniciales   = Math.max(1, resPrev.vendedoresFinales ?? 2);
+          dec.operariosIniciales    = Math.max(1, resPrev.operariosFinales ?? 4);
+          dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
+        }
+        return dec;
+      });
+    }
+    if (!decisiones.length) return send(res, 400, { error: 'Sin equipos registrados' });
     try {
       const simCfg = {
         params: sim.parametros,
