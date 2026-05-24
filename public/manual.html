@@ -1468,7 +1468,61 @@
           <div class="timeline-content">
             <span class="timeline-step">Paso 3 — Opcional</span>
             <h4>Pre-Simulación</h4>
-            <p>El profesor calcula la demanda estimada y la notifica a cada equipo. <strong>Debes confirmar la recepción explícitamente.</strong> Este es tu momento de ajustar el nivel de producción antes del resultado final. Si no confirmas, el profesor puede forzar la confirmación.</p>
+            <p>El profesor ejecuta el cálculo de demanda y tú recibes una vista previa de los resultados de mercado <strong>antes</strong> de la simulación final. Es tu última oportunidad para ajustar decisiones clave.</p>
+
+            <div style="margin:10px 0;background:var(--bg2);border-radius:var(--r);overflow:hidden">
+              <div style="background:var(--bg3);padding:6px 14px;font-family:var(--font-mono);font-size:.62rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px">
+                ¿Qué información recibes en la pre-simulación?
+              </div>
+              <div style="padding:10px 14px">
+                <table style="width:100%;font-size:.82rem;border-collapse:collapse">
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:5px 8px;font-weight:700;color:var(--accent3)">📊 Demanda formal</td>
+                    <td style="padding:5px 8px;color:var(--text2)">Total de compradores potenciales en tu segmento objetivo ese trimestre</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:5px 8px;font-weight:700;color:var(--accent3)">📈 Market share estimado</td>
+                    <td style="padding:5px 8px;color:var(--text2)">Tu participación de mercado calculada según tu atractivo competitivo frente a todos los rivales</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:5px 8px;font-weight:700;color:var(--accent5)">🎯 Demanda asignada</td>
+                    <td style="padding:5px 8px;color:var(--text2)">Unidades que el mercado está dispuesto a comprarte: Demanda formal × Market share</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:5px 8px;font-weight:700;color:var(--accent3)">📦 Inventario disponible</td>
+                    <td style="padding:5px 8px;color:var(--text2)">Inventario inicial + tu producción de este trimestre = unidades que puedes vender</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 8px;font-weight:700;color:var(--accent5)">✅ Ventas estimadas</td>
+                    <td style="padding:5px 8px;color:var(--text2)"><strong>min(demanda asignada, inventario disponible)</strong> — este será el número real de unidades vendidas si no cambias nada</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+
+            <div style="margin:10px 0;background:rgba(255,209,102,.06);border:1px solid rgba(255,209,102,.25);border-radius:var(--r);padding:10px 14px">
+              <div style="font-weight:700;color:var(--accent3);margin-bottom:6px;font-size:.85rem">⚡ ¿Qué puedes hacer con esta información?</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;color:var(--text2)">
+                <div>
+                  <strong style="color:var(--accent5)">Si demanda > inventario:</strong><br>
+                  Estás perdiendo ventas. Considera si puedes aumentar producción o si tienes stock de MP disponible.
+                </div>
+                <div>
+                  <strong style="color:var(--accent4)">Si inventario > demanda:</strong><br>
+                  Producirás más de lo que venderás. Tendrás inventario final con costo de almacenamiento.
+                </div>
+                <div>
+                  <strong style="color:var(--accent3)">Con 5 productos:</strong><br>
+                  Verás una tabla con los datos de cada producto por separado y el total consolidado de tu empresa.
+                </div>
+                <div>
+                  <strong style="color:var(--text)">Debes confirmar:</strong><br>
+                  Al recibir los datos debes presionar <strong>✓ Confirmar</strong>. El profesor puede forzar la confirmación si no lo haces.
+                </div>
+              </div>
+            </div>
+
+            <div class="tip">⚠️ La pre-simulación es informativa — <strong>no puedes modificar tu precio, segmento ni canal</strong>. Solo puedes ajustar la <strong>cantidad producida</strong> si detectas un desajuste entre oferta y demanda antes de que el profesor ejecute la simulación final.</div>
           </div>
         </div>
         <div class="timeline-item">
