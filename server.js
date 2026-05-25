@@ -1288,7 +1288,9 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
 
-    const CAPITAL_CONTABLE = sim.parametros?.capitalInicial ?? 680000;
+    const CAPITAL_CONTABLE = sim.parametros?.capitalContable
+      ?? sim.parametros?.capitalInicial
+      ?? 680000;
     const equipos          = await storage.getEquipos(sim.id);
     const rondas           = await storage.getRondasAll(sim.id);
     const proveedores      = sim.proveedores || [];
