@@ -1390,8 +1390,8 @@ function buildAdminKPIHTML(eqs, tc) {
       costoUnitP:       r.costoUnitario || 0,
       costoBase_p:      r.costoTransformacion || roundBs((r.costoBaseProducto||0) * 0.60),
       costoCalidad_p:   r.costoCalidadUnit  || 0,
-      costoCanal_p:     Math.max(0, r.costoCanal_calc ?? roundBs((r.costoUnitario||0) - (r.costoTransformacion||0) - (r.costoCalidadUnit||0) - (r.costoMPunitario||0))),
-      costoMP_p:        r.costoMPunitario   || 0,
+      costoCanal_p:     Math.max(0, r.costoCanal_calc ?? roundBs((r.costoUnitario||0) - (r.costoTransformacion||0) - (r.costoCalidadUnit||0) - roundBs((r.costoMPunitario||0)*0.87))),
+      costoMP_p:        r.costoMPunitario || 0,  // precio factura proveedor
       proveedor_p:      r.proveedorElegido  || '—',
       stockMP:          r.stockMPFinal      ?? null,
 
@@ -1498,7 +1498,7 @@ function buildAdminKPIHTML(eqs, tc) {
         [{val:0,color:S.gris}], '0.20 × nivel de calidad elegido')
     + kpiRow('  └ Costo canal distribución (Bs)', v.map(e=>Math.max(0,e.costoCanal_p)), bs,
         [{val:0,color:S.gris}], 'Costo adicional por unidad según canal principal y secundario')
-    + kpiRow('  └ Costo MP proveedor (Bs)', v.map(e=>e.costoMP_p), bs,
+    + kpiRow('  └ MP proveedor — factura (Bs)', v.map(e=>e.costoMP_p), bs,
         [{val:0,color:S.verde}], 'costoMP × unidadesMPporUnidad — 0 si no hay proveedor configurado')
     + kpiRow('Stock MP disponible (unid)', v.map(e=>e.stockMP), num,
         [{val:0,color:S.gris}], 'Inventario de materia prima al cierre del trimestre')
@@ -3715,8 +3715,11 @@ window.mostrarKpiRonda = (n, historial) => {
           ${kpiRow('Costo unitario TOTAL (Bs)',     fmt.d(r.costoUnitario,2))}
           ${kpiRow('  └ Transformación (MOD+OH, Bs)', r.costoTransformacion!=null?fmt.d(r.costoTransformacion,2):r.costoBaseProducto!=null?fmt.d((r.costoBaseProducto||0)*0.60,2):'—')}
           ${kpiRow('  └ Factor calidad (Bs)',       r.costoCalidadUnit!=null?fmt.d(r.costoCalidadUnit,2):'—')}
-          ${kpiRow('  └ Canal distribución (Bs)',   r.costoCanal_calc!=null?fmt.d(Math.max(0,r.costoCanal_calc),2):r.costoBaseProducto!=null?fmt.d(Math.max(0,(r.costoUnitario||0)-(r.costoTransformacion||0)-(r.costoCalidadUnit||0)-(r.costoMPunitario||0)),2):'—')}
-          ${kpiRow('  └ MP proveedor (Bs)',         r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—', r.costoMPunitario>0?'var(--accent3)':'')}
+          ${kpiRow('  └ Canal distribución (Bs)',   r.costoCanal_calc!=null?fmt.d(Math.max(0,r.costoCanal_calc),2):r.costoBaseProducto!=null?fmt.d(Math.max(0,(r.costoUnitario||0)-(r.costoTransformacion||0)-(r.costoCalidadUnit||0)-Math.round((r.costoMPunitario||0)*0.87*100)/100),2):'—')}
+          ${kpiRow('  └ MP proveedor — factura (Bs)', r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—', r.costoMPunitario>0?'var(--accent3)':'')}
+          ${kpiRow('  └   IVA crédito MP (13%)',    r.costoMPunitario>0?fmt.d(Math.round(r.costoMPunitario*0.13*100)/100,2):'—', 'var(--accent5)')}
+          ${kpiRow('  └   Costo neto MP en ER',      r.costoMPunitario>0?fmt.d(Math.round((r.costoMPunitario-r.costoMPunitario*0.13)*100)/100,2):'—')}
+          ${r.efInnovacionUnit?kpiRow('  └ Innovación/proceso (Bs)', fmt.d(r.efInnovacionUnit,2)):''}
           ${kpiRow('Proveedor activo',              r.proveedorElegido||'Sin proveedor')}
         </table>
       </div>

@@ -999,7 +999,28 @@ function ejecutarSimulador(decisiones, cfg) {
       proveedorElegido:    d.proveedorElegido || null,
       // Desglose visual correcto post-rediseño MP
       costoTransformacion: roundBs(cbProd * (1 - pctMP_enr)),
-      costoCanal_calc:     roundBs(cu - roundBs(cbProd * (1 - pctMP_enr)) - costoMPunit - roundBs(0.20 * (d.calidad || 5))),
+      // efInnovacion para el desglose
+      efInnovacionUnit: (() => {
+        if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
+        const bf = d.montoInnovacion / d.produccion;
+        if (d.tipoInnovacion === 'Producto') return roundBs(+bf * (paramsConProveedores.factorInnovacionProducto ?? 0.2));
+        if (d.tipoInnovacion === 'Proceso')  return roundBs(-bf * (paramsConProveedores.factorInnovacionProceso ?? 0.2));
+        return 0;
+      })(),
+      // costoCanal = CU − trans − MPneto − calidad − efInnovacion
+      costoCanal_calc: (() => {
+        const trans    = roundBs(cbProd * (1 - pctMP_enr));
+        const mpNeto   = roundBs(costoMPunit * (1 - (paramsConProveedores.tasaIVA ?? 0.13)));
+        const calidad  = roundBs(0.20 * (d.calidad || 5));
+        const ef       = (() => {
+          if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
+          const bf = d.montoInnovacion / d.produccion;
+          if (d.tipoInnovacion === 'Producto') return roundBs(+bf * (paramsConProveedores.factorInnovacionProducto ?? 0.2));
+          if (d.tipoInnovacion === 'Proceso')  return roundBs(-bf * (paramsConProveedores.factorInnovacionProceso ?? 0.2));
+          return 0;
+        })();
+        return Math.max(0, roundBs(cu - trans - mpNeto - calidad - ef));
+      })(),
       alertaCaja:      fin.cajaFinal < 500 ? 'ALERTA' : 'OK',
     };
   });
