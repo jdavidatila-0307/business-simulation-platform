@@ -870,7 +870,8 @@ async function route(req, res, body) {
           dec.operariosIniciales    = Math.max(1, resPrev.operariosFinales  ?? 4);
           dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
           dec.inventarioInicial     = 0;
-          console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales}`);
+          dec.saldoIUEcompensable   = Math.max(0, resPrev.saldoIUEfinal ?? 0);  // FASE 4
+          console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
           console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
         }
@@ -1466,6 +1467,7 @@ async function route(req, res, body) {
             inventarioFinal:       invFinalTotal,
             stockMPFinal:          p0.stockMPFinal ?? 0,
             pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
+            saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),  // FASE 4
           };
           totalEmpresas++;
         }
