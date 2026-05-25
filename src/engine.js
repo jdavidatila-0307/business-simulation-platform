@@ -391,24 +391,33 @@ function calcularParticipacion(decision, equiposEnSegmento, segmentoData, afinid
 }
 
 // ── Paso 6–7: Ventas, comisiones e inventario ─────────────────
-function calcularVentas(d, share, demandaFormal, costoUnitario) {
+// FASE 0-A: el precio que decide el equipo es el precio facturado al cliente (incluye IVA 13%)
+// Se extrae el IVA para obtener el ingreso real de la empresa (ventasBrutas sin IVA)
+function calcularVentas(d, share, demandaFormal, costoUnitario, params = {}) {
+  const tasaIVA = params.tasaIVA ?? 0.13;
+
   const inventarioDisponible = (d.inventarioInicial || 0) + (d.produccion || 0);
   const demandaAsignada      = Math.round(demandaFormal * share);
   const ventasReales         = Math.min(demandaAsignada, inventarioDisponible);
   const inventarioFinal      = inventarioDisponible - ventasReales;
 
-  const ventasBrutas = roundBs(ventasReales * (d.precioVenta || 0));
+  // Precio facturado al cliente (incluye IVA) → extraer IVA para obtener ingreso real
+  const totalFacturado  = roundBs(ventasReales * (d.precioVenta || 0));
+  const ivaDebitoVentas = roundBs(totalFacturado * tasaIVA);   // IVA que la empresa cobra al cliente para el Estado
+  const ventasBrutas    = roundBs(totalFacturado - ivaDebitoVentas);  // ingreso real de la empresa sin IVA
 
   // Comisión: promedio si hay canal secundario
   const canalesArr = [d.canalPrincipal];
   if (d.canalSecundario && d.canalSecundario !== 'Ninguno') canalesArr.push(d.canalSecundario);
 
-  return { inventarioDisponible, demandaAsignada, ventasReales, inventarioFinal, ventasBrutas };
+  return { inventarioDisponible, demandaAsignada, ventasReales, inventarioFinal,
+           ventasBrutas, totalFacturado, ivaDebitoVentas };
 }
 
 // ── Paso 3 continuado: P&L completo ──────────────────────────
 function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarketing, params, canalesCfg) {
-  const { ventasBrutas, ventasReales, inventarioFinal } = ventas;
+  const { ventasBrutas, ventasReales, inventarioFinal,
+          totalFacturado, ivaDebitoVentas } = ventas;  // FASE 0-C: incluye datos del precio facturado
 
   // Comisión canal
   const canalP = canalesCfg[d.canalPrincipal] || {};
@@ -476,8 +485,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
 
   // Flujo de caja
-  const cxcCobroEsta = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro)); // cobro cuota del CxC anterior
-  const cobrosContado = roundBs(ventasNetas * params.pctVentasContado + cxcCobroEsta);
+  // FASE 0-E: el cliente paga el precio completo con IVA (totalFacturado)
+  // La empresa recibe totalFacturado y luego paga ivaAPagar al Estado (pagoIVA en totalPagos)
+  const cxcCobroEsta  = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro));
+  const cobrosContado = roundBs(totalFacturado * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
   const pagoProduccion = roundBs((d.produccion || 0) * costoUnitario);
@@ -490,33 +501,37 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoIntereses  = interesesPrestamo;
   const pagoApertura   = comisionApertura;
 
-  // Etapa 3.3: IVA Bolivia (13%)
-  const tasaIVA   = params.tasaIVA ?? 0.13;
-  const ivaDebito  = roundBs(ventasBrutas * tasaIVA);  // FASE 1: base correcta = precio facturado al cliente (Ley 843)
-  const ivaCredito = roundBs(roundBs((d.produccion || 0) * costoUnitario) * tasaIVA);
-  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
-  const pagoIVA    = ivaAPagar;
+  // ── FASE 0-D: IVA Bolivia (Ley 843) ──────────────────────────────────────
+  // El precio que decide el equipo es el precio FACTURADO al cliente (incluye IVA).
+  // El IVA se extrae en calcularVentas → ventasBrutas ya es el ingreso real sin IVA.
+  // El IVA es un tributo NEUTRO para la empresa: lo cobra al cliente y lo entrega al Estado.
+  // NO aparece como gasto en el P&L — solo fluye por Caja y Balance.
+  const tasaIVA    = params.tasaIVA ?? 0.13;
+  const ivaDebito  = ivaDebitoVentas;  // extraído en calcularVentas: totalFacturado × tasaIVA
+  const ivaCredito = roundBs(roundBs((d.produccion || 0) * costoUnitario) * tasaIVA);  // IVA en compras
+  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));  // neto a pagar al Estado
+  const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
 
-  // Etapa 3.4: IT (3% sobre ventas brutas) — pago trimestral
+  // IT (3% sobre totalFacturado = precio con IVA) — base correcta Ley 843: ingresos brutos
   const tasaIT      = params.tasaIT ?? 0.03;
-  const impuestoIT  = roundBs(ventasBrutas * tasaIT);
+  const impuestoIT  = roundBs((totalFacturado || ventasBrutas / (1 - tasaIVA / (1 + tasaIVA))) * tasaIT);
 
-  // Etapa 3.4: IUE (25% sobre utilidad gravable) — pago anual (cada 4 trim.)
-  // Se provisiona trimestralmente; el pago real ocurre en el trimestre múltiplo de 4.
-  const tasaIUE       = params.tasaIUE ?? 0.25;
-  const periodosIUE   = params.periodosIUE ?? 4;
-  const rondaActual   = d.rondaNumero ?? 0;
-  const utilGravable  = Math.max(0, roundBs(utilidadNeta_operat - ivaAPagar - impuestoIT));  // FASE 3: base limpia sin doble descuento
-  const impuestoIUE   = (rondaActual > 0 && rondaActual % periodosIUE === 0)
+  // IUE (25% sobre utilidad gravable) — pago anual cada 4 trimestres
+  // Base limpia post Fase 0: utilidad_operat − IT solamente
+  // IVA ya NO está en el P&L → no se resta de la base del IUE
+  const tasaIUE     = params.tasaIUE ?? 0.25;
+  const periodosIUE = params.periodosIUE ?? 4;
+  const rondaActual = d.rondaNumero ?? 0;
+  const utilGravable = Math.max(0, roundBs(utilidadNeta_operat - impuestoIT));  // FASE 3+0: IT ya es el único impuesto en P&L
+  const impuestoIUE  = (rondaActual > 0 && rondaActual % periodosIUE === 0)
     ? roundBs(utilGravable * tasaIUE)
     : 0;
-  const provisionIUE  = roundBs(utilGravable * tasaIUE / periodosIUE); // provisión trimestral
-  const pagoIT        = impuestoIT;
-  const pagoIUE       = impuestoIUE;
+  const provisionIUE = roundBs(utilGravable * tasaIUE / periodosIUE);
+  const pagoIT       = impuestoIT;
+  const pagoIUE      = impuestoIUE;
 
-  // Obligación fiscal total del trimestre (sale de caja Y del P&L)
-  const totalImpuestos = roundBs(ivaAPagar + impuestoIT + impuestoIUE);
-  // FIX balance: impuestos reducen utilidadNeta (correcto para P&L y Balance)
+  // P&L: IVA NO es gasto de la empresa — solo IT e IUE reducen la utilidad neta
+  const totalImpuestos = roundBs(impuestoIT + impuestoIUE);  // FASE 0: IVA excluido del P&L
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // FIX balance: costo operarios sale de caja
@@ -546,7 +561,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const cajaFinal = cajaPreliminar;
 
   // CxC final = CxC anterior no cobrado + nuevas ventas a crédito
-  const cxcNuevo     = roundBs(ventasNetas * params.pctVentasCredito);
+  // Base = totalFacturado (cliente debe el precio con IVA incluido)
+  const cxcNuevo     = roundBs(totalFacturado * params.pctVentasCredito);
   const cxcNoCobrObj = roundBs((d.cxcInicial || 0) - cxcCobroEsta);
   const cxcFinal     = roundBs(Math.max(0, cxcNoCobrObj) + cxcNuevo);
 
@@ -834,7 +850,7 @@ function ejecutarSimulador(decisiones, cfg) {
     const cu         = calcularCostoUnitario(d, tiposProducto, canales, paramsConProveedores, costoMPunit);
     const share      = sharesPorEquipo[d.equipo] || 0;
     const demFormal  = seg?.demandaFormal || 0;
-    const ventas     = calcularVentas(d, share, demFormal, cu);
+    const ventas     = calcularVentas(d, share, demFormal, cu, paramsConProveedores);  // FASE 0-B: params para extracción IVA
     const fin        = calcularResultadosFinancieros(d, ventas, cu, d.gastoTotalMarketing, paramsConProveedores, canales);
 
     return {

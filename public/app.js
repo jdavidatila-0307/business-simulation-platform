@@ -3933,6 +3933,7 @@ window.mostrarFinanciero = (n) => {
             ${finRow('Caja y bancos',              r.cajaFinal,           false,'pos')}
             ${finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')}
             ${finRow('Inventarios',                r.invFinalValorizado,  false,'neutral')}
+            ${(r.ivaCredito||0)>0 ? finRow('IVA crédito fiscal (activo)', r.ivaCredito, false,'neutral') : ''}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
             ${finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0), false)}
 
