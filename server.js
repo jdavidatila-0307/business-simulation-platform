@@ -1287,57 +1287,199 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
 
-    const CAPITAL_CONTABLE = 680000;
-    const rondas = await storage.getRondasAll(sim.id);
-    const equipos = (sim.users || []).filter(e => !e.isBot);
-    const acumulado = {};
-    equipos.forEach(eq => { acumulado[eq.id] = 0; });
+    const CAPITAL_CONTABLE = sim.parametros?.capitalInicial ?? 680000;
+    const equipos          = await storage.getEquipos(sim.id);
+    const rondas           = await storage.getRondasAll(sim.id);
+    const proveedores      = sim.proveedores || [];
+    const unidMP           = sim.parametros?.unidadesMPporUnidad ?? 1;
 
-    let totalCorregidos = 0;
+    // Estado acumulado por empresa — se propaga ronda a ronda
+    const estadoEmpresa = {};
+    equipos.forEach(eq => {
+      estadoEmpresa[eq.id] = {
+        resultadoAcumulado:    0,
+        // Campos de continuidad financiera para re-simulación
+        cajaFinal:             sim.parametros?.cajaInicial ?? 96000,
+        cxcFinal:              0,
+        deudaFinal:            0,
+        afNetos:               sim.parametros?.activosFijosIniciales ?? 360000,
+        brandEquityFinal:      50,
+        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
+        operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
+        inventarioFinal:       0,
+        stockMPFinal:          0,
+        pedidosPendientesResta:[],
+      };
+    });
 
+    let totalRondas = 0;
+    let totalEmpresas = 0;
+    const errores = [];
+
+    // ── Procesar cada ronda en orden cronológico ──────────────────────────
     for (const ronda of rondas) {
-      const resObj = ronda.resultados?.resultados || {};
-      if (!Object.keys(resObj).length) continue;
-
-      // Agrupar por empresa
-      const porEmpresa = {};
-      Object.entries(resObj).forEach(([k, r]) => {
-        const eqId = r.equipoOriginal || r.equipo;
-        if (!porEmpresa[eqId]) porEmpresa[eqId] = [];
-        porEmpresa[eqId].push({ k, r });
-      });
-
-      for (const [eqId, prods] of Object.entries(porEmpresa)) {
-        const p0             = prods[0].r;
-        const utilidadNeta   = prods.reduce((s,p) => s+(p.r.utilidadNeta||0), 0);
-        const cajaFinal      = p0.cajaFinal      ?? 0;
-        const cxcFinal       = p0.cxcFinal       ?? 0;
-        const invFinal       = prods.reduce((s,p) => s+(p.r.invFinalValorizado||0), 0);
-        const afNetos        = p0.afNetos         ?? 0;
-        const deudaFinal     = p0.deudaFinal      ?? 0;
-        const resAcumAnt     = acumulado[eqId]    ?? 0;
-        const resAcum        = resAcumAnt + utilidadNeta;
-        const totalActivos   = cajaFinal + cxcFinal + invFinal + afNetos;
-        const patrimonio     = CAPITAL_CONTABLE + resAcumAnt + utilidadNeta;
-
-        prods.forEach(({ k }) => {
-          resObj[k].capitalContable            = CAPITAL_CONTABLE;
-          resObj[k].resultadoAcumuladoAnterior = resAcumAnt;
-          resObj[k].resultadoAcumulado         = resAcum;
-          resObj[k].totalActivos               = totalActivos;
-          resObj[k].patrimonio                 = patrimonio;
-        });
-        acumulado[eqId] = resAcum;
-        totalCorregidos++;
+      const n      = ronda.numero;
+      const resObj = ronda.resultados?.resultados || ronda.resultados || {};
+      if (!Object.keys(resObj).length) {
+        console.log(`[recalc] R${n}: sin resultados — omitida`);
+        continue;
       }
 
-      await storage.updateRonda(sim.id, ronda.numero, {
-        resultados: resObj
-      });
+      // Construir decisiones re-propagadas: tomar las decisiones originales
+      // y reemplazar solo los campos financieros de continuidad con el estado real
+      const decisionesOriginales = ronda.decisiones || {};
+      const decisiones = [];
+
+      for (const eq of equipos) {
+        const decOrig = decisionesOriginales[eq.id];
+        if (!decOrig) continue;
+
+        const estado = estadoEmpresa[eq.id] || {};
+
+        // Campos de decisión originales (precio, producción, marketing, etc.) se conservan
+        // Solo se reemplazan los campos de continuidad financiera
+        const decRepropagada = {
+          ...decOrig,
+          // ── Continuidad financiera desde resultados reales ──
+          cajaInicial:                Math.max(0, estado.cajaFinal ?? 0),
+          cxcInicial:                 Math.max(0, estado.cxcFinal ?? 0),
+          deudaInicial:               Math.max(0, estado.deudaFinal ?? 0),
+          activosFijosIniciales:      Math.max(0, estado.afNetos ?? 78000),
+          brandEquityInicial:         estado.brandEquityFinal ?? 50,
+          vendedoresIniciales:        Math.max(1, estado.vendedoresFinales ?? 2),
+          operariosIniciales:         Math.max(1, estado.operariosFinales ?? 4),
+          inventarioInicial:          Math.max(0, estado.inventarioFinal ?? 0),
+          stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
+          pedidosPendientes:          estado.pedidosPendientesResta ?? [],
+          resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
+        };
+
+        // Multiproducto: propagar también a cada producto del array productos[]
+        if (Array.isArray(decRepropagada.productos)) {
+          decRepropagada.productos = decRepropagada.productos.map((p, idx) => ({
+            ...p,
+            cajaInicial:                idx === 0 ? decRepropagada.cajaInicial : 0,
+            cxcInicial:                 idx === 0 ? decRepropagada.cxcInicial : 0,
+            deudaInicial:               idx === 0 ? decRepropagada.deudaInicial : 0,
+            activosFijosIniciales:      idx === 0 ? decRepropagada.activosFijosIniciales : 0,
+            brandEquityInicial:         decRepropagada.brandEquityInicial,
+            vendedoresIniciales:        decRepropagada.vendedoresIniciales,
+            operariosIniciales:         decRepropagada.operariosIniciales,
+            inventarioInicial:          idx === 0 ? decRepropagada.inventarioInicial : 0,
+            stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
+            pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
+            resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
+          }));
+        }
+
+        decisiones.push(decRepropagada);
+      }
+
+      if (!decisiones.length) continue;
+
+      // Construir demandaBaseAnteriorMap desde la ronda anterior
+      const demandaBaseAnteriorMap = {};
+      if (n > 1) {
+        const rondaPrevia = rondas.find(r => r.numero === n - 1);
+        (rondaPrevia?.mercadoSegmentos || []).forEach(seg => {
+          demandaBaseAnteriorMap[seg.nombre] = seg.demandaBase;
+        });
+      }
+
+      // Usar el shock ya guardado en la ronda (no regenerar)
+      const shockRonda = ronda.shock || generarShock(sim.id, n, sim.parametros?.probabilidadShock ?? 0.35);
+
+      const simCfg = {
+        params:             sim.parametros,
+        tiposProducto:      sim.tipos_producto,
+        canales:            sim.canales,
+        segmentos:          sim.segmentos,
+        afinidadMatrix:     sim.afinidad_matrix,
+        competenciaExterna: sim.competencia_externa,
+        demandaBaseAnteriorMap,
+        rondaNumero:        n,
+        proveedores:        proveedores,
+        shock:              shockRonda,
+        equipos,
+      };
+
+      try {
+        // Re-ejecutar el motor con las decisiones re-propagadas
+        const result = ejecutarSimulador(decisiones, simCfg);
+
+        // Construir nuevo resObj con los resultados recalculados
+        const nuevoResObj = {};
+        result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
+
+        // Regenerar reportes de investigación de mercado
+        const rondaPreviaData = n > 1 ? rondas.find(r => r.numero === n-1) : null;
+        const resultadosAnteriores = rondaPreviaData?.resultados?.resultados || rondaPreviaData?.resultados || {};
+        const reportes = {};
+        for (const d of decisiones) {
+          reportes[d.equipo] = generarReportes(
+            d, result.mercadoSegmentos, result.atractivoEquipos,
+            nuevoResObj, simCfg, resultadosAnteriores
+          );
+        }
+
+        // Actualizar estado propagado para la siguiente ronda
+        const porEmpresaRes = {};
+        Object.values(nuevoResObj).forEach(r => {
+          const eqId = r.equipoOriginal || r.equipo;
+          if (!porEmpresaRes[eqId]) porEmpresaRes[eqId] = [];
+          porEmpresaRes[eqId].push(r);
+        });
+
+        for (const [eqId, prods] of Object.entries(porEmpresaRes)) {
+          const p0           = prods[0];
+          const utilNeta     = prods.reduce((s,p) => s+(p.utilidadNeta||0), 0);
+          const invFinalTotal = prods.reduce((s,p) => s+Math.max(0,p.inventarioFinal||0), 0);
+          const resAcumAnt   = estadoEmpresa[eqId]?.resultadoAcumulado ?? 0;
+
+          estadoEmpresa[eqId] = {
+            resultadoAcumulado:    resAcumAnt + utilNeta,
+            cajaFinal:             p0.cajaFinal    ?? 0,
+            cxcFinal:              p0.cxcFinal     ?? 0,
+            deudaFinal:            p0.deudaFinal   ?? 0,
+            afNetos:               p0.afNetos      ?? 0,
+            brandEquityFinal:      p0.brandEquityFinal ?? 50,
+            vendedoresFinales:     p0.vendedoresFinales ?? 2,
+            operariosFinales:      p0.operariosFinales ?? 4,
+            inventarioFinal:       invFinalTotal,
+            stockMPFinal:          p0.stockMPFinal ?? 0,
+            pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
+          };
+          totalEmpresas++;
+        }
+
+        // Guardar resultados recalculados
+        await storage.updateRonda(sim.id, n, {
+          resultados:       nuevoResObj,
+          mercadoSegmentos: result.mercadoSegmentos,
+          atractivoEquipos: result.atractivoEquipos,
+          dashboard:        result.dashboard,
+          empresas:         result.empresas,
+          reportes,
+          shock:            shockRonda,
+        });
+
+        console.log(`[recalc] R${n}: OK — ${Object.keys(nuevoResObj).length} resultados actualizados`);
+        totalRondas++;
+
+      } catch (errRonda) {
+        console.error(`[recalc] R${n}: ERROR — ${errRonda.message}`);
+        errores.push({ ronda: n, error: errRonda.message });
+      }
     }
 
-    console.log(`[server] Balance recalculado: ${totalCorregidos} empresas en ${rondas.length} rondas`);
-    return send(res, 200, { ok: true, rondas: rondas.length, empresas: totalCorregidos });
+    const msg = `Recálculo completo: ${totalRondas} rondas · ${totalEmpresas} registros`;
+    console.log(`[server] ${msg}${errores.length ? ' · ' + errores.length + ' errores' : ''}`);
+    return send(res, 200, {
+      ok:      errores.length === 0,
+      rondas:  totalRondas,
+      empresas: totalEmpresas,
+      errores,
+    });
   }
 
   if (url === '/admin/ronda/siguiente' && method === 'POST') {

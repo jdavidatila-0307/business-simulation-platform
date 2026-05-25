@@ -635,17 +635,30 @@ async function loadAdminEquipos() {
 }
 
 async function doRecalcularBalance() {
-  if (!confirm('¿Recalcular Balance General para todas las rondas?\n\nEsto corregirá capitalContable, resultadoAcumulado y patrimonio en todas las rondas simuladas.')) return;
+  if (!confirm(
+  '⚠️ RE-SIMULACIÓN COMPLETA — todas las rondas\n\n' +
+  'Esta operación re-ejecuta el motor de cálculo para R1 hasta la última ronda simulada.\n\n' +
+  'Recalcula con los parámetros ACTUALES (incluyendo proveedores y costos de MP).\n\n' +
+  '• Decisiones originales de cada equipo se conservan\n' +
+  '• Financiero propagado (caja, deuda, inventario) se recalcula en cadena\n' +
+  '• Shocks históricos se respetan\n' +
+  '• Reportes de investigación se regeneran\n\n' +
+  'Los resultados históricos cambiarán. ¿Confirmas?'
+)) return;
   try {
     const btn = document.getElementById('btnRecalcularBalance');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Recalculando...'; }
     const r = await api('POST', '/admin/recalcular-balance');
-    toast(`✅ Balance recalculado: ${r.rondas} rondas · ${r.empresas} registros`, 'success');
+    const msgToast = r.errores?.length
+      ? `⚠️ Re-simulación: ${r.rondas} rondas OK · ${r.errores.length} error(es)`
+      : `✅ Re-simulación completa: ${r.rondas} rondas · ${r.empresas} registros`;
+    toast(msgToast, r.errores?.length ? 'warning' : 'success');
+    if (r.errores?.length) console.warn('[recalc] Errores:', r.errores);
     await loadAdminRondas();
   } catch(e) {
     toast(e.message, 'error');
     const btn = document.getElementById('btnRecalcularBalance');
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Recalcular Balance General'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Recalcular EF + Desglose CU — todas las rondas'; }
   }
 }
 
@@ -678,7 +691,16 @@ async function loadAdminRondas() {
       + '<th style="text-align:center">Ejecutada</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     // Botón Recalcular Estados Financieros
-    el.innerHTML += '<div style="margin-top:16px;padding:0 4px"><button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">🔄 Recalcular Estados Financieros — todas las rondas</button></div>';
+    el.innerHTML += '<div style="margin-top:20px;padding:12px 16px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2)">'
+      + '<div style="font-size:.75rem;color:var(--text3);margin-bottom:10px">'
+      + '🔧 Herramientas de mantenimiento de datos</div>'
+      + '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">'
+      + '🔄 Recalcular EF + Desglose CU — todas las rondas</button>'
+      + '<div style="font-size:.7rem;color:var(--text3);margin-top:6px;line-height:1.5">'
+      + 'Re-ejecuta el motor para todas las rondas con los parámetros actuales. '
+      + 'Conserva decisiones originales y shocks. '
+      + 'Útil cuando cambias costos de MP, proveedores o parámetros de industria.</div>'
+      + '</div>';
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
   }
