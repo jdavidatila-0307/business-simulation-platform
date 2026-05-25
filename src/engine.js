@@ -501,15 +501,46 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoIntereses  = interesesPrestamo;
   const pagoApertura   = comisionApertura;
 
-  // ── FASE 0-D: IVA Bolivia (Ley 843) ──────────────────────────────────────
-  // El precio que decide el equipo es el precio FACTURADO al cliente (incluye IVA).
-  // El IVA se extrae en calcularVentas → ventasBrutas ya es el ingreso real sin IVA.
-  // El IVA es un tributo NEUTRO para la empresa: lo cobra al cliente y lo entrega al Estado.
-  // NO aparece como gasto en el P&L — solo fluye por Caja y Balance.
+  // ── FASE 0-D + FASE 2: IVA Bolivia (Ley 843) — crédito fiscal completo ─────
+  // ivaDebito: IVA cobrado al cliente sobre ventas (extraído del precio facturado)
+  // ivaCredito: IVA pagado a proveedores en TODAS las compras con factura
+  //   • Insumos materiales (costoBase + costoCanal) × produccion  → factura proveedor
+  //   • Servicios externos de marketing                           → factura agencia
+  //   • Investigación de mercado                                  → factura consultora
+  //   • Innovación (servicio externo)                             → factura proveedor
+  //   • Comisiones de canal                                       → factura distribuidor
+  //   • Comisión apertura préstamo                                → factura banco
+  //   • Almacenamiento externo                                    → factura bodega
+  //   SIN IVA crédito: sueldos (relación laboral), depreciación,
+  //                    gastos admin/planta fijos (mixtos — simplificado sin IVA),
+  //                    intereses (exentos Ley 843 Art. 2)
   const tasaIVA    = params.tasaIVA ?? 0.13;
-  const ivaDebito  = ivaDebitoVentas;  // extraído en calcularVentas: totalFacturado × tasaIVA
-  const ivaCredito = roundBs(roundBs((d.produccion || 0) * costoUnitario) * tasaIVA);  // IVA en compras
-  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));  // neto a pagar al Estado
+  const ivaDebito  = ivaDebitoVentas;  // totalFacturado × tasaIVA (Fase 0)
+
+  // ── Base de insumos materiales: solo componentes con factura de proveedor ──
+  // costoBase (MP) + costoCanal_unit — excluye costoCalidad (mano obra) e innovación
+  const costoBaseP  = d.costoBaseProducto  || 0;
+  const costoCanal_unit = roundBs(costoUnitario - costoBaseP
+    - (d.costoCalidadUnit || 0) - (d.costoMPunitario || 0));
+  const baseInsumos = roundBs((costoBaseP + costoCanal_unit + (d.costoMPunitario || 0))
+    * ((d.produccion || 0) + inventarioFinal));  // producido (vendido + stock)
+
+  // ── Servicios externos con factura ───────────────────────────────────────
+  const baseServicios = roundBs(
+    (d.publicidad          || 0) +
+    (d.promocion           || 0) +
+    (d.eventos             || 0) +
+    (d.marketingRedes      || 0) +
+    (d.relacionesPublicas  || 0) +
+    gastoInvestigacion_mkt       +   // Básica/Premium/Estratégico
+    gastoInnovacion              +   // I+D externo
+    comisiones                   +   // distribuidor factura por su comisión
+    comisionApertura             +   // banco factura comisión apertura
+    costoAlmacenamiento              // bodega externa factura almacenaje
+  );
+
+  const ivaCredito = roundBs((baseInsumos + baseServicios) * tasaIVA);
+  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
   const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
 
   // IT (3% sobre totalFacturado = precio con IVA) — base correcta Ley 843: ingresos brutos

@@ -3874,7 +3874,6 @@ window.mostrarFinanciero = (n) => {
         ${finRow('Marketing en redes',         -r.marketingRedes,      false,'neg')}
         ${finRow('Relaciones públicas',        -r.relacionesPublicas,  false,'neg')}
         ${finRow('Fuerza de ventas',           -r.costoVendedores,     false,'neg')}
-        ${finRow('Comisiones de canal',        -r.comisiones,          false,'neg')}
 
         <!-- GASTOS ADMINISTRATIVOS -->
         <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Administrativos</div>
@@ -3911,8 +3910,15 @@ window.mostrarFinanciero = (n) => {
 
         <!-- IMPUESTOS -->
         <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Impuestos</div>
-        ${finRow('IT (3% ventas brutas)',       -r.impuestoIT,          false,'neg')}
+        ${finRow('IT (3% precio facturado)',     -r.impuestoIT,          false,'neg')}
         ${r.impuestoIUE>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE), false,'neg') : ''}
+        <div style="margin-top:10px;padding:8px 10px;background:rgba(59,130,246,.07);border-radius:6px;border-left:3px solid #3B82F6;font-size:.73rem;color:var(--text3);line-height:1.6">
+          <strong style="color:#3B82F6">ⓘ IVA — tributo neutro para la empresa (Ley 843)</strong><br>
+          Débito fiscal (ventas): ${fmt.bs(r.ivaDebito||0)}&nbsp;&nbsp;·&nbsp;&nbsp;
+          Crédito fiscal (compras + servicios con factura): ${fmt.bs(r.ivaCredito||0)}<br>
+          <strong>IVA neto a pagar al Estado: ${fmt.bs(r.ivaAPagar||0)}</strong><br>
+          El IVA no es gasto — la empresa lo cobra al cliente y entrega el neto al Estado.
+        </div>
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
         ${finRowSub('= Utilidad neta',         r.utilidadNeta,         true)}
       </div>
