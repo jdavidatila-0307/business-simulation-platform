@@ -964,6 +964,9 @@ function ejecutarSimulador(decisiones, cfg) {
       costoBaseProducto:   (tiposProducto[d.producto]?.costoBase ?? 0),
       costoCalidadUnit:    roundBs(0.20 * (d.calidad || 5)),
       proveedorElegido:    d.proveedorElegido || null,
+      // Desglose visual correcto post-rediseño MP
+      costoTransformacion: roundBs((tiposProducto[d.producto]?.costoBase ?? 0) * (1 - (paramsConProveedores.pctMateriaPrima ?? 0.40))),
+      costoCanal_calc:     roundBs(cu - (tiposProducto[d.producto]?.costoBase ?? 0) * (1 - (paramsConProveedores.pctMateriaPrima ?? 0.40)) - costoMPunit - roundBs(0.20 * (d.calidad || 5))),
       alertaCaja:      fin.cajaFinal < 500 ? 'ALERTA' : 'OK',
     };
   });
