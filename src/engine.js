@@ -492,7 +492,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
   // Etapa 3.3: IVA Bolivia (13%)
   const tasaIVA   = params.tasaIVA ?? 0.13;
-  const ivaDebito  = roundBs(ventasNetas * tasaIVA);
+  const ivaDebito  = roundBs(ventasBrutas * tasaIVA);  // FASE 1: base correcta = precio facturado al cliente (Ley 843)
   const ivaCredito = roundBs(roundBs((d.produccion || 0) * costoUnitario) * tasaIVA);
   const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
   const pagoIVA    = ivaAPagar;
@@ -506,7 +506,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const tasaIUE       = params.tasaIUE ?? 0.25;
   const periodosIUE   = params.periodosIUE ?? 4;
   const rondaActual   = d.rondaNumero ?? 0;
-  const utilGravable  = Math.max(0, roundBs(utilidadNeta - ivaAPagar - impuestoIT));
+  const utilGravable  = Math.max(0, roundBs(utilidadNeta_operat - ivaAPagar - impuestoIT));  // FASE 3: base limpia sin doble descuento
   const impuestoIUE   = (rondaActual > 0 && rondaActual % periodosIUE === 0)
     ? roundBs(utilGravable * tasaIUE)
     : 0;
