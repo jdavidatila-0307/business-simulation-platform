@@ -978,8 +978,33 @@ async function loadAdminDashboard() {
   if (ronda.roundState === 'simulated') {
     try {
       const rd = await api('GET', `/admin/resultados/${ronda.currentRound}`);
-      bottomHTML = buildAdminResultsHTML(rd);
-      bottomHTML += buildAdminChartsHTML(rd, ronda.currentRound);
+      // Dashboard: solo mini-resumen (ranking + charts) sin IDs duplicados
+      // El panel completo con tabs está en 📈 Resultados
+      if (rd?.resultados?.length) {
+        const PALETTE_D = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+        const tcD = i => PALETTE_D[i % PALETTE_D.length];
+        const bsD = v => {
+          if (!v && v!==0) return '—';
+          const n = Math.round(Math.abs(v)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+          return v < 0 ? '<span style="color:#EF4444">(Bs. '+n+')</span>' : '<span style="color:#10B981">Bs. '+n+'</span>';
+        };
+        const sorted = [...rd.resultados].sort((a,b)=>(b.utilidadNeta||0)-(a.utilidadNeta||0));
+        const miniRows = sorted.map((r,rank) => {
+          const i = rd.resultados.findIndex(e=>e.equipoNombre===r.equipoNombre);
+          const sem = (r.utilidadNeta||0)>0?'🟢':(r.utilidadNeta||0)>-50000?'🟡':'🔴';
+          return '<tr style="border-bottom:1px solid var(--border);'+(rank===0?'background:rgba(6,255,165,.05)':'')+'"><td style="padding:6px 10px;font-weight:700;color:'+tcD(i)+'">'+(rank+1)+'</td><td style="padding:6px 10px"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+tcD(i)+';margin-right:5px;vertical-align:middle"></span>'+r.equipoNombre+'</td><td style="padding:6px 10px;text-align:right;font-family:var(--font-mono);font-size:.8rem">'+bsD(r.utilidadNeta||0)+'</td><td style="padding:6px 10px;text-align:right;font-family:var(--font-mono);font-size:.8rem">'+bsD(r.cajaFinal||0)+'</td><td style="padding:6px 10px;text-align:center">'+sem+'</td></tr>';
+        }).join('');
+        bottomHTML = '<div style="margin-top:14px">'
+          + '<div style="font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Ranking · Ronda '+ronda.currentRound+'</div>'
+          + '<div class="table-wrap"><table style="width:100%;border-collapse:collapse"><thead><tr>'
+          + '<th style="padding:5px 10px;font-size:.7rem">#</th><th style="padding:5px 10px;font-size:.7rem">Empresa</th>'
+          + '<th style="padding:5px 10px;font-size:.7rem;text-align:right">Utilidad Neta</th>'
+          + '<th style="padding:5px 10px;font-size:.7rem;text-align:right">Caja Final</th>'
+          + '<th style="padding:5px 10px;font-size:.7rem;text-align:center">Estado</th></tr></thead>'
+          + '<tbody>'+miniRows+'</tbody></table></div>'
+          + '<p style="font-size:.75rem;color:var(--text3);margin-top:8px;text-align:right">Ver análisis completo → <strong>📈 Resultados</strong></p>'
+          + '</div>';
+      }
     } catch {}
   } else if (ronda.roundState === 'pre-sim') {
     // Show pre-sim confirmation progress
