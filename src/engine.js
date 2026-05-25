@@ -547,12 +547,21 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaDebito  = ivaDebitoVentas;  // totalFacturado × tasaIVA (Fase 0)
 
   // ── Base de insumos materiales: solo componentes con factura de proveedor ──
-  // costoBase (MP) + costoCanal_unit — excluye costoCalidad (mano obra) e innovación
-  const costoBaseP  = d.costoBaseProducto  || 0;
-  const costoCanal_unit = roundBs(costoUnitario - costoBaseP
-    - (d.costoCalidadUnit || 0) - (d.costoMPunitario || 0));
-  const baseInsumos = roundBs((costoBaseP + costoCanal_unit + (d.costoMPunitario || 0))
-    * ((d.produccion || 0) + inventarioFinal));  // producido (vendido + stock)
+  // Post rediseño MP: el CU tiene nueva estructura
+  //   costoTrans   = costoBase × (1 − pctMP)   → sin factura externa
+  //   componenteMP = costoBase × pctMP × factorCosto → factura proveedor
+  //   costoCalidad → sin factura externa (proceso interno)
+  //   costoCanal   → CON factura (comisiones ya están en baseServicios)
+  //   efInnovacion → con factura si es externo (ya en baseServicios)
+  // Por tanto baseInsumos = solo componenteMP × pares producidos
+  const costoBaseP   = d.costoBaseProducto || 0;
+  const pctMP_iva    = params.pctMateriaPrima ?? 0.40;
+  const factorC_iva  = (d.costoMPunitario && costoBaseP * pctMP_iva > 0)
+    ? d.costoMPunitario / (costoBaseP * pctMP_iva)
+    : 1.0;
+  // Costo de MP por par (lo que se pagó al proveedor con factura)
+  const costoMPporPar = roundBs(costoBaseP * pctMP_iva * factorC_iva);
+  const baseInsumos   = roundBs(costoMPporPar * ((d.produccion || 0) + inventarioFinal));
 
   // ── Servicios externos con factura ───────────────────────────────────────
   const baseServicios = roundBs(

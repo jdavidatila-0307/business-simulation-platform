@@ -1390,7 +1390,7 @@ function buildAdminKPIHTML(eqs, tc) {
       costoUnitP:       r.costoUnitario || 0,
       costoBase_p:      r.costoBaseProducto || 0,
       costoCalidad_p:   r.costoCalidadUnit  || 0,
-      costoCanal_p:     roundBs((r.costoUnitario||0) - (r.costoBaseProducto||0) - (r.costoCalidadUnit||0) - (r.costoMPunitario||0)),
+      costoCanal_p:     roundBs((r.costoUnitario||0) - (r.costoBaseProducto||0) - (r.costoCalidadUnit||0) - (r.costoMPunitario||0) - (r.efInnovacion||0)),
       costoMP_p:        r.costoMPunitario   || 0,
       proveedor_p:      r.proveedorElegido  || '—',
       stockMP:          r.stockMPFinal      ?? null,
@@ -1496,7 +1496,7 @@ function buildAdminKPIHTML(eqs, tc) {
         [{val:0,color:S.gris}], 'Costo base fijo definido por la industria para este producto')
     + kpiRow('  └ Factor calidad (Bs)', v.map(e=>e.costoCalidad_p), bs,
         [{val:0,color:S.gris}], '0.20 × nivel de calidad elegido')
-    + kpiRow('  └ Costo canal distribución (Bs)', v.map(e=>e.costoCanal_p), bs,
+    + kpiRow('  └ Costo canal distribución (Bs)', v.map(e=>Math.max(0,e.costoCanal_p)), bs,
         [{val:0,color:S.gris}], 'Costo adicional por unidad según canal principal y secundario')
     + kpiRow('  └ Costo MP proveedor (Bs)', v.map(e=>e.costoMP_p), bs,
         [{val:0,color:S.verde}], 'costoMP × unidadesMPporUnidad — 0 si no hay proveedor configurado')
@@ -3715,7 +3715,7 @@ window.mostrarKpiRonda = (n, historial) => {
           ${kpiRow('Costo unitario TOTAL (Bs)',     fmt.d(r.costoUnitario,2))}
           ${kpiRow('  └ Base producto (Bs)',        r.costoBaseProducto!=null?fmt.d(r.costoBaseProducto,2):'—')}
           ${kpiRow('  └ Factor calidad (Bs)',       r.costoCalidadUnit!=null?fmt.d(r.costoCalidadUnit,2):'—')}
-          ${kpiRow('  └ Canal distribución (Bs)',   r.costoMPunitario!=null&&r.costoBaseProducto!=null?fmt.d((r.costoUnitario||0)-(r.costoBaseProducto||0)-(r.costoCalidadUnit||0)-(r.costoMPunitario||0),2):'—')}
+          ${kpiRow('  └ Canal distribución (Bs)',   r.costoMPunitario!=null&&r.costoBaseProducto!=null?fmt.d(Math.max(0,(r.costoUnitario||0)-(r.costoBaseProducto||0)-(r.costoCalidadUnit||0)-(r.costoMPunitario||0)),2):'—')}
           ${kpiRow('  └ MP proveedor (Bs)',         r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—', r.costoMPunitario>0?'var(--accent3)':'')}
           ${kpiRow('Proveedor activo',              r.proveedorElegido||'Sin proveedor')}
         </table>
