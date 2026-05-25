@@ -1100,10 +1100,28 @@ async function route(req, res, body) {
       }
     }
 
-    // Generar shock de mercado para esta ronda (determinista por simId+ronda)
+    // Generar shock de mercado — aleatorio o elegido por el profesor
     const probabilidadShock = sim.parametros.probabilidadShock ?? 0.35;
-    const shock = generarShock(sim.id, n, probabilidadShock);
-    console.log(`[server] Shock R${n}: [${shock.tipo}] ${shock.descripcion} (factor=${shock.factorDemanda})`);
+    let shock;
+    if (body.shockOverride && body.shockOverride !== 'aleatorio') {
+      // El profesor eligió un shock específico del catálogo
+      const shockElegido = SHOCKS_CATALOGO.find(s => s.id === body.shockOverride);
+      if (shockElegido) {
+        shock = { ...shockElegido, forzadoPor: 'profesor' };
+        console.log(`[server] Shock R${n} FORZADO por profesor: [${shock.tipo}] ${shock.descripcion}`);
+      } else if (body.shockOverride === 'neutral') {
+        shock = { id:'neutral', tipo:'neutral', icono:'⚖️', color:'#6B7280',
+                  descripcion:'Mercado estable — sin eventos externos esta ronda',
+                  factorDemanda:1.00, segmentosAfectados:'todos', forzadoPor:'profesor' };
+        console.log(`[server] Shock R${n} FORZADO neutral por profesor`);
+      } else {
+        shock = generarShock(sim.id, n, probabilidadShock);
+        console.log(`[server] Shock R${n} (aleatorio): [${shock.tipo}] ${shock.descripcion}`);
+      }
+    } else {
+      shock = generarShock(sim.id, n, probabilidadShock);
+      console.log(`[server] Shock R${n} (aleatorio): [${shock.tipo}] ${shock.descripcion} (factor=${shock.factorDemanda})`);
+    }
 
     const simCfg = {
       meta:                  sim.config.industria ? { nombre: sim.config.industria } : {},

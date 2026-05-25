@@ -1094,6 +1094,38 @@ async function loadAdminDashboard() {
       </div>
     </div>
 
+    <!-- Selector de Shock — solo visible cuando hay botón de simulación -->
+    ${['locked','pre-sim'].includes(ronda.roundState) ? `
+    <div style="margin-bottom:16px;padding:14px 18px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2)">
+      <div style="font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">
+        ⚡ Shock de Mercado — Ronda ${ronda.currentRound}
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="font-size:.82rem;color:var(--text2);white-space:nowrap">Evento a aplicar:</label>
+        <select id="shockOverrideSelect" class="form-input" style="width:auto;min-width:280px;font-size:.83rem;padding:6px 10px">
+          <option value="aleatorio">🎲 Aleatorio (sistema decide)</option>
+          <optgroup label="── Boom (mercado favorable) ──">
+            <option value="boom_macro">📈 Crecimiento económico regional (+18% todos)</option>
+            <option value="boom_feria">🏪 Feria comercial internacional (+12% todos)</option>
+            <option value="boom_tend">🚀 Tendencia viral en redes (+25% seg. jóvenes)</option>
+            <option value="boom_export">🌍 Acuerdo comercial regional (+15% todos)</option>
+          </optgroup>
+          <optgroup label="── Crisis (mercado adverso) ──">
+            <option value="crisis_rec">📉 Recesión económica (−18% todos)</option>
+            <option value="crisis_imp">⚠️ Importaciones ilegales (−13% todos)</option>
+            <option value="crisis_reg">🏛️ Nueva regulación sectorial (−12% todos)</option>
+            <option value="crisis_inf">💸 Inflación segmento premium (−20% seg. 2-3)</option>
+          </optgroup>
+          <optgroup label="── Sin evento ──">
+            <option value="neutral">⚖️ Mercado estable (sin impacto)</option>
+          </optgroup>
+        </select>
+        <span style="font-size:.74rem;color:var(--text3);font-style:italic">
+          El aleatorio usa semilla determinista — siempre da el mismo resultado para esta ronda.
+        </span>
+      </div>
+    </div>` : ''}
+
     <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
       ${ronda.roundState === 'pending'
         ? `<button class="btn btn-success" id="btnActivarDash">▶ Activar Hoja de Decisiones — Ronda ${ronda.currentRound}</button>`
@@ -1137,14 +1169,23 @@ async function loadAdminDashboard() {
   document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
   async function doSimular(n) {
     const estado = ronda.roundState;
+    // Leer shock elegido por el profesor (o 'aleatorio' si no tocó el selector)
+    const shockOverride = document.getElementById('shockOverrideSelect')?.value || 'aleatorio';
+    const shockLabel = document.getElementById('shockOverrideSelect')?.options[
+      document.getElementById('shockOverrideSelect')?.selectedIndex]?.text || 'Aleatorio';
+
+    const shockInfo = shockOverride !== 'aleatorio'
+      ? '\n\n⚡ Shock seleccionado: ' + shockLabel
+      : '\n\n🎲 Shock: aleatorio (el sistema decide)';
+
     const msg = estado === 'pre-sim'
-      ? '¿Ejecutar Simulación FINAL de la Ronda ' + n + '?\n\nTodos los resultados serán calculados.'
-      : '¿Ejecutar Simulación de la Ronda ' + n + ' sin pre-simulación?\n\nEsta acción no se puede deshacer.';
+      ? '¿Ejecutar Simulación FINAL de la Ronda ' + n + '?' + shockInfo + '\n\nTodos los resultados serán calculados.'
+      : '¿Ejecutar Simulación de la Ronda ' + n + ' sin pre-simulación?' + shockInfo + '\n\nEsta acción no se puede deshacer.';
     if (!confirm(msg)) return;
     try {
       const btn = document.getElementById('btnSimularDash');
       if (btn) { btn.disabled = true; btn.textContent = '⏳ Ejecutando...'; }
-      await api('POST', '/admin/simular', { ronda: n });
+      await api('POST', '/admin/simular', { ronda: n, shockOverride });
       toast('✅ Simulación completada — Ronda ' + n, 'success');
       await loadAdminDashboard();
     } catch(e) {
@@ -1734,7 +1775,8 @@ function buildAdminResultsHTML(rd) {
       + '<div style="font-weight:700;font-size:.82rem;color:' + color + ';text-transform:uppercase;letter-spacing:1px">'
       + 'SHOCK DE MERCADO · Ronda ' + (rd.ronda || '') + ' · ' + (sh.tipo?.toUpperCase() || 'EVENTO') + '</div>'
       + '<div style="font-size:.85rem;color:var(--text1);margin-top:2px">' + sh.descripcion + '</div>'
-      + '<div style="font-size:.75rem;color:var(--text3);margin-top:3px">' + segs + factor + '</div>'
+      + '<div style="font-size:.75rem;color:var(--text3);margin-top:3px">' + segs + factor
+      + (sh.forzadoPor === 'profesor' ? ' &nbsp;·&nbsp; <span style="color:var(--accent3);font-weight:600">📌 Elegido por el profesor</span>' : '') + '</div>'
       + '</div></div>';
   })();
 
