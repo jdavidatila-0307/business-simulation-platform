@@ -216,12 +216,21 @@ function procesarPedidosMP(d, rondaNumero, params) {
   let pagoMP = 0;
 
   if (cantidadPedida > 0 && proveedor) {
-    const provData = (params._proveedores || []).find(p => p.id === proveedor || p.nombre === proveedor);
-    const costoUnitMP = provData?.costoMP ?? 0;
+    const provData    = (params._proveedores || []).find(p => p.id === proveedor || p.nombre === proveedor);
     const leadTime    = provData?.leadTime ?? 1;
+    // Costo del pedido: costoMPbase × factorCosto × cantidad
+    // costoMPbase = costoBase del producto × pctMateriaPrima
+    // Aquí no tenemos el costoBase por producto directamente, usamos el costoUnitario
+    // como aproximación del pagoMP (pago al momento del pedido)
+    const pctMP_mp    = params.pctMateriaPrima ?? 0.40;
+    const factorC     = provData?.factorCosto   ?? 1.0;
+    // pagoMP = costo estándar × factorProveedor × cantidad
+    // El costoUnitario actual refleja el precio con el proveedor anterior
+    // Para el pago del pedido usamos: (costoUnitario × pctMP × factorCosto)
+    const costoUnitMP = roundBs((params.costoUnitarioRef ?? 0) * pctMP_mp * factorC);
     pagoMP = roundBs(cantidadPedida * costoUnitMP);
     if (leadTime === 0) {
-      stockRecibido += cantidadPedida;   // entrega inmediata
+      stockRecibido += cantidadPedida;
     } else {
       pendientesResta.push({ rondaEntrega: rondaNumero + leadTime, cantidad: cantidadPedida, costoMP: costoUnitMP });
     }
@@ -232,8 +241,16 @@ function procesarPedidosMP(d, rondaNumero, params) {
 }
 
 // ── Paso 3: Costo unitario ─────────────────────────────────────
-// CU = costoBase + (0.20 × calidad) + costoCanal_prom + efecto_innovacion + costoMPunitario
-// costoMPunitario = costoMP_proveedor × unidadesMPporUnidad (si hay proveedor configurado)
+// CU = costoTransformacion + costoMP_ajustado + costoCalidad + costoCanal + efInnovacion
+//
+// Diseño de la MP:
+//   pctMateriaPrima (ej 0.40) → porcentaje del costoBase que representa materiales
+//   costoTransformacion = costoBase × (1 − pctMP)  → MOD + overhead, siempre igual
+//   costoMPbase = costoBase × pctMP                → costo estándar de materiales
+//   costoMP_ajustado = costoMPbase × factorCosto_proveedor
+//     factorCosto = 1.00 → Nacional (precio estándar)
+//     factorCosto = 0.65 → Importado (35% más barato, menor calidad, lead time 2)
+//   Sin proveedor → factorCosto = 1.0 → CU = costoBase (sin cambio)
 function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitario = 0) {
   // FIX: recuperar producto del campo legado tipoProducto si el canónico está vacío
   if (!d.producto && d.tipoProducto) {
@@ -279,11 +296,23 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
     // Canal: mejora atractivo, no afecta CU directamente
   }
 
-  // Materia prima: costo del proveedor elegido por unidad producida
-  // Solo aplica si hay proveedor con precio configurado
-  const componenteMP = costoMPunitario > 0 ? costoMPunitario : 0;
+  // ── Materia Prima con factorCosto del proveedor ──────────────────
+  // pctMateriaPrima: % del costoBase que son materiales (configurable, default 40%)
+  // factorCosto: multiplicador del proveedor sobre el costo estándar de MP
+  //   Nacional  → 1.00 (precio completo, leadTime 1)
+  //   Importado → 0.65 (35% ahorro, leadTime 2, calidad menor)
+  const pctMP         = params.pctMateriaPrima ?? 0.40;
+  const costoTrans    = roundBs(costoBase * (1 - pctMP));   // transformación: fijo
+  const costoMPbase   = roundBs(costoBase * pctMP);         // MP al precio estándar
 
-  return roundBs(costoBase + costoCalidad + costoCanal + efInnovacion + componenteMP);
+  // factorCosto viene de costoMPunitario: lo calculamos en ejecutarSimulador
+  // Si no hay proveedor → factorCosto = 1.0 → CU = costoBase (sin cambio)
+  const factorCosto   = costoMPbase > 0
+    ? (costoMPunitario > 0 ? costoMPunitario / costoMPbase : 1.0)
+    : 1.0;
+  const componenteMP  = roundBs(costoMPbase * factorCosto);
+
+  return roundBs(costoTrans + componenteMP + costoCalidad + costoCanal + efInnovacion);
 }
 
 // ── Brand Equity: cálculo acumulativo por ronda ───────────────
@@ -558,11 +587,25 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     ? roundBs(utilGravable * tasaIUE)
     : 0;
   const provisionIUE = roundBs(utilGravable * tasaIUE / periodosIUE);
-  const pagoIT       = impuestoIT;
-  const pagoIUE      = impuestoIUE;
 
-  // P&L: IVA NO es gasto de la empresa — solo IT e IUE reducen la utilidad neta
-  const totalImpuestos = roundBs(impuestoIT + impuestoIUE);  // FASE 0: IVA excluido del P&L
+  // ── FASE 4: Compensación IUE → IT (DS 5563) ──────────────────────────────
+  // El IUE efectivamente pagado genera un crédito que se compensa contra el IT
+  // de los trimestres siguientes, hasta agotar el saldo disponible.
+  // El IT sigue siendo GASTO del período (principio devengado) aunque no salga de caja.
+  // Solo el PAGO efectivo de caja se reduce por la compensación.
+  const saldoIUEant      = d.saldoIUEcompensable ?? 0;  // saldo del período anterior
+  const compensacionIT   = roundBs(Math.min(impuestoIT, saldoIUEant));  // cuánto del IT se cubre con IUE
+  const ITefectivoCaja   = roundBs(impuestoIT - compensacionIT);         // lo que sale de caja
+  // El saldo se recarga cuando se paga IUE (en ronda múltiplo de periodosIUE)
+  // y se reduce por la compensación usada este período
+  const saldoIUEfinal    = roundBs(saldoIUEant - compensacionIT + impuestoIUE);
+
+  const pagoIT  = ITefectivoCaja;   // CAJA: solo lo que no se pudo compensar
+  const pagoIUE = impuestoIUE;      // CAJA: IUE se paga siempre que corresponde
+
+  // P&L: IVA NO es gasto — solo IT e IUE son gastos del período (devengado)
+  // Nota: IT es gasto completo aunque parte salga de compensación (devengado ≠ percibido)
+  const totalImpuestos = roundBs(impuestoIT + impuestoIUE);  // FASE 0+4
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // FIX balance: costo operarios sale de caja
@@ -662,8 +705,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // Etapa 3.3: obligaciones fiscales IVA
     ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
 
-    // Etapa 3.4: IT e IUE
+    // Etapa 3.4: IT e IUE + compensación IUE→IT (Fase 4)
     impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
+    compensacionIT, ITefectivoCaja, saldoIUEfinal, saldoIUEant,
 
     // Etapa 3.1: materia prima (stockMPFinal se calcula en ejecutarSimulador)
     stockMPFinal:           d.stockMPFinal ?? null,
@@ -869,14 +913,19 @@ function ejecutarSimulador(decisiones, cfg) {
       pagoMP:                 mpData.pagoMP,
     };
 
-    // Costo unitario de MP: costoMP_proveedor × unidadesMPporUnidad
-    // Se incorpora al CU para reflejar el costo real de materiales en el P&L
+    // Costo MP ajustado por factorCosto del proveedor
+    // costoMPbase = costoBase × pctMateriaPrima (costo estándar de materiales)
+    // costoMPunit = costoMPbase × factorCosto_proveedor
+    //   → se pasa a calcularCostoUnitario para reemplazar la porción MP del costoBase
     const provData_cu   = (paramsConProveedores._proveedores || []).find(
       p => p.id === d.proveedorElegido || p.nombre === d.proveedorElegido
     );
-    const costoMPunit   = provData_cu
-      ? roundBs((provData_cu.costoMP ?? 0) * (paramsConProveedores.unidadesMPporUnidad ?? 1))
-      : 0;
+    const pctMP_cu      = paramsConProveedores.pctMateriaPrima ?? 0.40;
+    const tp_cu         = tiposProducto[d.producto] || tiposProducto[d.tipoProducto];
+    const costoBase_cu  = tp_cu?.costoBase ?? 0;
+    const costoMPbase   = roundBs(costoBase_cu * pctMP_cu);
+    const factorCosto   = provData_cu?.factorCosto ?? 1.0;
+    const costoMPunit   = roundBs(costoMPbase * factorCosto);
 
     const cu         = calcularCostoUnitario(d, tiposProducto, canales, paramsConProveedores, costoMPunit);
     const share      = sharesPorEquipo[d.equipo] || 0;

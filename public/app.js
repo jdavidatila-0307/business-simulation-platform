@@ -2009,6 +2009,7 @@ async function loadAdminParametros() {
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
         ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
+        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40%)','pctMateriaPrima')}
       </div>
 
       <div class="param-card">
@@ -4047,7 +4048,11 @@ window.mostrarFinanciero = (n) => {
         ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0   ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0),   false,'neg') : ''}
         ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',      -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
         ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0                ? finRow('Pago de almacenamiento',         -(r.pagoAlmacenamiento||r.pagoAlmacen||0),               false,'neg') : ''}
-        ${(r.totalImpuestos||0)>0                   ? finRow('Pago de impuestos',             -(r.totalImpuestos||0),                                false,'neg') : ''}
+        ${(r.pagoIVA||0)>0 ? finRow('Pago IVA neto al Estado', -(r.pagoIVA||0), false,'neg') : ''}
+        ${(r.pagoIT||0)>0  ? finRow('Pago IT (efectivo)',    -(r.pagoIT||0),  false,'neg') : ''}
+        ${(r.compensacionIT||0)>0 ? finRow('IT compensado con IUE (DS 5563)', r.compensacionIT||0, false,'pos') : ''}
+        ${(r.pagoIUE||0)>0 ? finRow('Pago IUE',              -(r.pagoIUE||0), false,'neg') : ''}
+        ${(r.saldoIUEfinal||0)>0 ? finRow('Saldo IUE compensable próx. trimestre', r.saldoIUEfinal||0, false,'neutral') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
         ${(() => {
           const entOp = (r.cobrosContado||0);
