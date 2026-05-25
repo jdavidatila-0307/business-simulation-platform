@@ -110,22 +110,35 @@ function expandirDecisionesMultiproducto(decisiones) {
 // Demanda formal = demandaBase_T × (1 - pctContrabando)
 // demandaBaseAnteriorMap: { [nombreSegmento]: demandaBase de ronda anterior }
 // Si no existe (ronda 1), usa el valor estático del JSON.
-function calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap = {}) {
-  return segmentos.map(seg => {
+function calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap = {}, shock = null) {
+  return segmentos.map((seg, idx) => {
     // Etapa 2.2: aplicar crecimiento sobre la demanda de la ronda anterior
     const baseAnterior = demandaBaseAnteriorMap[seg.nombre] ?? seg.demandaBase;
     const tasa         = seg.tasaCrecimiento ?? 0;
     const demandaBaseT = Math.round(baseAnterior * (1 + tasa));
+    const demandaFormalBase = Math.round(demandaBaseT * (1 - seg.pctContrabando));
+
+    // Shock de mercado: multiplicador sobre demanda formal
+    let factorShock = 1.0;
+    if (shock && shock.tipo !== 'neutral') {
+      const afectaTodos = shock.segmentosAfectados === 'todos';
+      const afectaEste  = afectaTodos ||
+        (Array.isArray(shock.segmentosAfectados) && shock.segmentosAfectados.includes(idx));
+      if (afectaEste) factorShock = shock.factorDemanda ?? 1.0;
+    }
+
     return {
-      nombre:              seg.nombre,
-      demandaBase:         demandaBaseT,          // actualizada con crecimiento
-      demandaBaseOriginal: seg.demandaBase,        // valor estático del JSON
-      pctContrabando:      seg.pctContrabando,
-      demandaFormal:       Math.round(demandaBaseT * (1 - seg.pctContrabando)),
-      tendencia:           seg.tendencia,
-      tasaCrecimiento:     tasa,
-      descripcion:         seg.descripcion,
-      indiceExterno:       seg.indiceExterno,
+      nombre:               seg.nombre,
+      demandaBase:          demandaBaseT,
+      demandaBaseOriginal:  seg.demandaBase,
+      pctContrabando:       seg.pctContrabando,
+      demandaFormal:        Math.round(demandaFormalBase * factorShock),
+      demandaFormalSinShock: demandaFormalBase,
+      factorShock,
+      tendencia:            seg.tendencia,
+      tasaCrecimiento:      tasa,
+      descripcion:          seg.descripcion,
+      indiceExterno:        seg.indiceExterno,
     };
   });
 }
@@ -410,6 +423,15 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Innovación (gasto operativo)
   const gastoInnovacion = d.innovacion ? (d.montoInnovacion || 0) : 0;
 
+  // Investigación de mercado (gasto operativo — sale de caja y del P&L)
+  const gastoInvestigacion_mkt = (() => {
+    const tipo = d.tipoInvestigacion || 'No';
+    if (tipo === 'Básica')      return params.costoInvestigacionBasica      || 5000;
+    if (tipo === 'Premium')     return params.costoInvestigacionPremium     || 12000;
+    if (tipo === 'Estratégico') return params.costoInvestigacionEstrategico || 20000;
+    return 0;
+  })();
+
   // Financiamiento
   const montoP = d.montoPrestamo || 0;
   const tipoP  = d.tipoPrestamo  || 'Ninguno';
@@ -434,7 +456,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     params.gastoFijoPlanta     +
     params.depreciacionTrimestral +
     costoAlmacenamiento        +
-    gastoInnovacion
+    gastoInnovacion            +
+    gastoInvestigacion_mkt     // Costo de reporte de investigación de mercado
     // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
   );
 
@@ -494,10 +517,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoOperarios  = d.costoOperarios || 0;  // FIX balance: costo operarios sale de caja
   const pagoMP         = d.pagoMP         || 0;  // FIX balance: pago MP sale de caja
 
+  const pagoInvestigacion = gastoInvestigacion_mkt;  // sale de caja este trimestre
   const totalPagos = roundBs(pagoProduccion + pagoMktTotal + pagoAdmin + pagoPlanta +
     pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura
     + pagoIVA + pagoIT + pagoIUE
-    + pagoOperarios + pagoMP);  // +operarios (3.2) +MP (3.1) +IVA (3.3) +IT+IUE (3.4)
+    + pagoOperarios + pagoMP
+    + pagoInvestigacion);  // investigación de mercado
 
   const cajaInicial   = d.cajaInicial || 0;
   const ingresoPrestamo = tipoP !== 'Ninguno' ? montoP : 0;
@@ -608,11 +633,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 // ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────
 function ejecutarSimulador(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix,
-          demandaBaseAnteriorMap = {} } = cfg;           // Etapa 2.2
+          demandaBaseAnteriorMap = {}, shock = null } = cfg;  // Etapa 2.2 + shocks
   decisiones = expandirDecisionesMultiproducto(decisiones);
 
-  // Calcular demanda formal de cada segmento (con crecimiento acumulado)
-  const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap);
+  // Calcular demanda formal de cada segmento (con crecimiento acumulado + shock)
+  const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos, demandaBaseAnteriorMap, shock);
   const segmentoPorNombre = {};
   mercadoSegmentos.forEach((s, i) => { segmentoPorNombre[s.nombre] = { ...s, idx: i }; });
 

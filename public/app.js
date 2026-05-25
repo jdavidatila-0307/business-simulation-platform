@@ -1948,6 +1948,7 @@ async function loadAdminParametros() {
         <div class="param-card-title">🔍 Investigación de Mercado</div>
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
+        ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
       </div>
 
       <div class="param-card">
@@ -3329,8 +3330,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           <tr><td class="hoja-label">🔍 Tipo de reporte</td>
               <td>${sel('tipoInvestigacion',tipoInvOpts)}</td>
               <td class="hoja-ref">
-                <strong>Básico Bs ${fmt.num(p.costoInvestigacionBasica||4000)}:</strong> tamaño de mercado, precios, alertas<br>
-                <strong>Premium Bs ${fmt.num(p.costoInvestigacionPremium||7500)}:</strong> + participación, sensibilidad, recomendaciones
+                <strong>Básico Bs ${fmt.num(p.costoInvestigacionBasica||5000)}:</strong> tamaño de mercado, precios, alertas del sector<br>
+                <strong>Premium Bs ${fmt.num(p.costoInvestigacionPremium||12000)}:</strong> + participación, sensibilidad, empresas anónimas<br>
+                <strong>Estratégico Bs ${fmt.num(p.costoInvestigacionEstrategico||20000)}:</strong> + nombres reales, elasticidad, punto de equilibrio dinámico
               </td>
               <td>${ta('investigacion','¿Por qué comprar este reporte?')}</td></tr>
         </tbody>

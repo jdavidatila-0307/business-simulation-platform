@@ -1135,6 +1135,7 @@ async function route(req, res, body) {
       rondaNumero:    n,         // Etapa 3.1: número de ronda para lead time
       proveedores:    sim.proveedores || [],  // Etapa 3.1: catálogo de proveedores
       shock,                   // Shock de mercado: afecta demandaFormal de segmentos
+      equipos,                 // Lista de equipos (para reportes Premium/Estratégico)
     };
 
     // ── Generar decisiones de bots ─────────────────────────────────────────
@@ -1219,10 +1220,15 @@ async function route(req, res, body) {
 
       result.resultados.forEach(r => { rondaActualizada.resultados[r.equipo] = r; });
 
+      // Resultados de la ronda anterior (para Estratégico: elasticidad y comparativa)
+      const rondaPreviaData = n > 1 ? await storage.getRonda(sim.id, n - 1) : null;
+      const resultadosAnteriores = rondaPreviaData?.resultados || {};
+
       const reportes = {};
       for (const d of decisiones) {
         reportes[d.equipo] = generarReportes(
-          d, result.mercadoSegmentos, result.atractivoEquipos, rondaActualizada.resultados, simCfg
+          d, result.mercadoSegmentos, result.atractivoEquipos,
+          rondaActualizada.resultados, simCfg, resultadosAnteriores
         );
       }
       rondaActualizada.reportes = reportes;
@@ -1601,6 +1607,7 @@ async function route(req, res, body) {
         parametros: {
           costoInvestigacionBasica: cfg.params.costoInvestigacionBasica,
           costoInvestigacionPremium: cfg.params.costoInvestigacionPremium,
+          costoInvestigacionEstrategico: cfg.params.costoInvestigacionEstrategico || 20000,
           costoContratacionVendedor: cfg.params.costoContratacionVendedor,
           costoDespidoVendedor: cfg.params.costoDespidoVendedor,
           sueldoTrimestralVendedor: cfg.params.sueldoTrimestralVendedor,
