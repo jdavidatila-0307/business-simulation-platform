@@ -1288,6 +1288,8 @@ function buildAdminKPIHTML(eqs, tc) {
       pubGasto:     pub,
       mktTotal:     mktT,
       roiMkt:       r.roiMarketing ?? null,
+      costoMktUnd:  ventU > 0 ? safe(mktT / ventU) : null,
+      ingPorPub:    pub > 0 ? safe(vN / pub) : null,
       brandEquity:  r.brandEquityFinal ?? 50,
       atractivo:    r.atractivo ?? null,
 
@@ -1308,6 +1310,8 @@ function buildAdminKPIHTML(eqs, tc) {
       costoOper:    r.costoOperarios ?? null,
 
       // ── TAB 4 FINANCIERO ──────────────────────────────────
+      costoUnitF:   r.costoUnitario || 0,
+      utilPorUnd:   ventU > 0 ? safe((vN - (r.costoVentas||0)) / ventU) : null,
       mNeto:        vN > 0 ? safe(uN / vN) : null,
       utilNeta:     uN,
       ebitVal:      ebit,
@@ -1363,6 +1367,11 @@ function buildAdminKPIHTML(eqs, tc) {
     + kpiRow('ROI Marketing (x)', v.map(e=>e.roiMkt), x2,
         [{val:2,color:S.verde},{val:1,color:S.ambar},{val:0,color:S.rojo}],
         'Retorno por Bs invertido en marketing. >2x excelente · <1x ineficiente')
+    + kpiRow('Costo Mkt por unidad vendida (Bs)', v.map(e=>e.costoMktUnd), bs,
+        [{val:0,color:S.gris}], 'Gasto total marketing / unidades vendidas')
+    + kpiRow('Ingresos por Bs 1 de publicidad (x)', v.map(e=>e.ingPorPub), x2,
+        [{val:3,color:S.verde},{val:1,color:S.ambar},{val:0,color:S.rojo}],
+        'Ventas netas / gasto en publicidad. >3x eficiente · <1x ineficiente')
     + secRow('⭐ Marca y Posicionamiento')
     + kpiRow('Brand Equity (pts)', v.map(e=>e.brandEquity), d1,
         [{val:70,color:S.verde},{val:50,color:S.ambar},{val:0,color:S.rojo}],
@@ -1415,6 +1424,11 @@ function buildAdminKPIHTML(eqs, tc) {
   // ── TAB 4 — Financiero ───────────────────────────────────────────────────
   const tab4 = tableWrap(
     secRow('📊 Rentabilidad')
+    + kpiRow('Costo unitario (Bs)', v.map(e=>e.costoUnitF), bs,
+        [{val:0,color:S.gris}], 'CostoBase + CalidadFactor + CostoCanal ± Innovación')
+    + kpiRow('Utilidad por unidad vendida (Bs)', v.map(e=>e.utilPorUnd), bs,
+        [{val:20,color:S.verde},{val:0,color:S.ambar},{val:-Infinity,color:S.rojo}],
+        '(Ventas Netas − Costo de Ventas) / Unidades vendidas')
     + kpiRow('Margen bruto (%)', v.map(e=>e.mBruto), pct,
         [{val:.40,color:S.verde},{val:.20,color:S.ambar},{val:0,color:S.rojo}])
     + kpiRow('Margen neto (%)', v.map(e=>e.mNeto), pct,
@@ -3564,14 +3578,14 @@ window.mostrarKpiRonda = (n, historial) => {
               fmt.d(r.roiMarketing??0,2)+'x',
               (r.roiMarketing??0)>=2?'var(--accent5)':(r.roiMarketing??0)>=1?'var(--accent3)':'var(--accent4)',
               (r.roiMarketing??0)>=2?'Excelente':(r.roiMarketing??0)>=1?'Aceptable':'Bajo')}
-          ${kpiRow('Costo por unidad vendida (Mkt)',
+          ${kpiRow('Costo Mkt por unidad vendida (Bs)',
               r.ventasReales>0 ? fmt.bs((r.pagoMktTotal||0)/(r.ventasReales)) : '—',
               'var(--text2)')}
-          ${kpiRow('Ingresos por Bs 1 de publicidad',
+          ${kpiRow('Ingresos por Bs 1 de publicidad (x)',
               r.publicidad>0 ? fmt.d((r.ventasNetas||0)/(r.publicidad),1)+'x' : '—',
               (r.publicidad||0)>0&&(r.ventasNetas||0)/(r.publicidad)>3?'var(--accent5)':'var(--text2)')}
 
-          ${kpiSection('⭐ Marca y Fidelización')}
+          ${kpiSection('⭐ Marca y Posicionamiento')}
           ${kpiRow('Brand Equity',
               (r.brandEquityFinal ?? 50).toFixed(1)+' pts',
               (r.brandEquityFinal||50)>70?'var(--accent5)':(r.brandEquityFinal||50)>50?'var(--accent3)':'var(--accent4)',
