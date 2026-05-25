@@ -3713,9 +3713,23 @@ window.mostrarKpiRonda = (n, historial) => {
           ${kpiRow('Stock MP disponible (unid)',    fmt.num(r.stockMPFinal ?? '—'))}
           <tr><td colspan="2" style="padding:4px 12px;font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;background:rgba(255,255,255,.03)">Desglose Costo Unitario</td></tr>
           ${kpiRow('Costo unitario TOTAL (Bs)',     fmt.d(r.costoUnitario,2))}
-          ${kpiRow('  └ Transformación (MOD+OH, Bs)', r.costoTransformacion!=null?fmt.d(r.costoTransformacion,2):r.costoBaseProducto!=null?fmt.d((r.costoBaseProducto||0)*0.60,2):'—')}
+          ${kpiRow('  └ Transformación (MOD+OH, Bs)', (() => {
+            if (r.costoTransformacion!=null) return fmt.d(r.costoTransformacion,2);
+            if (r.costoBaseProducto)         return fmt.d(Math.round((r.costoBaseProducto||0)*0.60*100)/100,2);
+            // fallback: CU - MPneto - calidad - canal_aprox
+            const pct = 0.60;
+            return fmt.d(Math.round((r.costoUnitario||0)*pct*100)/100,2);
+          })())}
           ${kpiRow('  └ Factor calidad (Bs)',       r.costoCalidadUnit!=null?fmt.d(r.costoCalidadUnit,2):'—')}
-          ${kpiRow('  └ Canal distribución (Bs)',   r.costoCanal_calc!=null?fmt.d(Math.max(0,r.costoCanal_calc),2):r.costoBaseProducto!=null?fmt.d(Math.max(0,(r.costoUnitario||0)-(r.costoTransformacion||0)-(r.costoCalidadUnit||0)-Math.round((r.costoMPunitario||0)*0.87*100)/100),2):'—')}
+          ${kpiRow('  └ Canal distribución (Bs)', (() => {
+            if (r.costoCanal_calc!=null) return fmt.d(Math.max(0,r.costoCanal_calc),2);
+            // fallback: CU − trans − calidad − MPneto − efInnovacion
+            const trans  = r.costoTransformacion || Math.round((r.costoBaseProducto||0)*0.60*100)/100;
+            const cal    = r.costoCalidadUnit    || Math.round(0.20*(r.calidad||5)*100)/100;
+            const mpNeto = Math.round((r.costoMPunitario||0)*0.87*100)/100;
+            const ef     = r.efInnovacionUnit    || 0;
+            return fmt.d(Math.max(0, Math.round(((r.costoUnitario||0)-trans-cal-mpNeto-ef)*100)/100),2);
+          })())}
           ${kpiRow('  └ MP proveedor — factura (Bs)', r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—', r.costoMPunitario>0?'var(--accent3)':'')}
           ${kpiRow('  └   IVA crédito MP (13%)',    r.costoMPunitario>0?fmt.d(Math.round(r.costoMPunitario*0.13*100)/100,2):'—', 'var(--accent5)')}
           ${kpiRow('  └   Costo neto MP en ER',      r.costoMPunitario>0?fmt.d(Math.round((r.costoMPunitario-r.costoMPunitario*0.13)*100)/100,2):'—')}
