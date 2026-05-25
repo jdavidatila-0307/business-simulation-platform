@@ -232,8 +232,9 @@ function procesarPedidosMP(d, rondaNumero, params) {
 }
 
 // ── Paso 3: Costo unitario ─────────────────────────────────────
-// CU = costoBase + (0.20 × calidad) + costoCanal_prom + efecto_innovacion
-function calcularCostoUnitario(d, tiposProducto, canales, params) {
+// CU = costoBase + (0.20 × calidad) + costoCanal_prom + efecto_innovacion + costoMPunitario
+// costoMPunitario = costoMP_proveedor × unidadesMPporUnidad (si hay proveedor configurado)
+function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitario = 0) {
   // FIX: recuperar producto del campo legado tipoProducto si el canónico está vacío
   if (!d.producto && d.tipoProducto) {
     d = { ...d, producto: d.tipoProducto };
@@ -278,7 +279,11 @@ function calcularCostoUnitario(d, tiposProducto, canales, params) {
     // Canal: mejora atractivo, no afecta CU directamente
   }
 
-  return roundBs(costoBase + costoCalidad + costoCanal + efInnovacion);
+  // Materia prima: costo del proveedor elegido por unidad producida
+  // Solo aplica si hay proveedor con precio configurado
+  const componenteMP = costoMPunitario > 0 ? costoMPunitario : 0;
+
+  return roundBs(costoBase + costoCalidad + costoCanal + efInnovacion + componenteMP);
 }
 
 // ── Brand Equity: cálculo acumulativo por ronda ───────────────
@@ -817,7 +822,16 @@ function ejecutarSimulador(decisiones, cfg) {
       pagoMP:                 mpData.pagoMP,
     };
 
-    const cu         = calcularCostoUnitario(d, tiposProducto, canales, paramsConProveedores);
+    // Costo unitario de MP: costoMP_proveedor × unidadesMPporUnidad
+    // Se incorpora al CU para reflejar el costo real de materiales en el P&L
+    const provData_cu   = (paramsConProveedores._proveedores || []).find(
+      p => p.id === d.proveedorElegido || p.nombre === d.proveedorElegido
+    );
+    const costoMPunit   = provData_cu
+      ? roundBs((provData_cu.costoMP ?? 0) * (paramsConProveedores.unidadesMPporUnidad ?? 1))
+      : 0;
+
+    const cu         = calcularCostoUnitario(d, tiposProducto, canales, paramsConProveedores, costoMPunit);
     const share      = sharesPorEquipo[d.equipo] || 0;
     const demFormal  = seg?.demandaFormal || 0;
     const ventas     = calcularVentas(d, share, demFormal, cu);
@@ -840,6 +854,11 @@ function ejecutarSimulador(decisiones, cfg) {
       shareReal:       share,
       atractivo:       atractivoEquipos[d.equipo] || 0,
       ...fin,
+      // Desglose del costo unitario para KPIs y reportes
+      costoMPunitario:     costoMPunit,
+      costoBaseProducto:   (tiposProducto[d.producto]?.costoBase ?? 0),
+      costoCalidadUnit:    roundBs(0.20 * (d.calidad || 5)),
+      proveedorElegido:    d.proveedorElegido || null,
       alertaCaja:      fin.cajaFinal < 500 ? 'ALERTA' : 'OK',
     };
   });

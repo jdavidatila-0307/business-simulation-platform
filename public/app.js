@@ -1365,8 +1365,13 @@ function buildAdminKPIHTML(eqs, tc) {
       invFinalU:    invU,
       invPct:       prod > 0 ? safe(invU / prod * 100) : null,
       capEfectiva:  r.capacidadEfectiva ?? null,
-      costoUnitP:   r.costoUnitario || 0,
-      stockMP:      r.stockMPFinal ?? null,
+      costoUnitP:       r.costoUnitario || 0,
+      costoBase_p:      r.costoBaseProducto || 0,
+      costoCalidad_p:   r.costoCalidadUnit  || 0,
+      costoCanal_p:     roundBs((r.costoUnitario||0) - (r.costoBaseProducto||0) - (r.costoCalidadUnit||0) - (r.costoMPunitario||0)),
+      costoMP_p:        r.costoMPunitario   || 0,
+      proveedor_p:      r.proveedorElegido  || '—',
+      stockMP:          r.stockMPFinal      ?? null,
 
       // ── TAB 3 RRHH ────────────────────────────────────────
       vendFin:      vend,
@@ -1463,8 +1468,16 @@ function buildAdminKPIHTML(eqs, tc) {
     + kpiRow('Capacidad efectiva (pares)', v.map(e=>e.capEfectiva), num,
         [{val:0,color:S.gris}], 'Operarios × Productividad × Factor capacitación')
     + secRow('💰 Costos de Producción')
-    + kpiRow('Costo unitario (Bs)', v.map(e=>e.costoUnitP), bs,
-        [{val:0,color:S.gris}], 'CostoBase + CalidadFactor + CostoCanal ± Innovación')
+    + kpiRow('Costo unitario TOTAL (Bs)', v.map(e=>e.costoUnitP), bs,
+        [{val:0,color:S.gris}], 'CostoBase + Calidad + Canal ± Innovación + MP proveedor')
+    + kpiRow('  └ Costo base producto (Bs)', v.map(e=>e.costoBase_p), bs,
+        [{val:0,color:S.gris}], 'Costo base fijo definido por la industria para este producto')
+    + kpiRow('  └ Factor calidad (Bs)', v.map(e=>e.costoCalidad_p), bs,
+        [{val:0,color:S.gris}], '0.20 × nivel de calidad elegido')
+    + kpiRow('  └ Costo canal distribución (Bs)', v.map(e=>e.costoCanal_p), bs,
+        [{val:0,color:S.gris}], 'Costo adicional por unidad según canal principal y secundario')
+    + kpiRow('  └ Costo MP proveedor (Bs)', v.map(e=>e.costoMP_p), bs,
+        [{val:0,color:S.verde}], 'costoMP × unidadesMPporUnidad — 0 si no hay proveedor configurado')
     + kpiRow('Stock MP disponible (unid)', v.map(e=>e.stockMP), num,
         [{val:0,color:S.gris}], 'Inventario de materia prima al cierre del trimestre')
   );
@@ -3675,6 +3688,13 @@ window.mostrarKpiRonda = (n, historial) => {
           ${kpiRow('Inventario / Producción',       invProd+'%', +invProd>20?'var(--accent4)':'var(--accent5)')}
           ${kpiRow('Capacidad efectiva (pares)',    fmt.num(r.capacidadEfectiva ?? '—'))}
           ${kpiRow('Stock MP disponible (unid)',    fmt.num(r.stockMPFinal ?? '—'))}
+          <tr><td colspan="2" style="padding:4px 12px;font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;background:rgba(255,255,255,.03)">Desglose Costo Unitario</td></tr>
+          ${kpiRow('Costo unitario TOTAL (Bs)',     fmt.d(r.costoUnitario,2))}
+          ${kpiRow('  └ Base producto (Bs)',        r.costoBaseProducto!=null?fmt.d(r.costoBaseProducto,2):'—')}
+          ${kpiRow('  └ Factor calidad (Bs)',       r.costoCalidadUnit!=null?fmt.d(r.costoCalidadUnit,2):'—')}
+          ${kpiRow('  └ Canal distribución (Bs)',   r.costoMPunitario!=null&&r.costoBaseProducto!=null?fmt.d((r.costoUnitario||0)-(r.costoBaseProducto||0)-(r.costoCalidadUnit||0)-(r.costoMPunitario||0),2):'—')}
+          ${kpiRow('  └ MP proveedor (Bs)',         r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—', r.costoMPunitario>0?'var(--accent3)':'')}
+          ${kpiRow('Proveedor activo',              r.proveedorElegido||'Sin proveedor')}
         </table>
       </div>
 
