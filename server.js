@@ -1369,6 +1369,7 @@ async function route(req, res, body) {
           stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
           pedidosPendientes:          estado.pedidosPendientesResta ?? [],
           resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
+          saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
         };
 
         // Multiproducto: propagar también a cada producto del array productos[]
