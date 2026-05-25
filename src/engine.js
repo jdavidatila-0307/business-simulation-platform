@@ -228,12 +228,14 @@ function procesarPedidosMP(d, rondaNumero, params) {
     // costoBaseRef: usamos el promedio de costoBase de los tipos de producto
     // o el valor de referencia si está disponible en params
     const costoBaseRef = params.costoBaseReferencia ?? 200;  // valor de referencia industria
-    const costoUnitMP  = roundBs(costoBaseRef * pctMP_mp * factorC);
-    pagoMP = roundBs(cantidadPedida * costoUnitMP);
+    // FIX 2: pagoMP = 0 porque el costo MP ya está en el CU (componenteMP)
+    // y sale de caja a través de pagoProduccion = produccion × costoUnitario
+    // El módulo MP sigue restringiendo producción via stock (lead time activo)
+    pagoMP = 0;
     if (leadTime === 0) {
       stockRecibido += cantidadPedida;
     } else {
-      pendientesResta.push({ rondaEntrega: rondaNumero + leadTime, cantidad: cantidadPedida, costoMP: costoUnitMP });
+      pendientesResta.push({ rondaEntrega: rondaNumero + leadTime, cantidad: cantidadPedida, costoMP: 0 });
     }
   }
 
@@ -554,13 +556,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   costoCanal   → CON factura (comisiones ya están en baseServicios)
   //   efInnovacion → con factura si es externo (ya en baseServicios)
   // Por tanto baseInsumos = solo componenteMP × pares producidos
-  const costoBaseP   = d.costoBaseProducto || 0;
-  const pctMP_iva    = params.pctMateriaPrima ?? 0.40;
-  const factorC_iva  = (d.costoMPunitario && costoBaseP * pctMP_iva > 0)
-    ? d.costoMPunitario / (costoBaseP * pctMP_iva)
-    : 1.0;
-  // Costo de MP por par (lo que se pagó al proveedor con factura)
-  const costoMPporPar = roundBs(costoBaseP * pctMP_iva * factorC_iva);
+  // FIX 3: costoBaseProducto viene en d (enriquecido en ejecutarSimulador)
+  // Base insumos = costoMPunitario × (produccion + inventarioFinal)
+  // costoMPunitario = costoBase × pctMP × factorCosto (calculado en ejecutarSimulador)
+  const costoMPporPar = d.costoMPunitario || 0;
   const baseInsumos   = roundBs(costoMPporPar * ((d.produccion || 0) + inventarioFinal));
 
   // ── Servicios externos con factura ───────────────────────────────────────
@@ -940,7 +939,16 @@ function ejecutarSimulador(decisiones, cfg) {
     const share      = sharesPorEquipo[d.equipo] || 0;
     const demFormal  = seg?.demandaFormal || 0;
     const ventas     = calcularVentas(d, share, demFormal, cu, paramsConProveedores);  // FASE 0-B: params para extracción IVA
-    const fin        = calcularResultadosFinancieros(d, ventas, cu, d.gastoTotalMarketing, paramsConProveedores, canales);
+    // FIX: enriquecer d con campos que necesita calcularResultadosFinancieros
+    const pctMP_enr  = paramsConProveedores.pctMateriaPrima ?? 0.40;
+    const cbProd     = tiposProducto[d.producto]?.costoBase ?? 0;
+    const dEnriquecido = {
+      ...d,
+      costoMPunitario:   costoMPunit,
+      costoBaseProducto: cbProd,
+      costoCalidadUnit:  roundBs(0.20 * (d.calidad || 5)),
+    };
+    const fin        = calcularResultadosFinancieros(dEnriquecido, ventas, cu, dEnriquecido.gastoTotalMarketing, paramsConProveedores, canales);
 
     return {
       equipo:          d.equipo,
@@ -961,12 +969,12 @@ function ejecutarSimulador(decisiones, cfg) {
       ...fin,
       // Desglose del costo unitario para KPIs y reportes
       costoMPunitario:     costoMPunit,
-      costoBaseProducto:   (tiposProducto[d.producto]?.costoBase ?? 0),
-      costoCalidadUnit:    roundBs(0.20 * (d.calidad || 5)),
+      costoBaseProducto:   dEnriquecido.costoBaseProducto,
+      costoCalidadUnit:    dEnriquecido.costoCalidadUnit,
       proveedorElegido:    d.proveedorElegido || null,
       // Desglose visual correcto post-rediseño MP
-      costoTransformacion: roundBs((tiposProducto[d.producto]?.costoBase ?? 0) * (1 - (paramsConProveedores.pctMateriaPrima ?? 0.40))),
-      costoCanal_calc:     roundBs(cu - (tiposProducto[d.producto]?.costoBase ?? 0) * (1 - (paramsConProveedores.pctMateriaPrima ?? 0.40)) - costoMPunit - roundBs(0.20 * (d.calidad || 5))),
+      costoTransformacion: roundBs(cbProd * (1 - pctMP_enr)),
+      costoCanal_calc:     roundBs(cu - roundBs(cbProd * (1 - pctMP_enr)) - costoMPunit - roundBs(0.20 * (d.calidad || 5))),
       alertaCaja:      fin.cajaFinal < 500 ? 'ALERTA' : 'OK',
     };
   });
