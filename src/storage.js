@@ -658,17 +658,48 @@ function genCodigo() {
 }
 
 async function getRondasAll(simulacionId) {
+  // ── Intentar tabla normalizada sim_rondas ────────────────────
   try {
     const r = await pool.query(
       "SELECT numero, estado, resultados FROM sim_rondas WHERE simulacion_id=$1 ORDER BY numero",
       [simulacionId]
     );
-    return r.rows.map(row => ({
-      numero:     row.numero,
-      estado:     row.estado,
-      resultados: row.resultados || {},
-    }));
-  } catch(e) { return []; }
+    if (r.rows.length > 0) {
+      return r.rows.map(row => ({
+        numero:     row.numero,
+        estado:     row.estado,
+        resultados: row.resultados || {},
+        shock:      row.resultados?.shock || null,
+      }));
+    }
+  } catch(e) {
+    console.warn('[storage.getRondasAll] Error tabla normalizada:', e.message);
+  }
+
+  // ── Fallback: JSONB legado en simulaciones.rondas ─────────────
+  try {
+    const sim = await getSimulacion(simulacionId);
+    if (!sim) return [];
+    const rondas = sim.rondas || {};
+    return Object.entries(rondas)
+      .map(([k, v]) => ({
+        numero:     parseInt(k),
+        estado:     v.estado || 'simulated',
+        resultados: v.resultados || v || {},
+        decisiones: v.decisiones || {},
+        mercadoSegmentos: v.mercadoSegmentos || [],
+        atractivoEquipos: v.atractivoEquipos || {},
+        dashboard:        v.dashboard || {},
+        reportes:         v.reportes  || {},
+        shock:            v.shock     || null,
+        ejecutadaAt:      v.ejecutadaAt || null,
+      }))
+      .filter(r => !isNaN(r.numero) && r.estado !== 'pending')
+      .sort((a, b) => a.numero - b.numero);
+  } catch(e) {
+    console.error('[storage.getRondasAll] Error fallback JSONB:', e.message);
+    return [];
+  }
 }
 
 async function countDecisiones(simulacionId, rondaNumero) {

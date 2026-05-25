@@ -1317,8 +1317,22 @@ async function route(req, res, body) {
     const errores = [];
 
     // ── Procesar cada ronda en orden cronológico ──────────────────────────
-    for (const ronda of rondas) {
-      const n      = ronda.numero;
+    // IMPORTANTE: usar getRonda() individual (no getRondasAll) porque incluye
+    // las decisiones completas (multiproducto + campos propagados)
+    for (const rondaBase of rondas) {
+      const n = rondaBase.numero;
+
+      // Si el fallback JSONB ya trajo las decisiones, usarlas directamente.
+      // Si no (tabla normalizada sin decisiones), cargar con getRonda.
+      let ronda = rondaBase;
+      if (!rondaBase.decisiones || !Object.keys(rondaBase.decisiones).length) {
+        ronda = await storage.getRonda(sim.id, n);
+        if (!ronda) {
+          console.log(`[recalc] R${n}: no encontrada — omitida`);
+          continue;
+        }
+      }
+
       const resObj = ronda.resultados?.resultados || ronda.resultados || {};
       if (!Object.keys(resObj).length) {
         console.log(`[recalc] R${n}: sin resultados — omitida`);
@@ -1412,8 +1426,12 @@ async function route(req, res, body) {
         result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
 
         // Regenerar reportes de investigación de mercado
-        const rondaPreviaData = n > 1 ? rondas.find(r => r.numero === n-1) : null;
-        const resultadosAnteriores = rondaPreviaData?.resultados?.resultados || rondaPreviaData?.resultados || {};
+        // Para resultadosAnteriores usamos nuevoResObj de la ronda anterior
+        // que ya fue guardado en el loop. Si es R1, no hay anteriores.
+        const rondaPrevBase = n > 1 ? rondas.find(r => r.numero === n-1) : null;
+        const resultadosAnteriores = rondaPrevBase
+          ? (rondaPrevBase.resultados?.resultados || rondaPrevBase.resultados || {})
+          : {};
         const reportes = {};
         for (const d of decisiones) {
           reportes[d.equipo] = generarReportes(
