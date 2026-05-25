@@ -4279,6 +4279,15 @@ window.forzarConfirmacion = async (equipoId) => {
   } catch(e) { toast(e.message, 'error'); }
 };
 
+window.switchMapTab = (idx, total) => {
+  for (let i = 0; i < total; i++) {
+    const btn  = document.getElementById('tabMapSeg_' + i);
+    const pane = document.getElementById('paneMapSeg_' + i);
+    if (btn)  btn.className  = i === idx ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+    if (pane) pane.style.display = i === idx ? '' : 'none';
+  }
+};
+
 window.mostrarReporteRonda = async (n, historialCache) => {
   document.querySelectorAll('#reportesContent .ronda-btn').forEach(b => {
     b.classList.toggle('active', parseInt(b.textContent.replace('Ronda ',''))===n);
@@ -4459,117 +4468,160 @@ window.mostrarReporteRonda = async (n, historialCache) => {
           + '<tbody>' + empNomRows + '</tbody></table></div></div></div>';
       }
 
-      // ESTRATÉGICO — Sección 3: Mapa de posicionamiento Precio vs Calidad
-      if (inv.tipo === 'Estratégico' && (inv.empresasConNombre||[]).length) {
-        // Recopilar todos los productos con precio y calidad
-        const puntos = [];
-        (inv.empresasConNombre||[]).forEach((e,ei) => {
+      // ESTRATÉGICO — Sección 3: Mapas de posicionamiento por segmento
+      if (inv.tipo === 'Estratégico') {
+        const mapas = inv.mapasPorSegmento || {};
+        const segNames = Object.keys(mapas).filter(s => (mapas[s].puntos||[]).length > 0);
+
+        if (segNames.length > 0) {
           const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
-          (e.productos||[]).forEach(p => {
-            puntos.push({
-              empresa: e.empresa,
-              producto: p.producto||'—',
-              precio:   p.precio||0,
-              calidad:  p.calidad||0,
-              share:    p.share||0,
-              color:    PALETTE[ei % PALETTE.length],
-            });
-          });
-        });
 
-        if (puntos.length) {
-          const maxPrecio = Math.max(...puntos.map(p=>p.precio)) || 1;
-          const W = 520; const H = 320;
-          const PAD = { top:30, right:20, bot:50, left:60 };
-          const cW = W - PAD.left - PAD.right;
-          const cH = H - PAD.top - PAD.bot;
+          // Función SVG para un segmento
+          const renderMapaSeg = (segNombre, datos) => {
+            const puntos  = datos.puntos  || [];
+            const externos = datos.externos || [];
+            if (!puntos.length) return '';
 
-          // Convertir precio/calidad a coordenadas SVG
-          const cx = p => PAD.left + (p.precio / maxPrecio) * cW;
-          const cy = p => PAD.top + (1 - (p.calidad / 10)) * cH;
-          const cr = p => 6 + (p.share||0) * 60; // radio proporcional al share
+            const W = 500; const H = 320;
+            const PAD = { top:36, right:24, bot:52, left:64 };
+            const cW = W - PAD.left - PAD.right;
+            const cH = H - PAD.top  - PAD.bot;
 
-          // Líneas de cuadrantes
-          const midX = PAD.left + cW / 2;
-          const midY = PAD.top + cH / 2;
+            const allPrecios  = [...puntos.map(p=>p.precio),  ...externos.map(e=>e.precio)].filter(v=>v>0);
+            const allCalidad  = [...puntos.map(p=>p.calidad), ...externos.map(e=>e.calidad)].filter(v=>v>0);
+            const maxPrecio   = allPrecios.length  ? Math.max(...allPrecios)  * 1.1 : 500;
+            const minPrecio   = allPrecios.length  ? Math.max(0, Math.min(...allPrecios) * 0.85) : 0;
+            const rangoPrecio = Math.max(maxPrecio - minPrecio, 1);
 
-          // Generar círculos y etiquetas
-          const circles = puntos.map(p =>
-            '<circle cx="' + Math.round(cx(p)) + '" cy="' + Math.round(cy(p)) + '" r="' + Math.round(cr(p)) + '" '
-            + 'fill="' + p.color + '" fill-opacity="0.7" stroke="' + p.color + '" stroke-width="2"/>'
+            const cx = p => PAD.left + ((p - minPrecio) / rangoPrecio) * cW;
+            const cy = q => PAD.top  + (1 - q / 10) * cH;
+            const cr = s => 7 + Math.min(s * 80, 28);
+
+            const midX = PAD.left + cW / 2;
+            const midY = PAD.top  + cH / 2;
+
+            // Precio promedio del segmento (línea de referencia)
+            const precioMed = allPrecios.length ? allPrecios.reduce((a,b)=>a+b,0)/allPrecios.length : 0;
+            const xMed = cx(precioMed);
+
+            // Círculos de empresas
+            const circles = puntos.map(p => {
+              const r   = cr(p.share);
+              const x   = Math.round(cx(p.precio));
+              const y   = Math.round(cy(p.calidad));
+              const tip = p.empresa + ' · ' + p.producto + ' · Share: ' + (p.share*100).toFixed(1) + '%';
+              return '<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+p.color+'" fill-opacity="0.75" stroke="'+p.color+'" stroke-width="2"><title>'+tip+'</title></circle>'
+                + '<text x="'+x+'" y="'+(y-r-4)+'" text-anchor="middle" font-size="8.5" fill="#E2E8F0" font-weight="600">'+p.empresa.substring(0,9)+'</text>'
+                + '<text x="'+x+'" y="'+(y+r+11)+'" text-anchor="middle" font-size="7.5" fill="#94A3B8">'+p.producto.substring(0,12)+'</text>';
+            }).join('');
+
+            // Diamantes de competencia externa
+            const diamonds = externos.map(e => {
+              const x = Math.round(cx(e.precio));
+              const y = Math.round(cy(e.calidad));
+              const s = 9;
+              const tip = e.nombre + ' (externo) · Part.ref: '+(e.share*100).toFixed(0)+'%';
+              return '<polygon points="'+x+','+(y-s)+' '+(x+s)+','+y+' '+x+','+(y+s)+' '+(x-s)+','+y+'" fill="#F97316" fill-opacity="0.8" stroke="#FB923C" stroke-width="1.5"><title>'+tip+'</title></polygon>'
+                + '<text x="'+x+'" y="'+(y-s-4)+'" text-anchor="middle" font-size="8" fill="#FB923C">'+e.nombre.substring(0,16)+'</text>';
+            }).join('');
+
+            // Ticks eje X (precio)
+            const nTicksX = 5;
+            const xTicks = Array.from({length:nTicksX+1},(_,i)=>i/nTicksX).map(pct => {
+              const val = Math.round(minPrecio + pct * rangoPrecio);
+              const xp  = PAD.left + pct * cW;
+              return '<line x1="'+xp+'" y1="'+(PAD.top+cH)+'" x2="'+xp+'" y2="'+(PAD.top+cH+5)+'" stroke="#475569" stroke-width="1"/>'
+                + '<text x="'+xp+'" y="'+(PAD.top+cH+16)+'" text-anchor="middle" font-size="8.5" fill="#94A3B8">'+val+'</text>';
+            }).join('');
+
+            // Ticks eje Y (calidad)
+            const yTicks = [0,2,4,6,8,10].map(q => {
+              const yp = PAD.top + (1-q/10)*cH;
+              return '<line x1="'+(PAD.left-5)+'" y1="'+yp+'" x2="'+PAD.left+'" y2="'+yp+'" stroke="#475569" stroke-width="1"/>'
+                + '<text x="'+(PAD.left-8)+'" y="'+(yp+3)+'" text-anchor="end" font-size="8.5" fill="#94A3B8">'+q+'</text>';
+            }).join('');
+
+            // Línea de precio promedio
+            const lineaMed = xMed > PAD.left && xMed < PAD.left+cW
+              ? '<line x1="'+xMed+'" y1="'+PAD.top+'" x2="'+xMed+'" y2="'+(PAD.top+cH)+'" stroke="#F59E0B" stroke-width="1" stroke-dasharray="5,3" opacity="0.6"/>'
+                + '<text x="'+xMed+'" y="'+(PAD.top-6)+'" text-anchor="middle" font-size="7.5" fill="#F59E0B">precio prom.</text>'
+              : '';
+
+            const tendColor = datos.tendencia==='Alto crecimiento'?'#10B981':datos.tendencia==='Creciente'?'#3B82F6':'#94A3B8';
+            const demStr   = datos.demandaFormal ? ' · Demanda formal: '+Math.round(datos.demandaFormal).toLocaleString('es-BO')+' pares' : '';
+
+            return '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:'+W+'px;background:#0F172A;border-radius:8px;display:block">'
+              // Fondos de cuadrante
+              + '<rect x="'+PAD.left+'" y="'+PAD.top+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(16,185,129,.04)"/>'
+              + '<rect x="'+(PAD.left+cW/2)+'" y="'+PAD.top+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(59,130,246,.04)"/>'
+              + '<rect x="'+PAD.left+'" y="'+(PAD.top+cH/2)+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(239,68,68,.04)"/>'
+              + '<rect x="'+(PAD.left+cW/2)+'" y="'+(PAD.top+cH/2)+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(251,191,36,.04)"/>'
+              // Líneas de cuadrante
+              + '<line x1="'+midX+'" y1="'+PAD.top+'" x2="'+midX+'" y2="'+(PAD.top+cH)+'" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>'
+              + '<line x1="'+PAD.left+'" y1="'+midY+'" x2="'+(PAD.left+cW)+'" y2="'+midY+'" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>'
+              // Línea precio promedio
+              + lineaMed
+              // Ejes
+              + '<line x1="'+PAD.left+'" y1="'+PAD.top+'" x2="'+PAD.left+'" y2="'+(PAD.top+cH)+'" stroke="#475569" stroke-width="1.5"/>'
+              + '<line x1="'+PAD.left+'" y1="'+(PAD.top+cH)+'" x2="'+(PAD.left+cW)+'" y2="'+(PAD.top+cH)+'" stroke="#475569" stroke-width="1.5"/>'
+              + xTicks + yTicks
+              // Etiquetas ejes
+              + '<text x="'+(PAD.left+cW/2)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9.5" fill="#94A3B8">Precio de venta (Bs)</text>'
+              + '<text x="13" y="'+(PAD.top+cH/2)+'" text-anchor="middle" font-size="9.5" fill="#94A3B8" transform="rotate(-90,13,'+(PAD.top+cH/2)+')">Calidad (0–10)</text>'
+              // Etiquetas cuadrantes
+              + '<text x="'+(PAD.left+8)+'" y="'+(PAD.top+13)+'" font-size="7.5" fill="#475569" font-style="italic">Alta calidad / Bajo precio</text>'
+              + '<text x="'+(PAD.left+cW/2+6)+'" y="'+(PAD.top+13)+'" font-size="7.5" fill="#475569" font-style="italic">Alta calidad / Alto precio</text>'
+              + '<text x="'+(PAD.left+8)+'" y="'+(PAD.top+cH-5)+'" font-size="7.5" fill="#475569" font-style="italic">Baja calidad / Bajo precio</text>'
+              + '<text x="'+(PAD.left+cW/2+6)+'" y="'+(PAD.top+cH-5)+'" font-size="7.5" fill="#475569" font-style="italic">Baja calidad / Alto precio</text>'
+              // Datos
+              + circles + diamonds
+              + '</svg>'
+              + '<div style="margin-top:8px;font-size:.74rem;color:var(--text3)">'
+              + '<span style="color:'+tendColor+'">● '+datos.tendencia+'</span>'
+              + demStr
+              + (externos.length ? ' &nbsp;·&nbsp; <span style="color:#FB923C">◆ Competencia externa</span>' : '')
+              + ' &nbsp;·&nbsp; Tamaño del círculo = market share'
+              + '</div>';
+          };
+
+          // Leyenda global de empresas
+          const legendaEmpresas = (inv.empresasConNombre||[]).map((e,ei) =>
+            '<span style="display:inline-flex;align-items:center;gap:5px;margin:2px 12px 2px 0;font-size:.77rem">'
+            + '<span style="width:9px;height:9px;border-radius:50%;background:'+PALETTE[ei%9]+';display:inline-block"></span>'
+            + e.empresa+'</span>'
+          ).join('') + '<span style="display:inline-flex;align-items:center;gap:5px;margin:2px 12px 2px 0;font-size:.77rem">'
+            + '<span style="display:inline-block;width:9px;height:9px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:#F97316"></span>'
+            + 'Competencia externa</span>';
+
+          // Tabs de segmentos
+          const tabsBar = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">'
+            + segNames.map((s,i) =>
+                '<button class="btn '+(i===0?'btn-primary':'btn-ghost')+' btn-sm" id="tabMapSeg_'+i+'" onclick="switchMapTab('+i+','+segNames.length+')">'
+                + s + '</button>'
+              ).join('')
+            + '</div>';
+
+          // Paneles SVG por segmento
+          const panesHTML = segNames.map((s,i) =>
+            '<div id="paneMapSeg_'+i+'" '+(i>0?'style="display:none"':'')+'>'
+            + renderMapaSeg(s, mapas[s])
+            + '</div>'
           ).join('');
-
-          const labels = puntos.map(p =>
-            '<text x="' + Math.round(cx(p)) + '" y="' + (Math.round(cy(p)) - Math.round(cr(p)) - 4) + '" '
-            + 'text-anchor="middle" font-size="9" fill="#CBD5E1">'
-            + p.empresa.substring(0,10) + '</text>'
-          ).join('');
-
-          // Eje X (precio) — marcas cada 25% del máximo
-          const xTicks = [0,25,50,75,100].map(pct => {
-            const xPos = PAD.left + (pct/100)*cW;
-            const val  = Math.round(maxPrecio * pct / 100);
-            return '<line x1="'+xPos+'" y1="'+(PAD.top+cH)+'" x2="'+xPos+'" y2="'+(PAD.top+cH+5)+'" stroke="#475569" stroke-width="1"/>'
-              + '<text x="'+xPos+'" y="'+(PAD.top+cH+16)+'" text-anchor="middle" font-size="9" fill="#94A3B8">Bs '+val+'</text>';
-          }).join('');
-
-          // Eje Y (calidad) — marcas 0,2,4,6,8,10
-          const yTicks = [0,2,4,6,8,10].map(cal => {
-            const yPos = PAD.top + (1 - cal/10)*cH;
-            return '<line x1="'+(PAD.left-5)+'" y1="'+yPos+'" x2="'+PAD.left+'" y2="'+yPos+'" stroke="#475569" stroke-width="1"/>'
-              + '<text x="'+(PAD.left-8)+'" y="'+(yPos+3)+'" text-anchor="end" font-size="9" fill="#94A3B8">'+cal+'</text>';
-          }).join('');
-
-          // Etiquetas de cuadrantes
-          const quadLabels =
-            '<text x="'+(PAD.left+10)+'" y="'+(PAD.top+14)+'" font-size="8" fill="#64748B" font-style="italic">Alto precio / Alta calidad</text>'
-            + '<text x="'+(PAD.left+10)+'" y="'+(PAD.top+cH-6)+'" font-size="8" fill="#64748B" font-style="italic">Alto precio / Baja calidad</text>'
-            + '<text x="'+(midX+6)+'" y="'+(PAD.top+14)+'" font-size="8" fill="#64748B" font-style="italic">Bajo precio / Alta calidad</text>'
-            + '<text x="'+(midX+6)+'" y="'+(PAD.top+cH-6)+'" font-size="8" fill="#64748B" font-style="italic">Bajo precio / Baja calidad</text>';
-
-          const svgMap = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:'+W+'px;background:#0F172A;border-radius:8px">'
-            // Fondo de cuadrantes
-            + '<rect x="'+PAD.left+'" y="'+PAD.top+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(16,185,129,.04)"/>'
-            + '<rect x="'+(PAD.left+cW/2)+'" y="'+PAD.top+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(59,130,246,.04)"/>'
-            + '<rect x="'+PAD.left+'" y="'+(PAD.top+cH/2)+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(239,68,68,.04)"/>'
-            + '<rect x="'+(PAD.left+cW/2)+'" y="'+(PAD.top+cH/2)+'" width="'+(cW/2)+'" height="'+(cH/2)+'" fill="rgba(251,191,36,.04)"/>'
-            // Líneas de cuadrante
-            + '<line x1="'+midX+'" y1="'+PAD.top+'" x2="'+midX+'" y2="'+(PAD.top+cH)+'" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>'
-            + '<line x1="'+PAD.left+'" y1="'+midY+'" x2="'+(PAD.left+cW)+'" y2="'+midY+'" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>'
-            // Ejes
-            + '<line x1="'+PAD.left+'" y1="'+PAD.top+'" x2="'+PAD.left+'" y2="'+(PAD.top+cH)+'" stroke="#475569" stroke-width="1.5"/>'
-            + '<line x1="'+PAD.left+'" y1="'+(PAD.top+cH)+'" x2="'+(PAD.left+cW)+'" y2="'+(PAD.top+cH)+'" stroke="#475569" stroke-width="1.5"/>'
-            + xTicks + yTicks
-            // Etiquetas de ejes
-            + '<text x="'+(PAD.left+cW/2)+'" y="'+(H-4)+'" text-anchor="middle" font-size="10" fill="#94A3B8">Precio de venta (Bs)</text>'
-            + '<text x="12" y="'+(PAD.top+cH/2)+'" text-anchor="middle" font-size="10" fill="#94A3B8" transform="rotate(-90,12,'+(PAD.top+cH/2)+')">Calidad (0–10)</text>'
-            // Etiquetas de cuadrantes
-            + quadLabels
-            // Datos
-            + circles + labels
-            + '</svg>';
-
-          // Leyenda de empresas
-          const leyenda = (inv.empresasConNombre||[]).map((e,ei) => {
-            const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
-            return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;font-size:.78rem">'
-              + '<span style="width:10px;height:10px;border-radius:50%;background:' + PALETTE[ei%9] + ';display:inline-block"></span>'
-              + e.empresa + '</span>';
-          }).join('');
 
           html += '<div class="result-round-card" style="margin-bottom:16px">'
-            + '<div class="result-round-header" style="background:linear-gradient(135deg,#2a1f6e,#4a2080)">'
-            + '<h3>📍 Estratégico · Sección 3 — Mapa de Posicionamiento</h3></div>'
+            + '<div class="result-round-header" style="background:linear-gradient(135deg,#1a3a6b,#2a5599)">'
+            + '<h3>📍 Estratégico · Sección 3 — Mapa de Posicionamiento por Segmento</h3></div>'
             + '<div style="padding:14px 18px">'
-            + '<p style="font-size:.78rem;color:var(--text3);margin-bottom:10px">'
-            + 'Precio vs Calidad por producto. El tamaño del círculo es proporcional al market share.</p>'
-            + svgMap
-            + '<div style="margin-top:10px;flex-wrap:wrap;display:flex">' + leyenda + '</div>'
+            + '<p style="font-size:.78rem;color:var(--text3);margin-bottom:12px">'
+            + 'Precio vs Calidad para cada segmento. Muestra solo los competidores activos en ese mercado. '
+            + 'La línea amarilla es el precio promedio del segmento.</p>'
+            + '<div style="margin-bottom:12px;flex-wrap:wrap;display:flex">' + legendaEmpresas + '</div>'
+            + tabsBar + panesHTML
             + '</div></div>';
         }
       }
 
-      // ESTRATÉGICO — Sección 2: elasticidad precio
+            // ESTRATÉGICO — Sección 2: elasticidad precio
       if (inv.tipo === 'Estratégico') {
         const colores = { verde:'var(--accent5)', ambar:'var(--accent3)', roja:'var(--accent4)' };
         let elHTML = '';

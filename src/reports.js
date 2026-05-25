@@ -122,7 +122,7 @@ function generarReportePremium(mercadoSegmentos, resultadosRonda, segmentosConfi
   };
 }
 
-function generarReporteEstrategico(mercadoSegmentos, resultadosRonda, segmentosConfig, equiposConfig, resultadosAnteriores) {
+function generarReporteEstrategico(mercadoSegmentos, resultadosRonda, segmentosConfig, equiposConfig, resultadosAnteriores, competenciaExterna) {
   const premium = generarReportePremium(mercadoSegmentos, resultadosRonda, segmentosConfig, equiposConfig);
   const resultados     = Object.values(resultadosRonda   || {});
   const resultadosAnt  = Object.values(resultadosAnteriores || {});
@@ -183,12 +183,59 @@ function generarReporteEstrategico(mercadoSegmentos, resultadosRonda, segmentosC
     });
   });
 
+  // SECCIÓN 3 — Mapas de posicionamiento por segmento
+  // Agrupa precio/calidad/share por segmento para renderizar un SVG por segmento
+  const PALETTE_REP = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+  const eqColorMap = {};
+  Object.values(porEmpresa).forEach((emp, i) => {
+    eqColorMap[emp.nombre] = PALETTE_REP[i % PALETTE_REP.length];
+  });
+
+  const mapasPorSegmento = {};
+  resultados.forEach(r => {
+    const seg = r.segmento || r.segmentoObjetivo;
+    if (!seg) return;
+    if (!mapasPorSegmento[seg]) mapasPorSegmento[seg] = { puntos: [], externos: [], demandaFormal: 0, tendencia: '' };
+    mapasPorSegmento[seg].puntos.push({
+      empresa:  r.equipoNombre,
+      producto: r.producto || '—',
+      precio:   r.precioVenta  || 0,
+      calidad:  r.calidad      || 0,
+      share:    r.shareReal    || 0,
+      ventas:   r.ventasReales || 0,
+      atractivo: r.atractivo   || 0,
+      color:    eqColorMap[r.equipoNombre] || '#6B7280',
+    });
+  });
+
+  // Metadatos de segmento (demanda, tendencia)
+  mercadoSegmentos.forEach(seg => {
+    if (mapasPorSegmento[seg.nombre]) {
+      mapasPorSegmento[seg.nombre].demandaFormal = seg.demandaFormal || 0;
+      mapasPorSegmento[seg.nombre].tendencia     = seg.tendencia     || 'Estable';
+    }
+  });
+
+  // Competencia externa por segmento
+  (competenciaExterna || []).forEach(comp => {
+    if (mapasPorSegmento[comp.segmento]) {
+      mapasPorSegmento[comp.segmento].externos.push({
+        nombre:  comp.nombre,
+        precio:  comp.precio  || 0,
+        calidad: comp.calidad || 0,
+        share:   comp.participacionRef || 0,
+      });
+    }
+  });
+
   return {
     ...premium,
     tipo:               'Estratégico',
     titulo:             'Reporte de Inteligencia de Mercado — Estratégico',
     empresasConNombre,
     elasticidades,
+    mapasPorSegmento,
+    eqColorMap,
   };
 }
 
@@ -206,7 +253,8 @@ function generarReportes(decision, mercadoSegmentos, atractivoEquipos, resultado
   if (tipo === 'Estratégico') {
     reportes.investigacion = generarReporteEstrategico(
       mercadoSegmentos, resultadosRonda, segmentos,
-      simCfg.equipos||[], resultadosAnteriores||{}
+      simCfg.equipos||[], resultadosAnteriores||{},
+      simCfg.competenciaExterna||[]
     );
   }
   return reportes;
