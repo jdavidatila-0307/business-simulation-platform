@@ -306,13 +306,15 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
   //   Nacional  (1.00): costoMPunit = costoBase × 40% × 1.00 = 40% del base
   //   Importado (0.65): costoMPunit = costoBase × 40% × 0.65 = 26% del base
   //   Sin proveedor:    costoMPunit = costoBase × 40% × 1.00 (default)
-  const pctMP      = params.pctMateriaPrima ?? 0.40;
-  const costoTrans = roundBs(costoBase * (1 - pctMP));  // transformación: MOD + overhead
-  // componenteMP = lo que calculó ejecutarSimulador
-  // Si es 0 (sin proveedor), usar el 40% estándar para no perder el costo
-  const componenteMP = costoMPunitario > 0
+  const pctMP       = params.pctMateriaPrima ?? 0.40;
+  const tasaIVA_cu  = params.tasaIVA ?? 0.13;
+  const costoTrans  = roundBs(costoBase * (1 - pctMP));  // transformación: MOD + overhead
+  // componenteMP en el P&L = precio neto sin IVA = monto_factura × (1 − tasaIVA)
+  // Ley 843: el costo contable es el precio neto; el IVA va como crédito fiscal
+  const costoMPbruto = costoMPunitario > 0
     ? costoMPunitario
-    : roundBs(costoBase * pctMP);  // fallback: precio estándar sin proveedor
+    : roundBs(costoBase * pctMP);
+  const componenteMP = roundBs(costoMPbruto * (1 - tasaIVA_cu));  // precio neto en ER
 
   return roundBs(costoTrans + componenteMP + costoCalidad + costoCanal + efInnovacion);
 }
@@ -487,22 +489,40 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     comisionApertura  = roundBs(montoP * params.comisionAperturaPrestamo);
   }
 
-  // Gastos operativos totales
-  // Gastos operativos SIN gastos financieros (para calcular EBIT correcto)
+  // ── Gastos operativos en P&L ────────────────────────────────────────────
+  // Ley 843: los gastos con factura se contabilizan al PRECIO NETO (sin IVA)
+  //   precio neto = monto_factura × (1 − tasaIVA)
+  //   el IVA pagado al proveedor va como crédito fiscal (activo), no como gasto
+  // SIN IVA: sueldos (relación laboral), depreciación, gastos admin/planta fijos
+  const tasaIVA_op = params.tasaIVA ?? 0.13;
+  const netIVA     = 1 - tasaIVA_op;  // factor para convertir bruto → neto (0.87)
+
+  // Gastos CON factura → precio neto en P&L
+  const gastoPublicidad     = roundBs((d.publicidad         || 0) * netIVA);
+  const gastoPromocion      = roundBs((d.promocion          || 0) * netIVA);
+  const gastoEventos        = roundBs((d.eventos            || 0) * netIVA);
+  const gastoMktRedes       = roundBs((d.marketingRedes     || 0) * netIVA);
+  const gastoRRPP           = roundBs((d.relacionesPublicas || 0) * netIVA);
+  const gastoInnovacionNeto = roundBs(gastoInnovacion            * netIVA);
+  const gastoInvMktNeto     = roundBs(gastoInvestigacion_mkt     * netIVA);
+  // comisiones: se descuentan de ventasBrutas para llegar a ventasNetas (ya aplicado)
+  // Su precio neto ya está reflejado en ventasNetas
+
+  // Gastos SIN factura → precio completo en P&L
+  const gastoCostoVend  = d.costoVendedores || 0;   // sueldos: relación laboral
+  const gastoOperarios  = d.costoOperarios  || 0;   // sueldos: relación laboral
+  const gastoAdminFijo  = params.gastoAdminFijo;     // mixto: simplificado sin IVA
+  const gastoPlantaFijo = params.gastoFijoPlanta;    // mixto: simplificado sin IVA
+  const gastoDepre      = params.depreciacionTrimestral; // no es compra del período
+  const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
+
   let gastosOp = roundBs(
-    (d.publicidad         || 0) +
-    (d.promocion          || 0) +
-    (d.eventos            || 0) +
-    (d.marketingRedes     || 0) +
-    (d.relacionesPublicas || 0) +
-    (d.costoVendedores    || 0) +
-    (d.costoOperarios     || 0) +   // Etapa 3.2: costo de operarios
-    params.gastoAdminFijo      +
-    params.gastoFijoPlanta     +
-    params.depreciacionTrimestral +
-    costoAlmacenamiento        +
-    gastoInnovacion            +
-    gastoInvestigacion_mkt     // Costo de reporte de investigación de mercado
+    gastoPublicidad  + gastoPromocion  + gastoEventos  +
+    gastoMktRedes    + gastoRRPP       +
+    gastoCostoVend   + gastoOperarios  +
+    gastoAdminFijo   + gastoPlantaFijo + gastoDepre    +
+    gastoAlmacen     +
+    gastoInnovacionNeto + gastoInvMktNeto
     // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
   );
 
@@ -562,19 +582,24 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const costoMPporPar = d.costoMPunitario || 0;
   const baseInsumos   = roundBs(costoMPporPar * ((d.produccion || 0) + inventarioFinal));
 
-  // ── Servicios externos con factura ───────────────────────────────────────
+  // ── Servicios externos con factura — base IVA crédito ───────────────────
+  // IVA crédito = monto_bruto × 13%   (monto bruto = lo que se pagó al proveedor)
+  // El crédito se calcula sobre el precio BRUTO (con IVA incluido en el monto)
+  // porque así funciona la factura boliviana: precio neto + 13% IVA
   const baseServicios = roundBs(
-    (d.publicidad          || 0) +
+    (d.publicidad          || 0) +   // monto bruto pagado a agencia
     (d.promocion           || 0) +
     (d.eventos             || 0) +
     (d.marketingRedes      || 0) +
     (d.relacionesPublicas  || 0) +
-    gastoInvestigacion_mkt       +   // Básica/Premium/Estratégico
-    gastoInnovacion              +   // I+D externo
-    comisiones                   +   // distribuidor factura por su comisión
-    comisionApertura             +   // banco factura comisión apertura
-    costoAlmacenamiento              // bodega externa factura almacenaje
+    gastoInvestigacion_mkt       +   // monto bruto del reporte
+    gastoInnovacion              +   // monto bruto I+D externo
+    comisiones                   +   // monto bruto comisión distribuidor
+    comisionApertura             +   // monto bruto comisión banco
+    costoAlmacenamiento              // monto bruto almacenaje
   );
+
+  // baseInsumos también usa el monto bruto (costoMPporPar = precio factura proveedor)
 
   const ivaCredito = roundBs((baseInsumos + baseServicios) * tasaIVA);
   const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
