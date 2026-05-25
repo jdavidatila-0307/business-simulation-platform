@@ -223,11 +223,12 @@ function procesarPedidosMP(d, rondaNumero, params) {
     // Aquí no tenemos el costoBase por producto directamente, usamos el costoUnitario
     // como aproximación del pagoMP (pago al momento del pedido)
     const pctMP_mp    = params.pctMateriaPrima ?? 0.40;
-    const factorC     = provData?.factorCosto   ?? 1.0;
-    // pagoMP = costo estándar × factorProveedor × cantidad
-    // El costoUnitario actual refleja el precio con el proveedor anterior
-    // Para el pago del pedido usamos: (costoUnitario × pctMP × factorCosto)
-    const costoUnitMP = roundBs((params.costoUnitarioRef ?? 0) * pctMP_mp * factorC);
+    const factorC     = provData?.factorCosto ?? 1.0;
+    // costoUnitMP = costoBaseRef × pctMP × factorCosto
+    // costoBaseRef: usamos el promedio de costoBase de los tipos de producto
+    // o el valor de referencia si está disponible en params
+    const costoBaseRef = params.costoBaseReferencia ?? 200;  // valor de referencia industria
+    const costoUnitMP  = roundBs(costoBaseRef * pctMP_mp * factorC);
     pagoMP = roundBs(cantidadPedida * costoUnitMP);
     if (leadTime === 0) {
       stockRecibido += cantidadPedida;
@@ -297,20 +298,19 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
   }
 
   // ── Materia Prima con factorCosto del proveedor ──────────────────
-  // pctMateriaPrima: % del costoBase que son materiales (configurable, default 40%)
-  // factorCosto: multiplicador del proveedor sobre el costo estándar de MP
-  //   Nacional  → 1.00 (precio completo, leadTime 1)
-  //   Importado → 0.65 (35% ahorro, leadTime 2, calidad menor)
-  const pctMP         = params.pctMateriaPrima ?? 0.40;
-  const costoTrans    = roundBs(costoBase * (1 - pctMP));   // transformación: fijo
-  const costoMPbase   = roundBs(costoBase * pctMP);         // MP al precio estándar
-
-  // factorCosto viene de costoMPunitario: lo calculamos en ejecutarSimulador
-  // Si no hay proveedor → factorCosto = 1.0 → CU = costoBase (sin cambio)
-  const factorCosto   = costoMPbase > 0
-    ? (costoMPunitario > 0 ? costoMPunitario / costoMPbase : 1.0)
-    : 1.0;
-  const componenteMP  = roundBs(costoMPbase * factorCosto);
+  // pctMP: porcentaje del costoBase que representa materiales (default 40%)
+  // costoMPunitario viene calculado en ejecutarSimulador:
+  //   costoMPunitario = costoBase × pctMP × factorCosto_proveedor
+  //   Nacional  (1.00): costoMPunit = costoBase × 40% × 1.00 = 40% del base
+  //   Importado (0.65): costoMPunit = costoBase × 40% × 0.65 = 26% del base
+  //   Sin proveedor:    costoMPunit = costoBase × 40% × 1.00 (default)
+  const pctMP      = params.pctMateriaPrima ?? 0.40;
+  const costoTrans = roundBs(costoBase * (1 - pctMP));  // transformación: MOD + overhead
+  // componenteMP = lo que calculó ejecutarSimulador
+  // Si es 0 (sin proveedor), usar el 40% estándar para no perder el costo
+  const componenteMP = costoMPunitario > 0
+    ? costoMPunitario
+    : roundBs(costoBase * pctMP);  // fallback: precio estándar sin proveedor
 
   return roundBs(costoTrans + componenteMP + costoCalidad + costoCanal + efInnovacion);
 }
