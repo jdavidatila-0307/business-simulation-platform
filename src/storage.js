@@ -272,6 +272,7 @@ async function getRonda(simulacionId, n, ownerId = null) {
         reportes:          resultados.reportes           || {},
         preSimulacion:     resultados.preSimulacion      || {},
         preSimMercado:     resultados.preSimMercado      || [],
+        shock:             resultados.shock              || null,
         _source: 'normalized',
       };
     }
@@ -313,7 +314,7 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
     const CAMPOS_RESULTADOS = [
       'mercadoSegmentos', 'atractivoEquipos', 'dashboard',
       'empresas', 'resultados', 'reportes',
-      'preSimulacion', 'preSimMercado',
+      'preSimulacion', 'preSimMercado', 'shock',
     ];
     let hayResultados = false;
     for (const campo of CAMPOS_RESULTADOS) {
