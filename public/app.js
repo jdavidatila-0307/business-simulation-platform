@@ -1388,9 +1388,9 @@ function buildAdminKPIHTML(eqs, tc, pfx='kpi_') {
       invPct:       prod > 0 ? safe(invU / prod * 100) : null,
       capEfectiva:  r.capacidadEfectiva ?? null,
       costoUnitP:       r.costoUnitario || 0,
-      costoBase_p:      r.costoTransformacion || roundBs((r.costoBaseProducto||0) * 0.60),
+      costoBase_p:      r.costoTransformacion || Math.round((r.costoBaseProducto||0) * 0.60 * 100)/100,
       costoCalidad_p:   r.costoCalidadUnit  || 0,
-      costoCanal_p:     Math.max(0, r.costoCanal_calc ?? roundBs((r.costoUnitario||0) - (r.costoTransformacion||0) - (r.costoCalidadUnit||0) - roundBs((r.costoMPunitario||0)*0.87))),
+      costoCanal_p:     Math.max(0, r.costoCanal_calc ?? Math.round(((r.costoUnitario||0) - (r.costoTransformacion||0) - (r.costoCalidadUnit||0) - Math.round((r.costoMPunitario||0)*0.87*100)/100)*100)/100),
       costoMP_p:        r.costoMPunitario || 0,  // precio factura proveedor
       proveedor_p:      r.proveedorElegido  || '—',
       stockMP:          r.stockMPFinal      ?? null,
