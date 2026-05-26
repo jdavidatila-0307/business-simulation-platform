@@ -511,9 +511,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // ── Fix caja: pagoProduccion usa precio BRUTO al proveedor ──────────────
   // En el P&L el CU usa MP neto (×87%) — correcto para la utilidad
   // En la CAJA se paga el precio bruto al proveedor (MP sin descontar IVA)
-  // El IVA crédito de MP es real pero sale de caja junto con el pago al proveedor
-  // Se recupera mediante la compensación contra el IVA débito → queda en ivaAPagar reducido
-  const costoMPunitario_bruto = dEnriquecido?.costoMPunitario || 0;
+  // d.costoMPunitario = costoBase × pctMP × factorProveedor (precio bruto sin IVA descontado)
+  // El IVA crédito de MP sale de caja con el pago al proveedor y se recupera via ivaAPagar
+  const costoMPunitario_bruto = d.costoMPunitario || 0;  // d — no dEnriquecido
   const ivaCredMPunit = roundBs(costoMPunitario_bruto * (params.tasaIVA ?? 0.13));
   const cuBruto = roundBs(costoUnitario + ivaCredMPunit);  // CU bruto para caja
 
