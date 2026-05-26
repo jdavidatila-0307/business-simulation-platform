@@ -554,13 +554,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
 
   // Flujo de caja
-  // Cobros: el canal retiene la comisión antes de pagar a la empresa
-  // La empresa recibe: (ventasNetas + ivaDebito) × pctContado
-  //   ventasNetas = ventasBrutas − comisiones (ingreso real sin IVA)
-  //   ivaDebito   = IVA cobrado al cliente
-  //   El canal ya descontó su comisión — la empresa no cobra esa parte
+  // ivaDebito necesario aquí — adelantar declaración
+  const ivaDebito  = ivaDebitoVentas;  // totalFacturado × tasaIVA (Fase 0)
   const cxcCobroEsta  = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro));
-  const baseCobroReal = roundBs(ventasNetas + ivaDebito);  // lo que realmente recibe la empresa
+  const baseCobroReal = roundBs(ventasNetas + ivaDebito);
   const cobrosContado = roundBs(baseCobroReal * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
@@ -592,7 +589,6 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //                    gastos admin/planta fijos (mixtos — simplificado sin IVA),
   //                    intereses (exentos Ley 843 Art. 2)
   const tasaIVA    = params.tasaIVA ?? 0.13;
-  const ivaDebito  = ivaDebitoVentas;  // totalFacturado × tasaIVA (Fase 0)
 
   // ── Base de insumos materiales: solo componentes con factura de proveedor ──
   // Post rediseño MP: el CU tiene nueva estructura
