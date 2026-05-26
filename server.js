@@ -871,6 +871,7 @@ async function route(req, res, body) {
           dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
           dec.inventarioInicial     = 0;
           dec.saldoIUEcompensable   = Math.max(0, resPrev.saldoIUEfinal ?? 0);  // FASE 4
+          dec.ivaAPagarAnterior     = Math.max(0, resPrev.ivaAPagar       ?? 0);  // IVA pago diferido
           console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
           console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
@@ -1370,6 +1371,7 @@ async function route(req, res, body) {
           pedidosPendientes:          estado.pedidosPendientesResta ?? [],
           resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
           saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
+          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar       ?? 0),  // IVA diferido
         };
 
         // Multiproducto: propagar también a cada producto del array productos[]
@@ -1471,6 +1473,7 @@ async function route(req, res, body) {
             stockMPFinal:          p0.stockMPFinal ?? 0,
             pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
             saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),  // FASE 4
+            ivaAPagar:            Math.max(0, p0.ivaAPagar       ?? 0),  // IVA diferido
           };
           totalEmpresas++;
         }

@@ -645,9 +645,16 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoMP         = d.pagoMP         || 0;  // FIX balance: pago MP sale de caja
 
   const pagoInvestigacion = gastoInvestigacion_mkt;  // sale de caja este trimestre
+
+  // OPCIÓN A — IVA pago diferido (realidad boliviana):
+  //   El IVA del PERÍODO ACTUAL es un pasivo al cierre — se paga el trimestre siguiente
+  //   El IVA del PERÍODO ANTERIOR (d.ivaAPagarAnterior) sale de caja este trimestre
+  const pagoIVAPeriodoAnterior = roundBs(d.ivaAPagarAnterior ?? 0);  // pago del IVA anterior
+
   const totalPagos = roundBs(pagoProduccion + pagoMktTotal + pagoAdmin + pagoPlanta +
     pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura
-    + pagoIVA + pagoIT + pagoIUE
+    + pagoIVAPeriodoAnterior   // ← IVA del trimestre anterior (no del actual)
+    + pagoIT + pagoIUE
     + pagoOperarios + pagoMP
     + pagoInvestigacion);  // investigación de mercado
 
@@ -681,23 +688,17 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Activos fijos netos
   const afNetos = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
 
-  // Balance General — debe cuadrar: Activos = Pasivos + Patrimonio
-  // El IVA se liquida y paga en el mismo período trimestral:
-  //   Asiento liquidación: IVA Débito → IVA Crédito + IVA por pagar
-  //   Asiento pago:        IVA por pagar → Caja
-  // Por tanto en el Balance final del período:
-  //   ivaCredito = 0 (compensado contra débito)
-  //   ivaAPagar  = 0 (pagado a caja)
-  //   La caja ya refleja el pago (pagoIVA se descontó de cajaFinal)
-  // NO incluir ivaCredito en totalActivos ni ivaAPagar en totalPasivos
+  // Balance General — OPCIÓN A: IVA pago diferido (realidad boliviana)
+  //   Al cierre del trimestre el IVA neto es un PASIVO (obligación devengada, no pagada aún)
+  //   El pago al Estado ocurre en el trimestre siguiente (pagoIVAPeriodoAnterior)
+  //   ivaAPagar aparece en Pasivo Corriente del Balance
+  //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
   const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos);
-  // capitalContable es el capital ORIGINAL que pusieron los socios — no cambia con la depreciación
   const capitalContable = roundBs(params.capitalContable || params.capitalInicial || (params.activosFijosIniciales + params.cajaInicial));
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
-  // totalPasivos = deudaFinal (préstamos + sobregiro)
-  // ivaAPagar ya fue descontado de caja (pagoIVA) — no es pasivo pendiente al cierre
-  const totalPasivos    = deudaFinal;
+  // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
+  const totalPasivos    = roundBs(deudaFinal + ivaAPagar);
 
   // Brand Equity acumulativo — Etapa 2.1
   const brandEquityFinal = calcularBrandEquity(
@@ -747,6 +748,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
     // Etapa 3.4: IT e IUE + compensación IUE→IT (Fase 4)
     impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
+    // IVA pago diferido (Opción A)
+    pagoIVAPeriodoAnterior,
     compensacionIT, ITefectivoCaja, saldoIUEfinal, saldoIUEant,
 
     // Etapa 3.1: materia prima (stockMPFinal se calcula en ejecutarSimulador)

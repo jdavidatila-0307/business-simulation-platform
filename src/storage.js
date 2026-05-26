@@ -609,7 +609,9 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             );
             decNueva.inventarioInicial = todosRes.reduce((s,r) => s + Math.max(0, r.inventarioFinal||0), 0);
             // FASE 4: propagar saldo IUE compensable para la siguiente ronda
-            decNueva.saldoIUEcompensable = Math.max(0, resPrev.saldoIUEfinal ?? 0);
+            decNueva.saldoIUEcompensable  = Math.max(0, resPrev.saldoIUEfinal ?? 0);
+            // IVA pago diferido: el ivaAPagar de esta ronda se paga en la siguiente
+            decNueva.ivaAPagarAnterior    = Math.max(0, resPrev.ivaAPagar    ?? 0);
           }
 
           rondaBase.decisiones[eq.id] = decNueva;
