@@ -493,13 +493,16 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const netIVA     = 1 - tasaIVA_op;  // 0.87
 
   // Costo de ventas — S7: costos REALES (netIVA ya disponible)
+  // S11: comisión neta en ER (×87%)
   const comisionesNeto  = roundBs(comisiones * netIVA);
   const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
-  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * ventasReales);
-  const cvOper   = roundBs(d.costoOperarios  || 0);
-  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);
-  const cvPlanta = roundBs(params.gastoFijoPlanta || 0);
-  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * ventasReales);
+  // MP: costo sobre unidades PRODUCIDAS (d.produccion ya es produccionReal)
+  const produccionPL    = d.produccion || 0;
+  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * produccionPL);
+  const cvOper   = roundBs(d.costoOperarios  || 0);   // fijo: paga igual
+  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);  // fijo
+  const cvPlanta = roundBs(params.gastoFijoPlanta || 0); // fijo
+  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * produccionPL); // S10
   const costoVentas    = roundBs(cvMP + cvOper + cvAdmin + cvPlanta + cvCalid);
   const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
