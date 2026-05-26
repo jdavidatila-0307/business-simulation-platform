@@ -4293,29 +4293,36 @@ window.mostrarFinanciero = (n) => {
         ${finRow('Cobros por ventas al contado',      r.cobrosContado||0,                        false,'pos')}
         <div style="height:4px"></div>
         <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas Operativas</div>
-        ${(r.pagoProduccion||0)>0    ? finRow('Pago de producción',           -(r.pagoProduccion||0),      false,'neg') : ''}
-        ${(r.pagoOperarios2||r.pagoOperarios||0)>0 ? finRow('Pago de operarios',           -(r.pagoOperarios2||r.pagoOperarios||0),                false,'neg') : ''}
-        ${(r.costoVendedores||0)>0                  ? finRow('Pago fuerza de ventas',         -(r.costoVendedores||0),                               false,'neg') : ''}
-        ${(r.pagoMktTotal||0)>0                     ? finRow('Pago de marketing total',       -(r.pagoMktTotal||0),                                  false,'neg') : ''}
-        ${(r.pagoInnovacion||0)>0                   ? finRow('Pago de innovación operativa',  -(r.pagoInnovacion||0),                                false,'neg') : ''}
-        ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0   ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0),   false,'neg') : ''}
-        ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',      -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
-        ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0                ? finRow('Pago de almacenamiento',         -(r.pagoAlmacenamiento||r.pagoAlmacen||0),               false,'neg') : ''}
+        ${(r.pagoMPbruto||0)>0       ? finRow('Pago materia prima (bruto)',    -(r.pagoMPbruto||0),          false,'neg') : ''}
+        ${(r.pagoComisiones||0)>0    ? finRow('Pago comisión canal',           -(r.pagoComisiones||0),       false,'neg') : ''}
+        ${(r.pagoOperarios2||r.pagoOperarios||0)>0 ? finRow('Pago de operarios', -(r.pagoOperarios2||r.pagoOperarios||0), false,'neg') : ''}
+        ${(r.costoVendedores||0)>0   ? finRow('Pago fuerza de ventas',         -(r.costoVendedores||0),      false,'neg') : ''}
+        ${(r.pagoMktTotal||0)>0      ? finRow('Pago de marketing total',        -(r.pagoMktTotal||0),         false,'neg') : ''}
+        ${(r.pagoInnovacion||0)>0    ? finRow('Pago de innovación operativa',   -(r.pagoInnovacion||0),       false,'neg') : ''}
+        ${(r.pagoCalidad||0)>0       ? finRow('Pago de calidad',                -(r.pagoCalidad||0),          false,'neg') : ''}
+        ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0   ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0), false,'neg') : ''}
+        ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',     -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
+        ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0 ? finRow('Pago de almacenamiento', -(r.pagoAlmacenamiento||r.pagoAlmacen||0), false,'neg') : ''}
         ${(r.pagoIVAPeriodoAnterior||0)>0 ? finRow('Pago IVA trimestre anterior al Estado', -(r.pagoIVAPeriodoAnterior||0), false,'neg') : ''}
         ${(r.ivaAPagar||0)>0 ? '<div style="font-size:.72rem;color:var(--text3);padding:3px 0 3px 12px;border-bottom:0.5px solid var(--border)">IVA generado este trimestre: Bs '+Math.round(r.ivaAPagar||0).toLocaleString()+' (se pagará en el siguiente trimestre)</div>' : ''}
-        ${finRow('IT devengado período', -(r.impuestoIT||0), false,'neg')}
-        ${(r.compensacionIT||0)>0 ? finRow('(+) Compensado con saldo IUE', +(r.compensacionIT||0), false,'pos') : ''}
-        ${finRow('Pago IT efectivo en caja', -(r.pagoIT??r.impuestoIT??0), false, (r.pagoIT??r.impuestoIT??0)===0?'neutral':'neg')}
+        ${(r.compensacionIT||0)>0
+          ? finRow('IT devengado período', -(r.impuestoIT||0), false,'neg') +
+            finRow('(+) Compensado con saldo IUE', +(r.compensacionIT||0), false,'pos') +
+            finRow('Pago IT efectivo en caja', -(r.pagoIT||0), false,'neutral')
+          : finRow('Pago IT (efectivo)', -(r.pagoIT??r.impuestoIT??0), false,'neg')}
 
         ${(r.pagoIUE||0)>0 ? finRow('Pago IUE',              -(r.pagoIUE||0), false,'neg') : ''}
         ${(r.saldoIUEfinal||0)>0 ? finRow('Saldo IUE compensable próx. trimestre', r.saldoIUEfinal||0, false,'neutral') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
         ${(() => {
           const entOp = (r.cobrosContado||0);
-          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
-                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
+          const salOp = (r.pagoMPbruto||0)+(r.pagoComisiones||0)
+                       +(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)
+                       +(r.pagoMktTotal||0)+(r.pagoInnovacion||0)+(r.pagoCalidad||0)
+                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)
+                       +(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
-                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // IVA diferido: pago del trimestre anterior
+                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);
           return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
         })()}
         <div style="height:12px"></div>
@@ -4359,10 +4366,13 @@ window.mostrarFinanciero = (n) => {
         <div style="height:4px;border-top:2px solid var(--border2)"></div>
         ${(() => {
           const entOp = (r.cobrosContado||0);
-          const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
-                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
+          const salOp = (r.pagoMPbruto||0)+(r.pagoComisiones||0)
+                       +(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)
+                       +(r.pagoMktTotal||0)+(r.pagoInnovacion||0)+(r.pagoCalidad||0)
+                       +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)
+                       +(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
-                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // IVA diferido: pago del trimestre anterior
+                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);
           const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
           const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
           const entInv = (r.ventaActivosFijos||0);
