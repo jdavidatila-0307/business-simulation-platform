@@ -457,20 +457,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const canalS = d.canalSecundario && d.canalSecundario !== 'Ninguno' ? canalesCfg[d.canalSecundario] : null;
   const comisionPct = canalS ? avg(canalP.comisionPct ?? 0, canalS.comisionPct ?? 0) : (canalP.comisionPct ?? 0);
   const comisiones  = roundBs(ventasBrutas * comisionPct);
-  // ventasNetas temporal — se recalcula en costoVentas con comisionesNeto (S11)
+  // ventasNetas temporal — se recalcula abajo con comisionesNeto (S11)
   const ventasNetas = roundBs(ventasBrutas - comisiones);  // para compatibilidad
 
-  // Costo de ventas — S7: costos REALES de producción (no CU estándar)
-  // S11: comisiones en ER = precio neto (×87%) — ya deducidas de ventasNetas
-  const comisionesNeto = roundBs(comisiones * netIVA);       // S11: comisión neta en ER
-  const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);  // S11: ventasNetas correctas
-  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * ventasReales); // MP neto
-  const cvOper   = roundBs(d.costoOperarios  || 0);          // operarios
-  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);      // admin fijo
-  const cvPlanta = roundBs(params.gastoFijoPlanta || 0);     // planta fija
-  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * ventasReales); // S10: calidad sale de caja
-  const costoVentas    = roundBs(cvMP + cvOper + cvAdmin + cvPlanta + cvCalid);
-  const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
+  // costoVentas y ventasNetasReal se calculan abajo (requieren netIVA)
 
   // Inventario final valorizado
   const invFinalValorizado = roundBs(inventarioFinal * costoUnitario);
@@ -499,12 +489,19 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   }
 
   // ── Gastos operativos en P&L ────────────────────────────────────────────
-  // Ley 843: los gastos con factura se contabilizan al PRECIO NETO (sin IVA)
-  //   precio neto = monto_factura × (1 − tasaIVA)
-  //   el IVA pagado al proveedor va como crédito fiscal (activo), no como gasto
-  // SIN IVA: sueldos (relación laboral), depreciación, gastos admin/planta fijos
   const tasaIVA_op = params.tasaIVA ?? 0.13;
-  const netIVA     = 1 - tasaIVA_op;  // factor para convertir bruto → neto (0.87)
+  const netIVA     = 1 - tasaIVA_op;  // 0.87
+
+  // Costo de ventas — S7: costos REALES (netIVA ya disponible)
+  const comisionesNeto  = roundBs(comisiones * netIVA);
+  const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
+  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * ventasReales);
+  const cvOper   = roundBs(d.costoOperarios  || 0);
+  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);
+  const cvPlanta = roundBs(params.gastoFijoPlanta || 0);
+  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * ventasReales);
+  const costoVentas    = roundBs(cvMP + cvOper + cvAdmin + cvPlanta + cvCalid);
+  const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
   // Gastos CON factura → precio neto en P&L
   const gastoPublicidad     = roundBs((d.publicidad         || 0) * netIVA);
