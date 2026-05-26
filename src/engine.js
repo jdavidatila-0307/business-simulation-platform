@@ -682,14 +682,21 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const afNetos = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
 
   // Balance General — debe cuadrar: Activos = Pasivos + Patrimonio
-  // Pasivos = deudaFinal (préstamos + sobregiro + interés sobregiro)
-  // Patrimonio = Capital + ResultadoAcumulado (resultado ya incluye la pérdida del interesSobregiro)
+  // El IVA se liquida y paga en el mismo período trimestral:
+  //   Asiento liquidación: IVA Débito → IVA Crédito + IVA por pagar
+  //   Asiento pago:        IVA por pagar → Caja
+  // Por tanto en el Balance final del período:
+  //   ivaCredito = 0 (compensado contra débito)
+  //   ivaAPagar  = 0 (pagado a caja)
+  //   La caja ya refleja el pago (pagoIVA se descontó de cajaFinal)
+  // NO incluir ivaCredito en totalActivos ni ivaAPagar en totalPasivos
   const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos);
   // capitalContable es el capital ORIGINAL que pusieron los socios — no cambia con la depreciación
-  const capitalContable = roundBs(params.activosFijosIniciales + params.cajaInicial);
+  const capitalContable = roundBs(params.capitalContable || params.capitalInicial || (params.activosFijosIniciales + params.cajaInicial));
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
-  // totalPasivos = totalActivos - patrimonio (by definition, ensures balance)
+  // totalPasivos = deudaFinal (préstamos + sobregiro)
+  // ivaAPagar ya fue descontado de caja (pagoIVA) — no es pasivo pendiente al cierre
   const totalPasivos    = deudaFinal;
 
   // Brand Equity acumulativo — Etapa 2.1

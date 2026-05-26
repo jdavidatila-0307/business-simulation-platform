@@ -1670,8 +1670,8 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
 
     } else if (tab === 'bg') {
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
-      const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0)+(r.ivaCredito||0);
-      const totalP  = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+      const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);  // ivaCredito ya compensado
+      const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
       const capital = r.capitalContable||680000;
       const utilidad = r.utilidadNeta||0;
       const acumAnt = totalA - totalP - capital - utilidad;
@@ -1680,8 +1680,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('Caja y bancos',              r.cajaFinal,           false,'pos')
         + finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')
         + finRow('Inventarios',                r.invFinalValorizado,  false,'neutral')
-        + ((r.ivaCredito||0)>0 ? finRow('IVA crédito fiscal (activo)', r.ivaCredito, false,'neutral') : '')
-        + finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaCredito||0), false)
+        + finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0), false)
         + sec('Activo No Corriente')
         + finRow('Activos fijos netos', r.afNetos||0, false,'neutral')
         + finRowSub('= Total Activo No Corriente', r.afNetos||0, false)
@@ -4191,7 +4190,6 @@ window.mostrarFinanciero = (n) => {
             ${finRow('Caja y bancos',              r.cajaFinal,           false,'pos')}
             ${finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')}
             ${finRow('Inventarios',                r.invFinalValorizado,  false,'neutral')}
-            ${(r.ivaCredito||0)>0 ? finRow('IVA crédito fiscal (activo)', r.ivaCredito, false,'neutral') : ''}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
             ${finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0), false)}
 
@@ -4217,11 +4215,11 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
 
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo Corriente</div>
-            ${(r.ivaAPagar||0)>0 ? finRow('Impuestos por pagar (IVA)', r.ivaAPagar, false,'neg') : ''}
+            <!-- IVA liquidado y pagado en el trimestre — no es pasivo pendiente al cierre -->
             ${(r.sobregiro||0)>0 ? finRow('Sobregiro bancario',        r.sobregiro, false,'neg') : ''}
             ${finRow('Préstamos y deuda total',    r.deudaFinal,        false,'neg')}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
-            ${finRowSub('= Total Pasivo Corriente', r.deudaFinal+(r.ivaAPagar||0)+(r.sobregiro||0), false)}
+            ${finRowSub('= Total Pasivo Corriente', (r.deudaFinal||0)+(r.sobregiro||0), false)}
 
             <div style="height:8px"></div>
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo No Corriente</div>
@@ -4231,7 +4229,7 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL PASIVOS', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0), true)}
+            ${finRowSub('= TOTAL PASIVOS', (r.deudaFinal||0)+(r.sobregiro||0), true)}
           </div>
         </div>
 
@@ -4240,7 +4238,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+              const totalP   = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
               const patrimonioReal = totalA - totalP;
               const capital  = r.capitalContable || 680000;
               const utilidad = r.utilidadNeta || 0;
