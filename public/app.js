@@ -1607,117 +1607,165 @@ window.adminKPITab = (n, pfx) => {
 
 
 // ── Vista estudiante por equipo (para toggle Opción B) ───────────────────────
+// Reutiliza exactamente el mismo HTML que ve el estudiante en loadEquipoFinanciero
 function buildVistaEstudiantePorEquipo(rd, tab) {
   if (!rd.resultados?.length) return '<p style="color:var(--text3);padding:20px">Sin resultados</p>';
   const eqs = rd.resultados;
+  const COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+  const fmt = { bs: v => 'Bs ' + Math.round(Math.abs(v||0)).toLocaleString('es'),
+                num: v => Math.round(v||0).toLocaleString('es'),
+                pct: v => ((v||0)*100).toFixed(1)+'%' };
 
   return eqs.map((r, idx) => {
-    const color = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'][idx % 6];
-    const nombre = r.equipoNombre || r.equipo || 'Equipo ' + (idx+1);
+    const color  = COLORS[idx % COLORS.length];
+    const nombre = r.equipoNombre || r.equipo || 'Equipo '+(idx+1);
 
-    // Reutilizar finRow y finRowSub del panel estudiante
-    let html = '<div style="background:var(--bg2);border:1px solid var(--border);border-left:4px solid '
-      + color + ';border-radius:var(--r);padding:16px;margin-bottom:12px">'
-      + '<div style="font-weight:700;font-size:.85rem;color:' + color + ';margin-bottom:12px">'
-      + nombre + '</div>';
+    // Encabezado del equipo
+    let html = '<div style="background:var(--bg2);border:0.5px solid var(--border);'
+      + 'border-left:4px solid '+color+';border-radius:var(--r);padding:16px 20px;margin-bottom:16px">'
+      + '<div style="font-weight:700;font-size:.9rem;color:'+color+';margin-bottom:14px;letter-spacing:.3px">'+nombre+'</div>';
 
     if (tab === 'pl') {
-      // ER formato estudiante
-      const fR = (lbl, val, neg=false, sub=false) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
-        + (sub ? 'padding-left:12px;color:var(--text3);' : '') + 'border-bottom:0.5px solid var(--border)">'
-        + '<span>' + lbl + '</span>'
-        + '<span style="font-family:var(--font-mono);color:' + (neg ? '#EF4444' : val >= 0 ? '#10B981' : '#EF4444') + '">'
-        + (neg ? '−' : '') + 'Bs ' + Math.abs(Math.round(val||0)).toLocaleString('es') + '</span></div>';
-      const fB = (lbl, val) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;'
-        + 'border-top:1px solid var(--border2);color:' + ((val||0)>=0?'#10B981':'#EF4444') + '">'
-        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
-
-      html += fR('Precio facturado al cliente', r.totalFacturado||0)
-        + fR('(−) IVA débito fiscal (13%)', r.ivaDebito||0, true, true)
-        + fB('= Ventas brutas (sin IVA)', r.ventasBrutas||0)
-        + fR('(−) Comisiones canal', r.comisiones||0, true, true)
-        + fB('= Ventas netas', r.ventasNetas||0)
-        + fR('(−) Costo de ventas', r.costoVentas||0, true, true)
-        + fB('= Utilidad bruta', r.utilidadBruta||0)
-        + fR('(−) Gastos comerciales', r.pagoMktTotal||0, true, true)
-        + fR('(−) Gastos admin y planta', (r.gastoAdminFijo||0)+(r.gastoFijoPlanta||0)+(r.costoOperarios||0), true, true)
-        + fR('(−) Depreciación', r.depreciacion||0, true, true)
-        + fB('= EBIT', r.ebit||0)
-        + fR('(−) Gastos financieros', (r.interesesPrestamo||0)+(r.comisionApertura||0), true, true)
-        + fR('(−) IT (3% precio facturado)', r.impuestoIT||0, true, true)
-        + (r.impuestoIUE > 0 ? fR('(−) IUE (25%)', r.impuestoIUE, true, true) : '')
-        + fB('= Utilidad neta', r.utilidadNeta||0)
-        + '<div style="margin-top:8px;padding:6px 8px;background:rgba(59,130,246,.07);border-radius:4px;font-size:.72rem;color:var(--text3)">'
-        + 'IVA débito: Bs ' + Math.round(r.ivaDebito||0).toLocaleString('es')
-        + ' · Crédito: Bs ' + Math.round(r.ivaCredito||0).toLocaleString('es')
-        + ' · Neto: Bs ' + Math.round(r.ivaAPagar||0).toLocaleString('es') + '</div>';
+      // ── ER idéntico al panel estudiante ──
+      const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
+      html += finRow('Precio facturado al cliente', r.totalFacturado||0, false,'neutral')
+        + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
+        + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
+        + finRow('(−) Comisiones canal', -(r.comisiones||0), false,'neg')
+        + finRowSub('= Ventas netas', r.ventasNetas||0, true)
+        + finRow('(−) Costo de ventas', -(r.costoVentas||0), false,'neg')
+        + finRowSub('= Utilidad bruta', r.utilidadBruta||0, true)
+        + sec('(-) Gastos Comerciales')
+        + finRow('Publicidad',              -(r.publicidad||0),         false,'neg')
+        + finRow('Promoción',               -(r.promocion||0),          false,'neg')
+        + finRow('Eventos',                 -(r.eventos||0),            false,'neg')
+        + finRow('Marketing en redes',      -(r.marketingRedes||0),     false,'neg')
+        + finRow('Relaciones públicas',     -(r.relacionesPublicas||0), false,'neg')
+        + finRow('Fuerza de ventas',        -(r.costoVendedores||0),    false,'neg')
+        + sec('(-) Gastos Administrativos')
+        + finRow('Sueldos administrativos (operarios)', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')
+        + finRow('Gastos administrativos fijos',        -(r.gastoAdminFijo||0), false,'neg')
+        + sec('(-) Gastos Operativos de Planta')
+        + finRow('Gasto fijo de planta',    -(r.gastoFijoPlanta||0),    false,'neg')
+        + finRow('Almacenamiento',          -(r.costoAlmacenamiento||0),false,'neg')
+        + ((r.gastoInnovacion||0)>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacion||0),false,'neg') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= EBITDA', (r.ebit??0)+(r.depreciacion??0), true)
+        + finRow('(-) Depreciación', -(r.depreciacion||0), false,'neg')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= EBIT / Utilidad Operativa', r.ebit??0, true)
+        + sec('(-) Gastos Financieros')
+        + finRow('Intereses préstamo', -(r.interesesPrestamo||0), false,'neg')
+        + ((r.comisionApertura||0)>0 ? finRow('Comisión apertura', -(r.comisionApertura||0), false,'neg') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= Utilidad antes de impuestos', (r.ebit??0)-(r.gastoFinanciero??0), true)
+        + sec('(-) Impuestos')
+        + finRow('IT (3% precio facturado)', -(r.impuestoIT||0), false,'neg')
+        + ((r.impuestoIUE||0)>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE||0), false,'neg') : '')
+        + '<div style="margin:8px 0;padding:8px 10px;background:rgba(59,130,246,.07);border-radius:6px;border-left:3px solid #3B82F6;font-size:.73rem;color:var(--text3);line-height:1.6">'
+        + '<strong style="color:#3B82F6">ⓘ IVA — tributo neutro (Ley 843)</strong><br>'
+        + 'Débito: '+fmt.bs(r.ivaDebito||0)+' · Crédito: '+fmt.bs(r.ivaCredito||0)+' · <strong>Neto a pagar: '+fmt.bs(r.ivaAPagar||0)+'</strong></div>'
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('= Utilidad neta', r.utilidadNeta, true);
 
     } else if (tab === 'bg') {
-      const fR = (lbl, val, sub=false) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
-        + (sub?'padding-left:12px;color:var(--text3);':'') + 'border-bottom:0.5px solid var(--border)">'
-        + '<span>' + lbl + '</span>'
-        + '<span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
-      const fB = (lbl, val, highlight=false) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;border-top:1px solid var(--border2)">'
-        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono);color:' + (highlight?(Math.abs((r.totalActivos||0)-(r.deudaFinal||0)-(r.patrimonio||0))<2?'#10B981':'#EF4444'):'var(--text1)') + '">'
-        + 'Bs ' + Math.round(val||0).toLocaleString('es') + (highlight?(Math.abs((r.totalActivos||0)-(r.deudaFinal||0)-(r.patrimonio||0))<2?' ✓':' ⚠'):'') + '</span></div>';
-      const sec = (lbl) => '<div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:8px 0 3px;font-family:var(--font-mono)">' + lbl + '</div>';
-
+      const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
+      const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0)+(r.ivaCredito||0);
+      const totalP  = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+      const capital = r.capitalContable||680000;
+      const utilidad = r.utilidadNeta||0;
+      const acumAnt = totalA - totalP - capital - utilidad;
+      const cuadra  = Math.abs(totalA - totalP - (capital+acumAnt+utilidad)) < 2;
       html += sec('Activo Corriente')
-        + fR('Caja y bancos', r.cajaFinal||0)
-        + fR('Cuentas por cobrar', r.cxcFinal||0)
-        + fR('Inventarios', r.invFinalValorizado||0)
-        + ((r.ivaCredito||0)>0 ? fR('IVA crédito fiscal (activo)', r.ivaCredito||0) : '')
-        + fB('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaCredito||0))
+        + finRow('Caja y bancos',              r.cajaFinal,           false,'pos')
+        + finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')
+        + finRow('Inventarios',                r.invFinalValorizado,  false,'neutral')
+        + ((r.ivaCredito||0)>0 ? finRow('IVA crédito fiscal (activo)', r.ivaCredito, false,'neutral') : '')
+        + finRowSub('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaCredito||0), false)
         + sec('Activo No Corriente')
-        + fR('Activos fijos netos', r.afNetos||0)
-        + fB('TOTAL ACTIVOS', r.totalActivos||0)
+        + finRow('Activos fijos netos', r.afNetos||0, false,'neutral')
+        + finRowSub('= Total Activo No Corriente', r.afNetos||0, false)
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('= TOTAL ACTIVOS', totalA, true)
         + sec('Pasivo Corriente')
-        + ((r.ivaAPagar||0)>0 ? fR('IVA neto por pagar', r.ivaAPagar||0) : '')
-        + fR('Préstamos y deuda', r.deudaFinal||0)
-        + fB('= Total Pasivos', (r.deudaFinal||0)+(r.ivaAPagar||0))
+        + ((r.ivaAPagar||0)>0 ? finRow('IVA neto por pagar (débito−crédito)', r.ivaAPagar, false,'neg') : '')
+        + ((r.sobregiro||0)>0 ? finRow('Sobregiro bancario', r.sobregiro, false,'neg') : '')
+        + finRow('Préstamos y deuda total', r.deudaFinal, false,'neg')
+        + finRowSub('= Total Pasivo Corriente', totalP, false)
+        + sec('Pasivo No Corriente')
+        + finRow('Deuda largo plazo', 0, false,'neutral')
+        + finRowSub('= Total Pasivo No Corriente', 0, false)
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('= TOTAL PASIVOS', totalP, true)
         + sec('Patrimonio')
-        + fR('Capital contable', r.capitalContable||0)
-        + fR('Resultados acumulados', r.resultadoAcumulado||0)
-        + fR('Utilidad del período', r.utilidadNeta||0)
-        + fB('= Total Patrimonio', r.patrimonio||0)
-        + fB('TOTAL PASIVOS + PATRIMONIO', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.patrimonio||0), true);
+        + finRow('Capital contable / social', capital, false,'neutral')
+        + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
+        + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('= TOTAL PATRIMONIO', totalA-totalP, true)
+        + finRowSub('TOTAL PASIVOS + PATRIMONIO', totalA, true)
+        + '<div style="margin-top:8px;padding:8px 12px;background:'+(cuadra?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)')
+        + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
+        + (cuadra?'✓ Balance cuadra':'⚠ Verificar balance')
+        + ' (Activos = '+fmt.bs(totalA)+' | P+P = '+fmt.bs(totalA)+')</div>';
 
     } else if (tab === 'fe') {
-      const fR = (lbl, val, neg=false, sub=false) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
-        + (sub?'padding-left:12px;color:var(--text3);':'') + 'border-bottom:0.5px solid var(--border)">'
-        + '<span>' + lbl + '</span>'
-        + '<span style="font-family:var(--font-mono);color:' + (neg?'#EF4444':'var(--text1)') + '">'
-        + (neg?'−':'') + 'Bs ' + Math.abs(Math.round(val||0)).toLocaleString('es') + '</span></div>';
-      const fB = (lbl, val) =>
-        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;border-top:1px solid var(--border2);color:' + ((val||0)>=0?'#10B981':'#EF4444') + '">'
-        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
-      const sec = (lbl) => '<div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:8px 0 3px;font-family:var(--font-mono)">' + lbl + '</div>';
-
-      const flujoOp = (r.cobrosContado||0) - (r.pagoProduccion||0) - (r.pagoOperarios||0)
-        - (r.costoVendedores||0) - (r.pagoMktTotal||0) - (r.pagoInnovacion||0)
-        - (r.gastoAdminFijo||0) - (r.gastoFijoPlanta||0)
-        - (r.pagoIVA||r.ivaAPagar||0) - (r.pagoIT||r.impuestoIT||0) - (r.pagoIUE||r.impuestoIUE||0);
-
-      html += fR('Caja inicial', r.cajaInicial||0)
-        + sec('Actividades Operativas')
-        + fR('Cobros por ventas', r.cobrosContado||0)
-        + fR('(−) Pago producción', r.pagoProduccion||0, true, true)
-        + fR('(−) Pago operarios', r.costoOperarios||0, true, true)
-        + fR('(−) Pago fuerza de ventas', r.costoVendedores||0, true, true)
-        + fR('(−) Pago marketing', r.pagoMktTotal||0, true, true)
-        + fR('(−) Pago gastos admin', r.gastoAdminFijo||0, true, true)
-        + fR('(−) Pago gastos planta', r.gastoFijoPlanta||0, true, true)
-        + fR('(−) Pago IVA neto', r.pagoIVA||r.ivaAPagar||0, true, true)
-        + fR('IT devengado', r.impuestoIT||0, true, true)
-        + ((r.compensacionIT||0)>0 ? '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0 3px 12px;color:#10B981;border-bottom:0.5px solid var(--border)"><span>(+) Compensado con IUE (DS 5563)</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(r.compensacionIT||0).toLocaleString('es') + '</span></div>' : '')
-        + fR('Pago IT efectivo', r.pagoIT||r.impuestoIT||0, true, true)
-        + fB('= Flujo neto operación', flujoOp)
-        + fB('= CAJA FINAL', r.cajaFinal||0);
+      const sec  = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0;border-bottom:2px solid var(--border2);margin-bottom:4px">'+lbl+'</div>';
+      const secS = lbl => '<div style="font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0">'+lbl+'</div>';
+      const entOp = (r.cobrosContado||0);
+      const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||r.costoOperarios||0)
+        +(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
+        +(r.pagoGastosAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.gastoFijoPlanta||0)
+        +(r.pagoAlmacenamiento||0)+(r.pagoIVA||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);
+      const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
+      const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)
+        +(r.interesSobregiro||0)+(r.comisionApertura||0);
+      html += finRow('Caja inicial', r.cajaInicial, false,'neutral')
+        + '<div style="height:12px"></div>'
+        + sec('Flujo de Efectivo por Actividades de Operación')
+        + secS('Entradas Operativas')
+        + finRow('Cobros por ventas al contado', r.cobrosContado||0, false,'pos')
+        + '<div style="height:4px"></div>'
+        + secS('Salidas Operativas')
+        + ((r.pagoProduccion||0)>0    ? finRow('Pago de producción',          -(r.pagoProduccion||0),  false,'neg') : '')
+        + ((r.pagoOperarios2||r.pagoOperarios||r.costoOperarios||0)>0 ? finRow('Pago de operarios', -(r.pagoOperarios2||r.pagoOperarios||r.costoOperarios||0), false,'neg') : '')
+        + ((r.costoVendedores||0)>0   ? finRow('Pago fuerza de ventas',       -(r.costoVendedores||0), false,'neg') : '')
+        + ((r.pagoMktTotal||0)>0      ? finRow('Pago de marketing total',     -(r.pagoMktTotal||0),    false,'neg') : '')
+        + ((r.pagoInnovacion||0)>0    ? finRow('Pago de innovación',          -(r.pagoInnovacion||0),  false,'neg') : '')
+        + ((r.pagoGastosAdmin||r.gastoAdminFijo||0)>0  ? finRow('Pago gastos administrativos', -(r.pagoGastosAdmin||r.gastoAdminFijo||0), false,'neg') : '')
+        + ((r.pagoGastosPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago gastos de planta',     -(r.pagoGastosPlanta||r.gastoFijoPlanta||0), false,'neg') : '')
+        + ((r.pagoIVA||0)>0  ? finRow('Pago IVA neto al Estado',   -(r.pagoIVA||0),  false,'neg') : '')
+        + finRow('IT devengado período', -(r.impuestoIT||0), false,'neg')
+        + ((r.compensacionIT||0)>0 ? finRow('(+) Compensado con saldo IUE (DS 5563)', +(r.compensacionIT||0), false,'pos') : '')
+        + finRow('Pago IT efectivo en caja', -(r.pagoIT??r.impuestoIT??0), false, (r.pagoIT??r.impuestoIT??0)===0?'neutral':'neg')
+        + ((r.pagoIUE||0)>0  ? finRow('Pago IUE',           -(r.pagoIUE||0),   false,'neg') : '')
+        + ((r.saldoIUEfinal||0)>0 ? finRow('Saldo IUE compensable próx. trim.', r.saldoIUEfinal||0, false,'neutral') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= Flujo Neto de Actividades de Operación', entOp-salOp, false)
+        + '<div style="height:12px"></div>'
+        + sec('Flujo de Efectivo por Actividades de Inversión')
+        + secS('Entradas de Inversión')
+        + finRow('Venta de activos fijos', r.ventaActivosFijos||0, false,'pos')
+        + '<div style="height:4px"></div>'
+        + secS('Salidas de Inversión')
+        + finRow('Compra de activos fijos / maquinaria', -(r.compraActivosFijos||0), false,'neg')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= Flujo Neto de Actividades de Inversión', (r.ventaActivosFijos||0)-(r.compraActivosFijos||0), false)
+        + '<div style="height:12px"></div>'
+        + sec('Flujo de Efectivo por Actividades de Financiamiento')
+        + secS('Entradas de Financiamiento')
+        + ((r.ingresoPrestamo||0)>0 ? finRow('Ingreso por préstamo', r.ingresoPrestamo||0, false,'pos') : '')
+        + '<div style="height:4px"></div>'
+        + secS('Salidas de Financiamiento')
+        + ((r.pagoIntereses||r.interesesPrestamo||0)>0 ? finRow('Pago intereses préstamo', -(r.pagoIntereses||r.interesesPrestamo||0), false,'neg') : '')
+        + ((r.comisionApertura||0)>0 ? finRow('Pago comisión apertura', -(r.comisionApertura||0), false,'neg') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= Flujo Neto de Actividades de Financiamiento', entFin-salFin, false)
+        + '<div style="height:12px"></div>'
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('Aumento / Disminución Neta de Caja', (entOp-salOp)+(r.ventaActivosFijos||0)-(r.compraActivosFijos||0)+(entFin-salFin), false)
+        + '<div style="height:4px"></div>'
+        + finRowSub('= CAJA FINAL', r.cajaFinal, true);
     }
 
     html += '</div>';
