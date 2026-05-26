@@ -4088,8 +4088,10 @@ window.mostrarFinanciero = (n) => {
         ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',      -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
         ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0                ? finRow('Pago de almacenamiento',         -(r.pagoAlmacenamiento||r.pagoAlmacen||0),               false,'neg') : ''}
         ${(r.pagoIVA||0)>0 ? finRow('Pago IVA neto al Estado', -(r.pagoIVA||0), false,'neg') : ''}
-        ${(r.pagoIT||0)>0  ? finRow('Pago IT (efectivo)',    -(r.pagoIT||0),  false,'neg') : ''}
-        ${(r.compensacionIT||0)>0 ? finRow('IT compensado con IUE (DS 5563)', r.compensacionIT||0, false,'pos') : ''}
+        ${finRow('IT devengado período', -(r.impuestoIT||0), false,'neg')}
+        ${(r.compensacionIT||0)>0 ? finRow('(+) Compensado con saldo IUE', +(r.compensacionIT||0), false,'pos') : ''}
+        ${finRow('Pago IT efectivo en caja', -(r.pagoIT??r.impuestoIT??0), false, (r.pagoIT??r.impuestoIT??0)===0?'neutral':'neg')}
+
         ${(r.pagoIUE||0)>0 ? finRow('Pago IUE',              -(r.pagoIUE||0), false,'neg') : ''}
         ${(r.saldoIUEfinal||0)>0 ? finRow('Saldo IUE compensable próx. trimestre', r.saldoIUEfinal||0, false,'neutral') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
@@ -4097,7 +4099,8 @@ window.mostrarFinanciero = (n) => {
           const entOp = (r.cobrosContado||0);
           const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
-                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
+                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
+                       +(r.pagoIVA||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // usar pagos efectivos
           return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
         })()}
         <div style="height:12px"></div>
@@ -4143,7 +4146,8 @@ window.mostrarFinanciero = (n) => {
           const entOp = (r.cobrosContado||0);
           const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
-                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)+(r.totalImpuestos||0);
+                       +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
+                       +(r.pagoIVA||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // usar pagos efectivos
           const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
           const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
           const entInv = (r.ventaActivosFijos||0);
