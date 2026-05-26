@@ -545,10 +545,14 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
 
   // Flujo de caja
-  // FASE 0-E: el cliente paga el precio completo con IVA (totalFacturado)
-  // La empresa recibe totalFacturado y luego paga ivaAPagar al Estado (pagoIVA en totalPagos)
+  // Cobros: el canal retiene la comisión antes de pagar a la empresa
+  // La empresa recibe: (ventasNetas + ivaDebito) × pctContado
+  //   ventasNetas = ventasBrutas − comisiones (ingreso real sin IVA)
+  //   ivaDebito   = IVA cobrado al cliente
+  //   El canal ya descontó su comisión — la empresa no cobra esa parte
   const cxcCobroEsta  = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro));
-  const cobrosContado = roundBs(totalFacturado * params.pctVentasContado + cxcCobroEsta);
+  const baseCobroReal = roundBs(ventasNetas + ivaDebito);  // lo que realmente recibe la empresa
+  const cobrosContado = roundBs(baseCobroReal * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
   const pagoProduccion = roundBs((d.produccion || 0) * cuBruto);  // paga precio bruto al proveedor
@@ -660,6 +664,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   El IVA del PERÍODO ANTERIOR (d.ivaAPagarAnterior) sale de caja este trimestre
   const pagoIVAPeriodoAnterior = roundBs(d.ivaAPagarAnterior ?? 0);  // pago del IVA anterior
 
+  // Las comisiones del canal ya fueron retenidas por el canal al momento del cobro
+  // La empresa NUNCA recibe ese dinero — el canal cobra al cliente y entrega el neto
+  // Por tanto NO hay pagoComisiones en totalPagos
+  // cobrosContado ya refleja el neto recibido: (ventasNetas + ivaDebito) × pctContado
+
   const totalPagos = roundBs(pagoProduccion + pagoMktTotal + pagoAdmin + pagoPlanta +
     pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura
     + pagoIVAPeriodoAnterior   // ← IVA del trimestre anterior (no del actual)
@@ -684,8 +693,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const cajaFinal = cajaPreliminar;
 
   // CxC final = CxC anterior no cobrado + nuevas ventas a crédito
-  // Base = totalFacturado (cliente debe el precio con IVA incluido)
-  const cxcNuevo     = roundBs(totalFacturado * params.pctVentasCredito);
+  // Base = ventasNetas + ivaDebito (ingreso real sin comisiones del canal)
+  const cxcNuevo     = roundBs(baseCobroReal * params.pctVentasCredito);
   const cxcNoCobrObj = roundBs((d.cxcInicial || 0) - cxcCobroEsta);
   const cxcFinal     = roundBs(Math.max(0, cxcNoCobrObj) + cxcNuevo);
 
