@@ -1606,6 +1606,160 @@ window.adminKPITab = (n, pfx) => {
 };
 
 
+// ── Vista estudiante por equipo (para toggle Opción B) ───────────────────────
+function buildVistaEstudiantePorEquipo(rd, tab) {
+  if (!rd.resultados?.length) return '<p style="color:var(--text3);padding:20px">Sin resultados</p>';
+  const eqs = rd.resultados;
+
+  return eqs.map((r, idx) => {
+    const color = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'][idx % 6];
+    const nombre = r.equipoNombre || r.equipo || 'Equipo ' + (idx+1);
+
+    // Reutilizar finRow y finRowSub del panel estudiante
+    let html = '<div style="background:var(--bg2);border:1px solid var(--border);border-left:4px solid '
+      + color + ';border-radius:var(--r);padding:16px;margin-bottom:12px">'
+      + '<div style="font-weight:700;font-size:.85rem;color:' + color + ';margin-bottom:12px">'
+      + nombre + '</div>';
+
+    if (tab === 'pl') {
+      // ER formato estudiante
+      const fR = (lbl, val, neg=false, sub=false) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
+        + (sub ? 'padding-left:12px;color:var(--text3);' : '') + 'border-bottom:0.5px solid var(--border)">'
+        + '<span>' + lbl + '</span>'
+        + '<span style="font-family:var(--font-mono);color:' + (neg ? '#EF4444' : val >= 0 ? '#10B981' : '#EF4444') + '">'
+        + (neg ? '−' : '') + 'Bs ' + Math.abs(Math.round(val||0)).toLocaleString('es') + '</span></div>';
+      const fB = (lbl, val) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;'
+        + 'border-top:1px solid var(--border2);color:' + ((val||0)>=0?'#10B981':'#EF4444') + '">'
+        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
+
+      html += fR('Precio facturado al cliente', r.totalFacturado||0)
+        + fR('(−) IVA débito fiscal (13%)', r.ivaDebito||0, true, true)
+        + fB('= Ventas brutas (sin IVA)', r.ventasBrutas||0)
+        + fR('(−) Comisiones canal', r.comisiones||0, true, true)
+        + fB('= Ventas netas', r.ventasNetas||0)
+        + fR('(−) Costo de ventas', r.costoVentas||0, true, true)
+        + fB('= Utilidad bruta', r.utilidadBruta||0)
+        + fR('(−) Gastos comerciales', r.pagoMktTotal||0, true, true)
+        + fR('(−) Gastos admin y planta', (r.gastoAdminFijo||0)+(r.gastoFijoPlanta||0)+(r.costoOperarios||0), true, true)
+        + fR('(−) Depreciación', r.depreciacion||0, true, true)
+        + fB('= EBIT', r.ebit||0)
+        + fR('(−) Gastos financieros', (r.interesesPrestamo||0)+(r.comisionApertura||0), true, true)
+        + fR('(−) IT (3% precio facturado)', r.impuestoIT||0, true, true)
+        + (r.impuestoIUE > 0 ? fR('(−) IUE (25%)', r.impuestoIUE, true, true) : '')
+        + fB('= Utilidad neta', r.utilidadNeta||0)
+        + '<div style="margin-top:8px;padding:6px 8px;background:rgba(59,130,246,.07);border-radius:4px;font-size:.72rem;color:var(--text3)">'
+        + 'IVA débito: Bs ' + Math.round(r.ivaDebito||0).toLocaleString('es')
+        + ' · Crédito: Bs ' + Math.round(r.ivaCredito||0).toLocaleString('es')
+        + ' · Neto: Bs ' + Math.round(r.ivaAPagar||0).toLocaleString('es') + '</div>';
+
+    } else if (tab === 'bg') {
+      const fR = (lbl, val, sub=false) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
+        + (sub?'padding-left:12px;color:var(--text3);':'') + 'border-bottom:0.5px solid var(--border)">'
+        + '<span>' + lbl + '</span>'
+        + '<span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
+      const fB = (lbl, val, highlight=false) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;border-top:1px solid var(--border2)">'
+        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono);color:' + (highlight?(Math.abs((r.totalActivos||0)-(r.deudaFinal||0)-(r.patrimonio||0))<2?'#10B981':'#EF4444'):'var(--text1)') + '">'
+        + 'Bs ' + Math.round(val||0).toLocaleString('es') + (highlight?(Math.abs((r.totalActivos||0)-(r.deudaFinal||0)-(r.patrimonio||0))<2?' ✓':' ⚠'):'') + '</span></div>';
+      const sec = (lbl) => '<div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:8px 0 3px;font-family:var(--font-mono)">' + lbl + '</div>';
+
+      html += sec('Activo Corriente')
+        + fR('Caja y bancos', r.cajaFinal||0)
+        + fR('Cuentas por cobrar', r.cxcFinal||0)
+        + fR('Inventarios', r.invFinalValorizado||0)
+        + ((r.ivaCredito||0)>0 ? fR('IVA crédito fiscal (activo)', r.ivaCredito||0) : '')
+        + fB('= Total Activo Corriente', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaCredito||0))
+        + sec('Activo No Corriente')
+        + fR('Activos fijos netos', r.afNetos||0)
+        + fB('TOTAL ACTIVOS', r.totalActivos||0)
+        + sec('Pasivo Corriente')
+        + ((r.ivaAPagar||0)>0 ? fR('IVA neto por pagar', r.ivaAPagar||0) : '')
+        + fR('Préstamos y deuda', r.deudaFinal||0)
+        + fB('= Total Pasivos', (r.deudaFinal||0)+(r.ivaAPagar||0))
+        + sec('Patrimonio')
+        + fR('Capital contable', r.capitalContable||0)
+        + fR('Resultados acumulados', r.resultadoAcumulado||0)
+        + fR('Utilidad del período', r.utilidadNeta||0)
+        + fB('= Total Patrimonio', r.patrimonio||0)
+        + fB('TOTAL PASIVOS + PATRIMONIO', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.patrimonio||0), true);
+
+    } else if (tab === 'fe') {
+      const fR = (lbl, val, neg=false, sub=false) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;'
+        + (sub?'padding-left:12px;color:var(--text3);':'') + 'border-bottom:0.5px solid var(--border)">'
+        + '<span>' + lbl + '</span>'
+        + '<span style="font-family:var(--font-mono);color:' + (neg?'#EF4444':'var(--text1)') + '">'
+        + (neg?'−':'') + 'Bs ' + Math.abs(Math.round(val||0)).toLocaleString('es') + '</span></div>';
+      const fB = (lbl, val) =>
+        '<div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;padding:5px 0;border-top:1px solid var(--border2);color:' + ((val||0)>=0?'#10B981':'#EF4444') + '">'
+        + '<span>' + lbl + '</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(val||0).toLocaleString('es') + '</span></div>';
+      const sec = (lbl) => '<div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:8px 0 3px;font-family:var(--font-mono)">' + lbl + '</div>';
+
+      const flujoOp = (r.cobrosContado||0) - (r.pagoProduccion||0) - (r.pagoOperarios||0)
+        - (r.costoVendedores||0) - (r.pagoMktTotal||0) - (r.pagoInnovacion||0)
+        - (r.gastoAdminFijo||0) - (r.gastoFijoPlanta||0)
+        - (r.pagoIVA||r.ivaAPagar||0) - (r.pagoIT||r.impuestoIT||0) - (r.pagoIUE||r.impuestoIUE||0);
+
+      html += fR('Caja inicial', r.cajaInicial||0)
+        + sec('Actividades Operativas')
+        + fR('Cobros por ventas', r.cobrosContado||0)
+        + fR('(−) Pago producción', r.pagoProduccion||0, true, true)
+        + fR('(−) Pago operarios', r.costoOperarios||0, true, true)
+        + fR('(−) Pago fuerza de ventas', r.costoVendedores||0, true, true)
+        + fR('(−) Pago marketing', r.pagoMktTotal||0, true, true)
+        + fR('(−) Pago gastos admin', r.gastoAdminFijo||0, true, true)
+        + fR('(−) Pago gastos planta', r.gastoFijoPlanta||0, true, true)
+        + fR('(−) Pago IVA neto', r.pagoIVA||r.ivaAPagar||0, true, true)
+        + fR('IT devengado', r.impuestoIT||0, true, true)
+        + ((r.compensacionIT||0)>0 ? '<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0 3px 12px;color:#10B981;border-bottom:0.5px solid var(--border)"><span>(+) Compensado con IUE (DS 5563)</span><span style="font-family:var(--font-mono)">Bs ' + Math.round(r.compensacionIT||0).toLocaleString('es') + '</span></div>' : '')
+        + fR('Pago IT efectivo', r.pagoIT||r.impuestoIT||0, true, true)
+        + fB('= Flujo neto operación', flujoOp)
+        + fB('= CAJA FINAL', r.cajaFinal||0);
+    }
+
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+// helper: wrap vista comparativa + vista estudiante con toggle
+function withToggle(pfxId, tabKey, comparativaHTML, rd) {
+  const btnId  = pfxId + '_togBtn_' + tabKey;
+  const compId = pfxId + '_comp_'   + tabKey;
+  const studId = pfxId + '_stud_'   + tabKey;
+  return '<div>'
+    + '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">'
+    + '<div style="display:inline-flex;border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden;font-size:.75rem">'
+    + '<button id="' + btnId + '_c" onclick="toggleVistaAdmin(\'' + compId + '\',\'' + studId + '\',\'' + btnId + '\')" '
+    + 'style="padding:5px 12px;background:var(--accent);color:#fff;border:none;cursor:pointer">Vista comparativa</button>'
+    + '<button id="' + btnId + '_s" onclick="toggleVistaAdmin(\'' + studId + '\',\'' + compId + '\',\'' + btnId + '\')" '
+    + 'style="padding:5px 12px;background:transparent;border:none;cursor:pointer;color:var(--text2)">Vista por equipo</button>'
+    + '</div></div>'
+    + '<div id="' + compId + '">' + comparativaHTML + '</div>'
+    + '<div id="' + studId + '" style="display:none">' + buildVistaEstudiantePorEquipo(rd, tabKey) + '</div>'
+    + '</div>';
+}
+
+window.toggleVistaAdmin = (showId, hideId, btnId) => {
+  const show = document.getElementById(showId);
+  const hide = document.getElementById(hideId);
+  if (show) show.style.display = '';
+  if (hide) hide.style.display = 'none';
+  // Actualizar estilos de botones
+  const bComp = document.getElementById(btnId + '_c');
+  const bStud = document.getElementById(btnId + '_s');
+  if (bComp && bStud) {
+    const showIsComp = showId.includes('_comp_');
+    bComp.style.background = showIsComp ? 'var(--accent)' : 'transparent';
+    bComp.style.color       = showIsComp ? '#fff' : 'var(--text2)';
+    bStud.style.background  = showIsComp ? 'transparent' : 'var(--accent)';
+    bStud.style.color       = showIsComp ? 'var(--text2)' : '#fff';
+  }
+};
+
 function buildAdminResultsHTML(rd) {
   if (!rd.resultados?.length) return '';
 
@@ -1717,7 +1871,7 @@ function buildAdminResultsHTML(rd) {
     + '</div>';
 
   // ── PESTAÑA 2: ESTADO DE RESULTADOS ──────────────────────
-  const plHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  const plHTMLcomp = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
     + hdr()
     + sec('Ingresos')
     + row('(+) Ingresos por ventas',      r => r.ventasBrutas||0)
@@ -1731,9 +1885,10 @@ function buildAdminResultsHTML(rd) {
     + row('Impuestos (IVA+IT+IUE)',       r => (r.ivaAPagar||0)+(r.impuestoIT||0)+(r.impuestoIUE||0), true)
     + tot('UTILIDAD NETA',                r => r.utilidadNeta||0, true)
     + '</table></div>';
+  const plHTML = withToggle(pfx+'pl', 'pl', plHTMLcomp, rd);
 
   // ── PESTAÑA 3: BALANCE GENERAL ────────────────────────────
-  const bgHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  const bgHTMLcomp = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
     + hdr()
     + sec('A · Activo Corriente')
     + row('Caja y equivalentes',          r => r.cajaFinal||0)
@@ -1762,9 +1917,10 @@ function buildAdminResultsHTML(rd) {
         return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">TOTAL PASIVO + PATRIMONIO</td>'+checks+'</tr>';
       })()
     + '</table></div>';
+  const bgHTML = withToggle(pfx+'bg', 'bg', bgHTMLcomp, rd);
 
   // ── PESTAÑA 4: FLUJO DE EFECTIVO ──────────────────────────
-  const feHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+  const feHTMLcomp = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
     + hdr()
     + sec('A · Actividades Operativas')
     + row('Utilidad neta',                r => r.utilidadNeta||0)
@@ -1794,6 +1950,7 @@ function buildAdminResultsHTML(rd) {
         return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">Saldo final de caja</td>'+checks+'</tr>';
       })()
     + '</table></div>';
+  const feHTML = withToggle(pfx+'fe', 'fe', feHTMLcomp, rd);
 
   // ── Encabezado y tabs ─────────────────────────────────────
   const encabezado = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
