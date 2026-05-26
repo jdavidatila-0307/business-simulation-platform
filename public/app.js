@@ -1763,6 +1763,9 @@ window.toggleVistaAdmin = (showId, hideId, btnId) => {
 function buildAdminResultsHTML(rd) {
   if (!rd.resultados?.length) return '';
 
+  // F7-FIX: pfx definido al inicio para que withToggle pueda usarlo
+  const pfx = 'ef_r' + (rd.ronda || 'x') + '_';
+
   // ── Paleta de colores por empresa ─────────────────────────
   const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6',
                    '#EC4899','#06FFA5','#84CC16','#F97316'];
@@ -1963,9 +1966,7 @@ function buildAdminResultsHTML(rd) {
     + '</div>'
     + '</div>';
 
-  // F7-FIX: usar prefijo único por instancia para evitar IDs duplicados
-  // cuando buildAdminResultsHTML se llama desde Dashboard Y desde Resultados
-  const pfx = 'ef_r' + (rd.ronda || 'x') + '_';
+  // F7-FIX: pfx ya definido al inicio de la función
   const tabs = '<div id="' + pfx + 'Tabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
     + '<button class="btn btn-primary btn-sm" id="' + pfx + 'btn1" onclick="adminEFTab(1,\'' + pfx + '\')">📊 Dashboard</button>'
     + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn2" onclick="adminEFTab(2,\'' + pfx + '\')">📋 Estado de Resultados</button>'
