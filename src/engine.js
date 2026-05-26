@@ -749,12 +749,19 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // Estado de Resultados
     ventasBrutas, comisiones, ventasNetas,
     costoVentas, utilidadBruta,
+    // Gastos brutos (decisiones)
     publicidad:         d.publicidad         || 0,
     promocion:          d.promocion          || 0,
     eventos:            d.eventos            || 0,
     marketingRedes:     d.marketingRedes     || 0,
     relacionesPublicas: d.relacionesPublicas || 0,
     costoVendedores:    d.costoVendedores    || 0,
+    // Gastos netos (×87% para ER — Ley 843)
+    gastoPublicidad, gastoPromocion, gastoEventos,
+    gastoMktRedes, gastoRRPP,
+    gastoInnovacionNeto,
+    // Comisiones netas y ventas netas reales
+    comisionesNeto, ventasNetasReal,
     gastoAdminFijo:     params.gastoAdminFijo,
     gastoFijoPlanta:    params.gastoFijoPlanta,
     depreciacion:       params.depreciacionTrimestral,
