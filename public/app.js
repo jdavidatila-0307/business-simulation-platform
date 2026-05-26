@@ -4216,11 +4216,11 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
 
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo Corriente</div>
-            <!-- IVA liquidado y pagado en el trimestre — no es pasivo pendiente al cierre -->
+            ${(r.ivaAPagar||0)>0 ? finRow('IVA por pagar (saldo trimestre)', r.ivaAPagar, false,'neg') : ''}
             ${(r.sobregiro||0)>0 ? finRow('Sobregiro bancario',        r.sobregiro, false,'neg') : ''}
             ${finRow('Préstamos y deuda total',    r.deudaFinal,        false,'neg')}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
-            ${finRowSub('= Total Pasivo Corriente', (r.deudaFinal||0)+(r.sobregiro||0), false)}
+            ${finRowSub('= Total Pasivo Corriente', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0), false)}
 
             <div style="height:8px"></div>
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Pasivo No Corriente</div>
@@ -4230,7 +4230,7 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL PASIVOS', (r.deudaFinal||0)+(r.sobregiro||0), true)}
+            ${finRowSub('= TOTAL PASIVOS', (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0), true)}
           </div>
         </div>
 
@@ -4239,7 +4239,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalP   = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
+              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);  // IVA pasivo al cierre
               const patrimonioReal = totalA - totalP;
               const capital  = r.capitalContable || 680000;
               const utilidad = r.utilidadNeta || 0;
@@ -4298,7 +4298,8 @@ window.mostrarFinanciero = (n) => {
         ${(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)>0   ? finRow('Pago de gastos administrativos', -(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0),   false,'neg') : ''}
         ${(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)>0 ? finRow('Pago de gastos de planta',      -(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0), false,'neg') : ''}
         ${(r.pagoAlmacenamiento||r.pagoAlmacen||0)>0                ? finRow('Pago de almacenamiento',         -(r.pagoAlmacenamiento||r.pagoAlmacen||0),               false,'neg') : ''}
-        ${(r.pagoIVA||0)>0 ? finRow('Pago IVA neto al Estado', -(r.pagoIVA||0), false,'neg') : ''}
+        ${(r.pagoIVAPeriodoAnterior||0)>0 ? finRow('Pago IVA trimestre anterior al Estado', -(r.pagoIVAPeriodoAnterior||0), false,'neg') : ''}
+        ${(r.ivaAPagar||0)>0 ? '<div style="font-size:.72rem;color:var(--text3);padding:3px 0 3px 12px;border-bottom:0.5px solid var(--border)">IVA generado este trimestre: Bs '+Math.round(r.ivaAPagar||0).toLocaleString()+' (se pagará en el siguiente trimestre)</div>' : ''}
         ${finRow('IT devengado período', -(r.impuestoIT||0), false,'neg')}
         ${(r.compensacionIT||0)>0 ? finRow('(+) Compensado con saldo IUE', +(r.compensacionIT||0), false,'pos') : ''}
         ${finRow('Pago IT efectivo en caja', -(r.pagoIT??r.impuestoIT??0), false, (r.pagoIT??r.impuestoIT??0)===0?'neutral':'neg')}
@@ -4311,7 +4312,7 @@ window.mostrarFinanciero = (n) => {
           const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
-                       +(r.pagoIVA||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // usar pagos efectivos
+                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // IVA diferido: pago del trimestre anterior
           return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
         })()}
         <div style="height:12px"></div>
@@ -4358,7 +4359,7 @@ window.mostrarFinanciero = (n) => {
           const salOp = (r.pagoProduccion||0)+(r.pagoOperarios2||r.pagoOperarios||0)+(r.costoVendedores||0)+(r.pagoMktTotal||0)+(r.pagoInnovacion||0)
                        +(r.pagoGastosAdmin||r.pagoAdmin||r.gastoAdminFijo||0)+(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
-                       +(r.pagoIVA||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // usar pagos efectivos
+                       +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);  // IVA diferido: pago del trimestre anterior
           const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
           const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
           const entInv = (r.ventaActivosFijos||0);
