@@ -492,18 +492,15 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const tasaIVA_op = params.tasaIVA ?? 0.13;
   const netIVA     = 1 - tasaIVA_op;  // 0.87
 
-  // Costo de ventas — S7: costos REALES (netIVA ya disponible)
+  // Costo de ventas — S7: solo costos VARIABLES de producción
+  // Los costos fijos (operarios, admin, planta) van en gastosOp — NO duplicar aquí
   // S11: comisión neta en ER (×87%)
   const comisionesNeto  = roundBs(comisiones * netIVA);
   const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
-  // MP: costo sobre unidades PRODUCIDAS (d.produccion ya es produccionReal)
   const produccionPL    = d.produccion || 0;
-  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * produccionPL);
-  const cvOper   = roundBs(d.costoOperarios  || 0);   // fijo: paga igual
-  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);  // fijo
-  const cvPlanta = roundBs(params.gastoFijoPlanta || 0); // fijo
-  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * produccionPL); // S10
-  const costoVentas    = roundBs(cvMP + cvOper + cvAdmin + cvPlanta + cvCalid);
+  const cvMP    = roundBs((d.costoMPunitario || 0) * netIVA * produccionPL);  // MP neto
+  const cvCalid = roundBs(0.20 * (d.calidad || 5) * produccionPL);           // S10 calidad
+  const costoVentas    = roundBs(cvMP + cvCalid);
   const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
   // Gastos CON factura → precio neto en P&L
@@ -554,11 +551,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   let utilidadNeta = utilidadNeta_operat;  // se actualizará post-impuestos
 
   // Flujo de caja
-  // ivaDebito necesario aquí — adelantar declaración
+  // S2: cobros = totalFacturado × pctContado (empresa cobra directo al cliente)
+  // S3: comisión sale como pago separado en pagoComisiones
   const ivaDebito  = ivaDebitoVentas;  // totalFacturado × tasaIVA (Fase 0)
   const cxcCobroEsta  = roundBs((d.cxcInicial || 0) / Math.max(1, params.plazoCobro));
-  const baseCobroReal = roundBs(ventasNetas + ivaDebito);
-  const cobrosContado = roundBs(baseCobroReal * params.pctVentasContado + cxcCobroEsta);
+  const cobrosContado = roundBs(totalFacturado * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
   // S7: pagoProduccion ELIMINADO — los costos reales de producción
@@ -713,9 +710,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   }
   const cajaFinal = cajaPreliminar;
 
-  // CxC final = CxC anterior no cobrado + nuevas ventas a crédito
-  // Base = ventasNetas + ivaDebito (ingreso real sin comisiones del canal)
-  const cxcNuevo     = roundBs(baseCobroReal * params.pctVentasCredito);
+  // CxC final = totalFacturado × pctCredito (S2: cliente debe precio con IVA)
+  const cxcNuevo     = roundBs(totalFacturado * params.pctVentasCredito);
   const cxcNoCobrObj = roundBs((d.cxcInicial || 0) - cxcCobroEsta);
   const cxcFinal     = roundBs(Math.max(0, cxcNoCobrObj) + cxcNuevo);
 
