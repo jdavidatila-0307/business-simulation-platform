@@ -1281,7 +1281,7 @@ async function loadAdminDashboard() {
 // 4 tabs por rol (mismos KPIs que ve el estudiante) en formato comparativo.
 // Dependencias: eqs (array de resultados consolidados por empresa), tc() (colores)
 
-function buildAdminKPIHTML(eqs, tc) {
+function buildAdminKPIHTML(eqs, tc, pfx='kpi_') {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const safe = (v) => (isNaN(v) || !isFinite(v) || v === null) ? null : v;
@@ -1571,13 +1571,13 @@ function buildAdminKPIHTML(eqs, tc) {
   );
 
   // ── Ensamblado con 4 tabs ─────────────────────────────────────────────────
-  const tabBar = '<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
-    + '<button class="btn btn-primary btn-sm" id="btnKPI1" onclick="adminKPITab(1)">📣 Marketing</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnKPI2" onclick="adminKPITab(2)">🏭 Producción</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnKPI3" onclick="adminKPITab(3)">👥 RRHH</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnKPI4" onclick="adminKPITab(4)">💰 Financiero</button>'
+  const tabBar = '<div id="' + pfx + 'TabBar" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="' + pfx + 'btn1" onclick="adminKPITab(1,\''+pfx+'\')">📣 Marketing</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn2" onclick="adminKPITab(2,\''+pfx+'\')">🏭 Producción</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn3" onclick="adminKPITab(3,\''+pfx+'\')">👥 RRHH</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn4" onclick="adminKPITab(4,\''+pfx+'\')">💰 Financiero</button>'
     + '<div style="flex:1"></div>'
-    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminKPIContent\',\'Análisis KPI Financiero\',\'Ronda actual\')">🖨️ Imprimir</button>'
+    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'' + pfx + 'Content\',\'Análisis KPI Financiero\',\'Ronda actual\')">🖨️ Imprimir</button>'
     + '</div>';
 
   const leyenda = '<div style="display:flex;gap:16px;margin-bottom:10px;font-size:.74rem;color:var(--text3)">'
@@ -1587,18 +1587,19 @@ function buildAdminKPIHTML(eqs, tc) {
     + '<span style="margin-left:auto;font-style:italic">Hover en ⓘ para ver definición del indicador</span>'
     + '</div>';
 
-  return '<div id="adminKPIContent">' + leyenda + tabBar
-    + '<div id="adminKPIPane1">' + tab1 + '</div>'
-    + '<div id="adminKPIPane2" style="display:none">' + tab2 + '</div>'
-    + '<div id="adminKPIPane3" style="display:none">' + tab3 + '</div>'
-    + '<div id="adminKPIPane4" style="display:none">' + tab4 + '</div>'
+  return '<div id="' + pfx + 'Content">' + leyenda + tabBar
+    + '<div id="' + pfx + 'pane1">' + tab1 + '</div>'
+    + '<div id="' + pfx + 'pane2" style="display:none">' + tab2 + '</div>'
+    + '<div id="' + pfx + 'pane3" style="display:none">' + tab3 + '</div>'
+    + '<div id="' + pfx + 'pane4" style="display:none">' + tab4 + '</div>'
     + '</div>';
 }
 
-window.adminKPITab = (n) => {
+window.adminKPITab = (n, pfx) => {
+  // F7-FIX: pfx identifica la instancia correcta de los tabs KPI
   [1,2,3,4].forEach(i => {
-    const p = document.getElementById('adminKPIPane'+i);
-    const b = document.getElementById('btnKPI'+i);
+    const p = document.getElementById(pfx ? pfx+'pane'+i : 'adminKPIPane'+i);
+    const b = document.getElementById(pfx ? pfx+'btn'+i  : 'btnKPI'+i);
     if (p) p.style.display = i===n ? '' : 'none';
     if (b) b.className    = i===n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
   });
@@ -1805,16 +1806,19 @@ function buildAdminResultsHTML(rd) {
     + '</div>'
     + '</div>';
 
-  const tabs = '<div id="adminEFTabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
-    + '<button class="btn btn-primary btn-sm" id="btnEFT1" onclick="adminEFTab(1)">📊 Dashboard</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnEFT2" onclick="adminEFTab(2)">📋 Estado de Resultados</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnEFT3" onclick="adminEFTab(3)">🏦 Balance General</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnEFT4" onclick="adminEFTab(4)">💧 Flujo de Efectivo</button>'
-    + '<button class="btn btn-ghost btn-sm"   id="btnEFT5" onclick="adminEFTab(5)">📐 Análisis KPI</button>'
+  // F7-FIX: usar prefijo único por instancia para evitar IDs duplicados
+  // cuando buildAdminResultsHTML se llama desde Dashboard Y desde Resultados
+  const pfx = 'ef_r' + (rd.ronda || 'x') + '_';
+  const tabs = '<div id="' + pfx + 'Tabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="' + pfx + 'btn1" onclick="adminEFTab(1,\'' + pfx + '\')">📊 Dashboard</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn2" onclick="adminEFTab(2,\'' + pfx + '\')">📋 Estado de Resultados</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn3" onclick="adminEFTab(3,\'' + pfx + '\')">🏦 Balance General</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn4" onclick="adminEFTab(4,\'' + pfx + '\')">💧 Flujo de Efectivo</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn5" onclick="adminEFTab(5,\'' + pfx + '\')">📐 Análisis KPI</button>'
     + '</div>';
 
   // Construir KPI panel (3 tabs de ratios financieros)
-  const kpiHTML = buildAdminKPIHTML(eqs, tc);
+  const kpiHTML = buildAdminKPIHTML(eqs, tc, pfx+'kpi_');
 
   // ── Banner de Shock de Mercado ────────────────────────────
   const shockBanner = (() => {
@@ -1840,20 +1844,22 @@ function buildAdminResultsHTML(rd) {
       + '</div></div>';
   })();
 
-  return '<div id="adminEFContent">'
+  return '<div id="' + pfx + 'Content">'
     + shockBanner + encabezado + tabs
-    + '<div id="adminEFPane1">' + dashHTML + '</div>'
-    + '<div id="adminEFPane2" style="display:none">' + plHTML + '</div>'
-    + '<div id="adminEFPane3" style="display:none">' + bgHTML + '</div>'
-    + '<div id="adminEFPane4" style="display:none">' + feHTML + '</div>'
-    + '<div id="adminEFPane5" style="display:none">' + kpiHTML + '</div>'
+    + '<div id="' + pfx + 'pane1">' + dashHTML + '</div>'
+    + '<div id="' + pfx + 'pane2" style="display:none">' + plHTML + '</div>'
+    + '<div id="' + pfx + 'pane3" style="display:none">' + bgHTML + '</div>'
+    + '<div id="' + pfx + 'pane4" style="display:none">' + feHTML + '</div>'
+    + '<div id="' + pfx + 'pane5" style="display:none">' + kpiHTML + '</div>'
     + '</div>';
 }
 
-window.adminEFTab = (n) => {
+window.adminEFTab = (n, pfx) => {
+  // F7-FIX: pfx identifica la instancia correcta de los tabs
+  // Soporte legado: si no hay pfx busca IDs antiguos
   [1,2,3,4,5].forEach(i => {
-    const pane = document.getElementById('adminEFPane'+i);
-    const btn  = document.getElementById('btnEFT'+i);
+    const pane = document.getElementById(pfx ? pfx+'pane'+i : 'adminEFPane'+i);
+    const btn  = document.getElementById(pfx ? pfx+'btn'+i  : 'btnEFT'+i);
     if (pane) pane.style.display = i===n ? '' : 'none';
     if (btn)  btn.className = i===n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
   });
