@@ -4238,17 +4238,18 @@ window.mostrarFinanciero = (n) => {
           <div class="result-round-header"><h3>Patrimonio</h3></div>
           <div style="padding:16px 20px">
             ${(() => {
-              const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);  // IVA pasivo al cierre
-              const patrimonioReal = totalA - totalP;
+              // Usar valores del engine directamente — no recalcular
               const capital  = r.capitalContable || 680000;
-              const utilidad = r.utilidadNeta || 0;
-              const acumAnt  = patrimonioReal - capital - utilidad;
-              return finRow('Capital contable / social', capital, false, 'neutral')
+              const utilidad = r.utilidadNeta    || 0;
+              const acumAnt  = r.resultadoAcumulado != null
+                ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
+                : 0;
+              const patrimonio = capital + acumAnt + utilidad;
+              return finRow('Capital contable / social', capital,  false, 'neutral')
                 + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
                 + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
                 + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
-                + finRowSub('= TOTAL PATRIMONIO', patrimonioReal, true);
+                + finRowSub('= TOTAL PATRIMONIO', patrimonio, true);
             })()}
           </div>
         </div>
@@ -4256,14 +4257,16 @@ window.mostrarFinanciero = (n) => {
         <div class="result-round-card">
           <div style="padding:12px 16px">
             ${(() => {
-              const totalA = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalPP = totalA;  // Por definición: P+P = Activos
-              const cuadra = Math.abs(totalA - totalPP) < 2;
+              const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
+              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+              const patrim   = r.patrimonio || (totalA - totalP);
+              const totalPP  = totalP + patrim;
+              const cuadra   = Math.abs(totalA - totalPP) < 2;
               return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
                 + '<div style="margin-top:8px;padding:8px 12px;background:'
                 + (cuadra?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)')
                 + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
-                + (cuadra?'✓ Balance cuadra':'⚠ Verificar balance')
+                + (cuadra ? '✓ Balance cuadra' : '⚠ Verificar balance')
                 + ' (Activos = ' + fmt.bs(totalA) + ' | P+P = ' + fmt.bs(totalPP) + ')</div>';
             })()}
           </div>
