@@ -452,16 +452,25 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const { ventasBrutas, ventasReales, inventarioFinal,
           totalFacturado, ivaDebitoVentas } = ventas;  // FASE 0-C: incluye datos del precio facturado
 
-  // Comisión canal
+  // Comisión canal — S3/S11: comisión se paga en caja (Modelo B)
   const canalP = canalesCfg[d.canalPrincipal] || {};
   const canalS = d.canalSecundario && d.canalSecundario !== 'Ninguno' ? canalesCfg[d.canalSecundario] : null;
   const comisionPct = canalS ? avg(canalP.comisionPct ?? 0, canalS.comisionPct ?? 0) : (canalP.comisionPct ?? 0);
   const comisiones  = roundBs(ventasBrutas * comisionPct);
-  const ventasNetas = roundBs(ventasBrutas - comisiones);
+  // ventasNetas temporal — se recalcula en costoVentas con comisionesNeto (S11)
+  const ventasNetas = roundBs(ventasBrutas - comisiones);  // para compatibilidad
 
-  // Costo de ventas
-  const costoVentas    = roundBs(ventasReales * costoUnitario);
-  const utilidadBruta  = roundBs(ventasNetas - costoVentas);
+  // Costo de ventas — S7: costos REALES de producción (no CU estándar)
+  // S11: comisiones en ER = precio neto (×87%) — ya deducidas de ventasNetas
+  const comisionesNeto = roundBs(comisiones * netIVA);       // S11: comisión neta en ER
+  const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);  // S11: ventasNetas correctas
+  const cvMP     = roundBs((d.costoMPunitario || 0) * netIVA * ventasReales); // MP neto
+  const cvOper   = roundBs(d.costoOperarios  || 0);          // operarios
+  const cvAdmin  = roundBs(params.gastoAdminFijo || 0);      // admin fijo
+  const cvPlanta = roundBs(params.gastoFijoPlanta || 0);     // planta fija
+  const cvCalid  = roundBs(0.20 * (d.calidad || 5) * ventasReales); // S10: calidad sale de caja
+  const costoVentas    = roundBs(cvMP + cvOper + cvAdmin + cvPlanta + cvCalid);
+  const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
   // Inventario final valorizado
   const invFinalValorizado = roundBs(inventarioFinal * costoUnitario);
@@ -555,7 +564,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const cobrosContado = roundBs(baseCobroReal * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
-  const pagoProduccion = roundBs((d.produccion || 0) * cuBruto);  // paga precio bruto al proveedor
+  // S7: pagoProduccion ELIMINADO — los costos reales de producción
+  // salen individualmente: pagoMP (bruto) + operarios + admin + planta
+  // La variable se mantiene para compatibilidad con el return pero = 0
+  const pagoProduccion = 0;  // S7: eliminado — no hay pago único de producción
+  const pagoMPbruto    = roundBs((d.costoMPunitario || 0) * (d.produccion || 0)); // S4: MP bruto
   const pagoMktTotal   = gastoTotalMarketing; // ya incluye vendedores
   const pagoAdmin      = params.gastoAdminFijo;
   const pagoPlanta     = params.gastoFijoPlanta;
@@ -654,8 +667,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const totalImpuestos = roundBs(impuestoIT + impuestoIUE);  // FASE 0+4
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
-  const pagoOperarios  = d.costoOperarios || 0;  // FIX balance: costo operarios sale de caja
-  const pagoMP         = d.pagoMP         || 0;  // FIX balance: pago MP sale de caja
+  const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
+  const pagoCalidad    = roundBs(0.20 * (d.calidad || 5) * (d.produccion || 0)); // S10: calidad
+  const pagoComisiones = comisiones;             // S3: comisión sale de caja
+  const pagoMP         = pagoMPbruto;            // S4: MP bruto sale de caja
 
   const pagoInvestigacion = gastoInvestigacion_mkt;  // sale de caja este trimestre
 
@@ -669,12 +684,22 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Por tanto NO hay pagoComisiones en totalPagos
   // cobrosContado ya refleja el neto recibido: (ventasNetas + ivaDebito) × pctContado
 
-  const totalPagos = roundBs(pagoProduccion + pagoMktTotal + pagoAdmin + pagoPlanta +
-    pagoInnovacion + pagoAlmacen + pagoIntereses + pagoApertura
-    + pagoIVAPeriodoAnterior   // ← IVA del trimestre anterior (no del actual)
-    + pagoIT + pagoIUE
-    + pagoOperarios + pagoMP
-    + pagoInvestigacion);  // investigación de mercado
+  // S7: totalPagos con pagos REALES individuales (sin pagoProduccion)
+  const totalPagos = roundBs(
+    pagoMP           +  // S4: MP bruto al proveedor
+    pagoComisiones   +  // S3: comisión al canal
+    pagoMktTotal     +  // S5: mkt bruto + vendedores
+    pagoAdmin        +  // S6: admin fijo
+    pagoPlanta       +  // S6: planta fija
+    pagoInnovacion   +  // S9: innovación bruto
+    pagoCalidad      +  // S10: calidad
+    pagoAlmacen      +
+    pagoIntereses    +
+    pagoApertura     +
+    pagoIVAPeriodoAnterior +  // IVA trimestre anterior
+    pagoIT + pagoIUE +
+    pagoOperarios    +
+    pagoInvestigacion);
 
   const cajaInicial   = d.cajaInicial || 0;
   const ingresoPrestamo = tipoP !== 'Ninguno' ? montoP : 0;
@@ -751,7 +776,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
     // Flujo de Efectivo
     cajaInicial, cobrosContado, ingresoPrestamo,
-    pagoProduccion, pagoMktTotal, pagoAdmin, pagoPlanta,
+    pagoProduccion, pagoMPbruto, pagoCalidad, pagoComisiones,
+    pagoMktTotal, pagoAdmin, pagoPlanta,
     pagoOperarios, pagoMP,
     pagoInnovacion, pagoAlmacen, pagoIntereses, pagoApertura,
     totalPagos, sobregiro, cajaFinal,
