@@ -508,6 +508,15 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // comisiones: se descuentan de ventasBrutas para llegar a ventasNetas (ya aplicado)
   // Su precio neto ya está reflejado en ventasNetas
 
+  // ── Fix caja: pagoProduccion usa precio BRUTO al proveedor ──────────────
+  // En el P&L el CU usa MP neto (×87%) — correcto para la utilidad
+  // En la CAJA se paga el precio bruto al proveedor (MP sin descontar IVA)
+  // El IVA crédito de MP es real pero sale de caja junto con el pago al proveedor
+  // Se recupera mediante la compensación contra el IVA débito → queda en ivaAPagar reducido
+  const costoMPunitario_bruto = dEnriquecido?.costoMPunitario || 0;
+  const ivaCredMPunit = roundBs(costoMPunitario_bruto * (params.tasaIVA ?? 0.13));
+  const cuBruto = roundBs(costoUnitario + ivaCredMPunit);  // CU bruto para caja
+
   // Gastos SIN factura → precio completo en P&L
   const gastoCostoVend  = d.costoVendedores || 0;   // sueldos: relación laboral
   const gastoOperarios  = d.costoOperarios  || 0;   // sueldos: relación laboral
@@ -542,7 +551,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const cobrosContado = roundBs(totalFacturado * params.pctVentasContado + cxcCobroEsta);
 
   // Produccion: pago de costos de producción (solo MP y conversión, sin CxP por simplicidad)
-  const pagoProduccion = roundBs((d.produccion || 0) * costoUnitario);
+  const pagoProduccion = roundBs((d.produccion || 0) * cuBruto);  // paga precio bruto al proveedor
   const pagoMktTotal   = gastoTotalMarketing; // ya incluye vendedores
   const pagoAdmin      = params.gastoAdminFijo;
   const pagoPlanta     = params.gastoFijoPlanta;
