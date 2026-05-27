@@ -1547,18 +1547,27 @@ async function route(req, res, body) {
         // (representan saldo al cierre, no acumulables por producto)
         const sumar = ['ventasBrutas','ventasNetas','ventasNetasReal','ventasReales','costoVentas',
           'utilidadBruta','gastosOp','utilidadNeta','ebit',
-          'ivaAPagar','impuestoIT','impuestoIUE','totalImpuestos',
+          'impuestoIT','impuestoIUE','totalImpuestos',
           'pagoProduccion','pagoMktTotal','totalPagos','cobrosContado',
           'inventarioFinal','ingresoPrestamo',
           'publicidad','comisiones','comisionesNeto',
           'gastoCostoVend','gastoOperarios','gastoInvMktNeto',
+          'ivaDebito','ivaCredito',
           'roiMarketing','demandaAsignada','demandaFormal'];
         // cxcFinal e invFinalValorizado: usar del primer producto (ya en ...r inicial)
         sumar.forEach(k => {
           porEmpresa[eqId][k] = (porEmpresa[eqId][k] || 0) + (r[k] || 0);
         });
-        // Campos de empresa: tomar del primer producto (son únicos por empresa)
-        // cajaFinal, deudaFinal, patrimonio, totalActivos ya están en el primero
+        // Campos de empresa — tomar del primer producto (pasivos únicos)
+        porEmpresa[eqId].ivaAPagar           = porEmpresa[eqId].ivaAPagar;           // ya en prod_1
+        porEmpresa[eqId].totalPasivos        = porEmpresa[eqId].totalPasivos;
+        porEmpresa[eqId].resultadoAcumulado  = porEmpresa[eqId].resultadoAcumulado;
+        porEmpresa[eqId].pagoIVAPeriodoAnterior = porEmpresa[eqId].pagoIVAPeriodoAnterior;
+        porEmpresa[eqId].compensacionIT      = porEmpresa[eqId].compensacionIT;
+        porEmpresa[eqId].ITefectivoCaja      = porEmpresa[eqId].ITefectivoCaja;
+        porEmpresa[eqId].saldoIUEfinal       = porEmpresa[eqId].saldoIUEfinal;
+        porEmpresa[eqId].totalFacturado      = porEmpresa[eqId].totalFacturado
+          || Math.round(((porEmpresa[eqId].impuestoIT||0)/0.03));
         porEmpresa[eqId].productos.push(r);
       }
     });
