@@ -1443,10 +1443,12 @@ async function route(req, res, body) {
           const p0           = prods[0];
           const utilNeta     = prods.reduce((s,p) => s+(p.utilidadNeta||0), 0);
           const invFinalTotal = prods.reduce((s,p) => s+Math.max(0,p.inventarioFinal||0), 0);
-          const resAcumAnt   = estadoEmpresa[eqId]?.resultadoAcumulado ?? 0;
+          // Usar resultadoAcumulado del engine (incluye resultadoAcumuladoAnterior correctamente)
+          // Esto garantiza que el balance de apertura de la siguiente ronda cuadre
+          const resAcumuladoNuevo = p0.resultadoAcumulado ?? ((estadoEmpresa[eqId]?.resultadoAcumulado ?? 0) + utilNeta);
 
           estadoEmpresa[eqId] = {
-            resultadoAcumulado:    resAcumAnt + utilNeta,
+            resultadoAcumulado:    resAcumuladoNuevo,
             cajaFinal:             p0.cajaFinal    ?? 0,
             cxcFinal:              p0.cxcFinal     ?? 0,
             deudaFinal:            p0.deudaFinal   ?? 0,
