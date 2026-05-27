@@ -252,9 +252,13 @@ async function getRonda(simulacionId, n, ownerId = null) {
         [simulacionId, n]
       );
 
+      // Con ORDER BY enviada_at DESC, el primer registro por equipo es el más reciente
+      // Solo guardamos el primero para evitar que registros antiguos sobreescriban el nuevo
       const decisionesMap = {};
       for (const d of decisionesRows.rows) {
-        decisionesMap[d.equipo_id] = d.decisiones;
+        if (!decisionesMap[d.equipo_id]) {
+          decisionesMap[d.equipo_id] = d.decisiones;
+        }
       }
 
       const estadoLegado = ESTADO_NUEVO_A_LEGACY[row.estado] || row.estado;
