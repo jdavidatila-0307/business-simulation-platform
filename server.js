@@ -1634,6 +1634,8 @@ async function route(req, res, body) {
       afinidadMatrix: sim.afinidad_matrix,
       competenciaExterna: sim.competencia_externa,
       mercadoSegmentos: calcularMercadoSegmentos(sim.parametros, sim.segmentos),
+      codigoAcceso: sim.codigo_acceso,
+      simId: sim.id,
     });
   }
 

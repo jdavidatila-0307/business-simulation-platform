@@ -2359,9 +2359,41 @@ async function loadAdminParametros() {
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
       <span class="param-warning">⚠ Los cambios aplican desde la próxima simulación</span>
+    </div>
+
+    <div class="param-card" style="margin-top:16px;max-width:480px">
+      <div class="param-card-title">🔑 Código de Acceso al Simulador</div>
+      <div style="font-size:.8rem;color:var(--text3);margin-bottom:12px">
+        Los estudiantes usan este código para ingresar. Cámbialo cuando necesites.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="inputCodigoAcceso" class="param-input" type="text"
+          style="flex:1;font-family:var(--font-mono);letter-spacing:2px;font-size:1rem;text-transform:uppercase"
+          placeholder="Ej: TIGRES2026"
+          value="${data.codigoAcceso || ''}"/>
+        <button class="btn btn-primary btn-sm" onclick="cambiarCodigoAcceso()">🔄 Cambiar</button>
+      </div>
+      <div id="codigoAccesoStatus" style="font-size:.75rem;margin-top:8px;color:var(--text3)">
+        Código actual: <span style="font-family:var(--font-mono);color:var(--accent3);font-weight:700">${data.codigoAcceso || '—'}</span>
+      </div>
     </div>`;
 
   document.getElementById('btnSaveParams').addEventListener('click', saveParametros);
+}
+
+async function cambiarCodigoAcceso() {
+  const input = document.getElementById('inputCodigoAcceso');
+  const nuevo = (input?.value || '').trim().toUpperCase();
+  if (!nuevo || nuevo.length < 3) { toast('El código debe tener al menos 3 caracteres', 'error'); return; }
+  try {
+    const simId = state.ref?.simId || state.simId;
+    if (!simId) { toast('Sin simulación activa', 'error'); return; }
+    await api('PUT', `/admin/simulaciones/${simId}`, { codigoAcceso: nuevo });
+    const st = document.getElementById('codigoAccesoStatus');
+    if (st) st.innerHTML = 'Código actualizado: <span style="font-family:var(--font-mono);color:var(--accent2);font-weight:700">' + nuevo + '</span> ✅';
+    input.value = nuevo;
+    toast('✅ Código de acceso actualizado: ' + nuevo, 'success');
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function saveParametros() {
