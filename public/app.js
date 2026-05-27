@@ -1646,14 +1646,19 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
           const col = PROD_COLORS2[i % PROD_COLORS2.length];
           const utilColor = (p.utilidadNeta||0)>=0?'var(--accent2)':'var(--accent4)';
           const ebit = p.ebit??((p.utilidadBruta||0)-(p.gastosOp||0));
-          const margenPct = (p.ventasNetas||0)>0?((p.utilidadNeta||0)/(p.ventasNetas)*100).toFixed(1)+'%':'—';
+          const ub2       = p.utilidadBruta||0;
+          const mbColor2  = ub2>=0?'var(--accent2)':'var(--accent4)';
+          const mbPct2    = (p.ventasNetas||0)>0?(ub2/(p.ventasNetas)*100).toFixed(1)+'%':'—';
+          const mnPct2    = (p.ventasNetas||0)>0?((p.utilidadNeta||0)/(p.ventasNetas)*100).toFixed(1)+'%':'—';
           return '<div style="background:var(--bg3);border:0.5px solid var(--border);border-top:3px solid '+col
             +';border-radius:var(--r);padding:10px 12px;min-width:180px;flex:1">'
             +'<div style="font-weight:700;font-size:.75rem;color:'+col+';margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(p.producto||'Prod '+(i+1))+'</div>'
             +'<table style="width:100%;border-collapse:collapse">'
             +fR2('Ventas netas',p.ventasNetas||0,false,'neutral')
             +fR2('(−) Costo ventas',p.costoVentas||0,true,'neg')
-            +fRS2('= Util. bruta',p.utilidadBruta||0)
+            +fRS2('= Util. bruta',ub2)
+            +'<tr><td style="padding:2px 8px;font-size:.7rem;color:var(--text3)">Margen bruto</td>'
+            +'<td style="padding:2px 8px;text-align:right;font-family:var(--font-mono);font-size:.7rem;color:'+mbColor2+'">'+mbPct2+'</td></tr>'
             +fR2('(−) Gastos op.',p.gastosOp||0,true,'neg')
             +fRS2('= EBIT',ebit)
             +fR2('(−) IT',p.impuestoIT||0,true,'neg')
@@ -1661,8 +1666,8 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
             +'<td style="padding:4px 8px;font-size:.74rem;font-weight:700">= Util. neta</td>'
             +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-size:.74rem;font-weight:700;color:'+utilColor+'">'
             +'Bs '+Math.round(p.utilidadNeta||0).toLocaleString('es')+'</td></tr>'
-            +'<tr><td style="padding:2px 8px;font-size:.7rem;color:var(--text3)">Margen</td>'
-            +'<td style="padding:2px 8px;text-align:right;font-family:var(--font-mono);font-size:.7rem;color:'+utilColor+'">'+margenPct+'</td></tr>'
+            +'<tr><td style="padding:2px 8px;font-size:.7rem;color:var(--text3)">Margen neto</td>'
+            +'<td style="padding:2px 8px;text-align:right;font-family:var(--font-mono);font-size:.7rem;color:'+utilColor+'">'+mnPct2+'</td></tr>'
             +'</table></div>';
         }).join('');
         html += '<div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px">📦 ER por Producto</div>'
@@ -4152,7 +4157,10 @@ window.mostrarFinanciero = (n) => {
               const gastosOp = p.gastosOp || 0;
               const ebit     = p.ebit ?? ((p.utilidadBruta||0) - gastosOp);
               const utilNeta = p.utilidadNeta || 0;
-              const margenPct = (p.ventasNetas||0)>0 ? ((utilNeta/(p.ventasNetas))*100).toFixed(1)+'%' : '—';
+              const utilBruta  = p.utilidadBruta || 0;
+              const margenBrutoPct = (p.ventasNetas||0)>0 ? ((utilBruta/(p.ventasNetas))*100).toFixed(1)+'%' : '—';
+              const margenNetoPct  = (p.ventasNetas||0)>0 ? ((utilNeta/(p.ventasNetas))*100).toFixed(1)+'%' : '—';
+              const mbColor = utilBruta>=0?'var(--accent2)':'var(--accent4)';
               return '<div style="background:var(--bg2);border:0.5px solid var(--border);border-top:3px solid '+col
                 + ';border-radius:var(--r);padding:12px 14px;min-width:200px;flex:1">'
                 + '<div style="font-weight:700;font-size:.78rem;color:'+col+';margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
@@ -4160,7 +4168,9 @@ window.mostrarFinanciero = (n) => {
                 + '<table style="width:100%;border-collapse:collapse">'
                 + fR('Ventas netas', p.ventasNetas||0, false, 'neutral')
                 + fR('(−) Costo ventas', p.costoVentas||0, true, 'neg')
-                + fRS('= Utilidad bruta', p.utilidadBruta||0)
+                + fRS('= Utilidad bruta', utilBruta)
+                + '<tr><td style="padding:2px 8px;font-size:.72rem;color:var(--text3)">Margen bruto</td>'
+                + '<td style="padding:2px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:'+mbColor+'">' + margenBrutoPct + '</td></tr>'
                 + fR('(−) Gastos operativos', gastosOp, true, 'neg')
                 + fRS('= EBIT', ebit)
                 + fR('(−) Impuesto IT', p.impuestoIT||0, true, 'neg')
@@ -4169,7 +4179,7 @@ window.mostrarFinanciero = (n) => {
                 + '<td style="padding:5px 8px;text-align:right;font-family:var(--font-mono);font-size:.78rem;font-weight:700;color:'+utilColor+'">'
                 + 'Bs ' + Math.round(utilNeta).toLocaleString('es') + '</td></tr>'
                 + '<tr><td style="padding:3px 8px;font-size:.72rem;color:var(--text3)">Margen neto</td>'
-                + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:'+utilColor+'">' + margenPct + '</td></tr>'
+                + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:'+utilColor+'">' + margenNetoPct + '</td></tr>'
                 + '<tr><td style="padding:3px 8px;font-size:.72rem;color:var(--text3)">Unidades vendidas</td>'
                 + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem">' + Math.round(p.ventasReales||0).toLocaleString('es') + '</td></tr>'
                 + '</table></div>';
