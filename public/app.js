@@ -4589,12 +4589,11 @@ window.mostrarFinanciero = (n) => {
           const ivaCredito = r.ivaCredito || 0;
           const ivaAPagar  = r.ivaAPagar  || 0;
           const ivaFavor   = ivaCredito > ivaDebito ? ivaCredito - ivaDebito : 0;
+          const itDet      = r.impuestoIT  || 0;
           // totalFacturado: usar directo, o calcular desde IT (IT = totalFact × 3%)
-          // o reconstruir desde ventasBrutas + ivaDebito
           const totalFact  = r.totalFacturado
             || (itDet > 0 ? Math.round(itDet / 0.03) : 0)
             || ((r.ventasBrutas||0) + ivaDebito);
-          const itDet      = r.impuestoIT  || 0;
           const itComp     = r.compensacionIUE || 0;
           const itPagar    = Math.max(0, itDet - itComp);
           const utilAntesIT= (r.ebit||0) - (r.gastoFinanciero||0);
