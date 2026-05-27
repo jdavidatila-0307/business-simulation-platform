@@ -1347,7 +1347,8 @@ async function route(req, res, body) {
           ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar       ?? 0),  // IVA diferido
         };
 
-        // Multiproducto: propagar también a cada producto del array productos[]
+        // Multiproducto: propagar campos financieros a cada producto[]
+        // ivaAPagarAnterior y saldoIUE solo en prod_1 (controla la caja)
         if (Array.isArray(decRepropagada.productos)) {
           decRepropagada.productos = decRepropagada.productos.map((p, idx) => ({
             ...p,
@@ -1362,6 +1363,8 @@ async function route(req, res, body) {
             stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
             pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
             resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
+            ivaAPagarAnterior:          idx === 0 ? (decRepropagada.ivaAPagarAnterior ?? 0) : 0,
+            saldoIUEcompensable:        decRepropagada.saldoIUEcompensable ?? 0,
           }));
         }
 
