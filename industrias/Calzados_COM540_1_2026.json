@@ -61,7 +61,8 @@
     "lambdaLogit": 1.0,
     "factorCanibalizacion": 0.15,
     "coefPrecio": -0.005,
-    "costoInvestigacionEstrategico": 20000
+    "costoInvestigacionEstrategico": 20000,
+    "modeloCostos": "mixto"
   },
   "tiposProducto": {
     "Sandalia Infantil Ajustable": {

@@ -1,0 +1,276 @@
+{
+  "meta": {
+    "id": "jaboncillos_v1",
+    "nombre": "Industria de Jaboncillos (Jabones de tocador)",
+    "version": "1.0",
+    "moneda": "Bs",
+    "autor": "SimNego — UAGRM Ing. Comercial"
+  },
+  "params": {
+    "moneda": "Bs",
+    "trimestresPorAnio": 4,
+    "capitalInicial": 150000,
+    "cajaInicial": 50000,
+    "activosFijosIniciales": 80000,
+    "inventarioInicialUnid": 0,
+    "cxcInicial": 0,
+    "deudaInicial": 0,
+    "capacidadMaxProduccion": 20000,
+    "gastoAdminFijo": 8000,
+    "gastoFijoPlanta": 5000,
+    "depreciacionTrimestral": 2000,
+    "costoAlmacenamientoUnidad": 0.1,
+    "pctVentasContado": 0.7,
+    "pctVentasCredito": 0.3,
+    "plazoCobro": 1,
+    "tasaPrestamoOperativo": 0.04,
+    "tasaPrestamoInversion": 0.03,
+    "tasaSobregiro": 0.06,
+    "comisionAperturaPrestamo": 0.01,
+    "plazoPrestamoOperativo": 2,
+    "plazoPrestamoInversion": 4,
+    "vendedoresIniciales": 2,
+    "sueldoTrimestralVendedor": 2400,
+    "costoContratacionVendedor": 500,
+    "costoDespidoVendedor": 800,
+    "costoInvestigacionBasica": 4000,
+    "costoInvestigacionPremium": 7500,
+    "factorInnovacionProducto": 0.333,
+    "factorInnovacionProceso": 0.333,
+    "tasaDecaimiento": 0.05,
+    "factorCanibalizacion": 0.15,
+    "tasaIVA": 0.13,
+    "unidadesMPporUnidad": 1.0,
+    "costoAlmacenamientoMP": 0.05,
+    "lambdaLogit": 1.0,
+    "tasaIT": 0.03,
+    "tasaIUE": 0.25,
+    "periodosIUE": 4,
+    "productividadBase": 440,
+    "operariosIniciales": 4,
+    "costoOperario": 3200,
+    "costoContratacionOperario": 800,
+    "costoDespidoOperario": 1200,
+    "factorCapacitacion": 0.05,
+    "modeloCostos": "mixto"
+  },
+  "tiposProducto": {
+    "Básico": {
+      "costoBase": 2.1
+    },
+    "Antibacterial": {
+      "costoBase": 2.6
+    },
+    "Cosmético": {
+      "costoBase": 3.2
+    },
+    "Dermatológico": {
+      "costoBase": 3.8
+    },
+    "Natural": {
+      "costoBase": 3.4
+    },
+    "Institucional": {
+      "costoBase": 2.9
+    }
+  },
+  "canales": {
+    "Mercado": {
+      "costoAdicionalUnitario": 0.2,
+      "comisionPct": 0.08,
+      "factorImpactoVendedores": 0.4,
+      "bonoAtractivo": 2
+    },
+    "Supermercado": {
+      "costoAdicionalUnitario": 0.45,
+      "comisionPct": 0.15,
+      "factorImpactoVendedores": 0.7,
+      "bonoAtractivo": 2
+    },
+    "Farmacia": {
+      "costoAdicionalUnitario": 0.6,
+      "comisionPct": 0.18,
+      "factorImpactoVendedores": 0.8,
+      "bonoAtractivo": 2
+    },
+    "Digital": {
+      "costoAdicionalUnitario": 0.35,
+      "comisionPct": 0.1,
+      "factorImpactoVendedores": 0.2,
+      "bonoAtractivo": 2
+    },
+    "Institucional": {
+      "costoAdicionalUnitario": 0.25,
+      "comisionPct": 0.12,
+      "factorImpactoVendedores": 1,
+      "bonoAtractivo": 2
+    }
+  },
+  "segmentos": [
+    {
+      "nombre": "Masivo popular",
+      "demandaBase": 40000,
+      "pctContrabando": 0.3,
+      "indiceExterno": 7.8,
+      "tendencia": "Estable",
+      "descripcion": "Alta sensibilidad al precio",
+      "tasaCrecimiento": 0.0
+    },
+    {
+      "nombre": "Masivo aspiracional",
+      "demandaBase": 18000,
+      "pctContrabando": 0.2,
+      "indiceExterno": 6.5,
+      "tendencia": "Creciente",
+      "descripcion": "Busca marca accesible y calidad",
+      "tasaCrecimiento": 0.03
+    },
+    {
+      "nombre": "Funcional familiar",
+      "demandaBase": 16000,
+      "pctContrabando": 0.15,
+      "indiceExterno": 5.8,
+      "tendencia": "Creciente",
+      "descripcion": "Prioriza protección e higiene",
+      "tasaCrecimiento": 0.03
+    },
+    {
+      "nombre": "Cosmético",
+      "demandaBase": 14000,
+      "pctContrabando": 0.1,
+      "indiceExterno": 6.2,
+      "tendencia": "Estable",
+      "descripcion": "Valora fragancia e imagen",
+      "tasaCrecimiento": 0.0
+    },
+    {
+      "nombre": "Dermatológico",
+      "demandaBase": 10000,
+      "pctContrabando": 0.05,
+      "indiceExterno": 5.5,
+      "tendencia": "Creciente",
+      "descripcion": "Requiere cuidado especializado",
+      "tasaCrecimiento": 0.03
+    },
+    {
+      "nombre": "Natural",
+      "demandaBase": 12000,
+      "pctContrabando": 0.12,
+      "indiceExterno": 6,
+      "tendencia": "Alto crecimiento",
+      "descripcion": "Ingredientes naturales y diferenciación",
+      "tasaCrecimiento": 0.06
+    },
+    {
+      "nombre": "Institucional",
+      "demandaBase": 10000,
+      "pctContrabando": 0.03,
+      "indiceExterno": 5.2,
+      "tendencia": "Estable",
+      "descripcion": "Compra por volumen y condiciones",
+      "tasaCrecimiento": 0.0
+    }
+  ],
+  "afinidadMatrix": {
+    "Básico": [
+      3,
+      1,
+      2,
+      -2,
+      -2,
+      -1,
+      0
+    ],
+    "Antibacterial": [
+      2,
+      1,
+      3,
+      0,
+      1,
+      0,
+      1
+    ],
+    "Cosmético": [
+      -2,
+      2,
+      0,
+      3,
+      1,
+      1,
+      -2
+    ],
+    "Dermatológico": [
+      -2,
+      0,
+      1,
+      1,
+      3,
+      1,
+      -2
+    ],
+    "Natural": [
+      -1,
+      1,
+      1,
+      1,
+      1,
+      3,
+      -2
+    ],
+    "Institucional": [
+      -2,
+      -2,
+      0,
+      -2,
+      -2,
+      -2,
+      3
+    ]
+  },
+  "competenciaExterna": [
+    {
+      "segmento": "Masivo popular",
+      "nombre": "Contrabando genérico",
+      "precio": 2.8,
+      "calidad": 3,
+      "marketing": 0,
+      "participacionRef": 0.35
+    },
+    {
+      "segmento": "Natural",
+      "nombre": "Marca natural local",
+      "precio": 7.2,
+      "calidad": 8,
+      "marketing": 6000,
+      "participacionRef": 0.35
+    },
+    {
+      "segmento": "Cosmético",
+      "nombre": "Marca líder cosmética",
+      "precio": 7.8,
+      "calidad": 8,
+      "marketing": 9000,
+      "participacionRef": 0.4
+    }
+  ],
+  "proveedores": [
+    {
+      "id": "prov_1",
+      "nombre": "Nacional",
+      "costoMP": 0.4,
+      "calidad": 7,
+      "leadTime": 1,
+      "loteMin": 500,
+      "loteMax": 20000
+    },
+    {
+      "id": "prov_2",
+      "nombre": "Importado",
+      "costoMP": 0.3,
+      "calidad": 5,
+      "leadTime": 2,
+      "loteMin": 1000,
+      "loteMax": 30000
+    }
+  ]
+}

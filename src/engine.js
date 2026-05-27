@@ -555,7 +555,17 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Alternativa 3 — Costos mixtos multiproducto:
   //   COMUNES (se cobran UNA sola vez, en prod_1): admin, planta, depreciación
   //   ESPECÍFICOS (por cada línea activa): operarios ← ya arriba
-  const esProductoPrincipal = (d.productoId === 'prod_1' || !d.productoId);
+  //
+  // modeloCostos configurable por industria (params.modeloCostos):
+  //   'mixto'     → Alternativa 3: costos comunes solo en prod_1 (default)
+  //   'absorcion' → Alternativa 1: cada producto paga costos fijos completos
+  //   'directo'   → solo costos variables (sin costos fijos por producto)
+  const modeloCostos = params.modeloCostos || 'mixto';
+  const esProductoPrincipal = modeloCostos === 'mixto'
+    ? (d.productoId === 'prod_1' || !d.productoId)
+    : modeloCostos === 'directo'
+    ? false   // directo: ningún producto paga costos fijos
+    : true;   // absorcion: todos los productos pagan costos fijos completos
   const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
   const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
   const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
