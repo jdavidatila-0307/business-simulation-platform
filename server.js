@@ -1292,6 +1292,7 @@ async function route(req, res, body) {
     let totalRondas = 0;
     let totalEmpresas = 0;
     const errores = [];
+    let nuevoResObjAnterior = {};  // resultados recalculados de la ronda anterior
 
     // ── Procesar cada ronda en orden cronológico ──────────────────────────
     // IMPORTANTE: usar getRonda() individual (no getRondasAll) porque incluye
@@ -1350,9 +1351,10 @@ async function route(req, res, body) {
         if (Array.isArray(decRepropagada.productos)) {
           decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
             // Buscar el resultado previo específico de este producto
-            const prodId     = p.productoId || ('prod_' + (idx + 1));
+            // Usar nuevoResObjAnterior (resultados recalculados de R(n-1)) para mayor precisión
+            const prodId      = p.productoId || ('prod_' + (idx + 1));
             const keyPrevProd = eq.id + '__' + prodId;
-            const resPrevProd = resObj[keyPrevProd] || null;
+            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || resObj[keyPrevProd] || null;
             // inventario específico por producto (no el total consolidado)
             const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
 
@@ -1460,6 +1462,9 @@ async function route(req, res, body) {
           };
           totalEmpresas++;
         }
+
+        // Guardar referencia a resultados de esta ronda para la siguiente
+        nuevoResObjAnterior = nuevoResObj;
 
         // Guardar resultados recalculados
         await storage.updateRonda(sim.id, n, {
