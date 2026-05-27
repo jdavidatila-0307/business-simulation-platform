@@ -20,7 +20,7 @@ inicializarPlantillaDefault();
 
 
 const storage  = require('./src/storage');
-const { ejecutarSimulador, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
+const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 
 // ════════════════════════════════════════════════════════════════
@@ -861,17 +861,7 @@ async function route(req, res, body) {
           .find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id));
 
         if (resPrev) {
-          dec.cajaInicial           = Math.max(0, resPrev.cajaFinal   ?? 0);
-          dec.cxcInicial            = Math.max(0, resPrev.cxcFinal    ?? 0);
-          dec.deudaInicial          = Math.max(0, resPrev.deudaFinal  ?? 0);
-          dec.activosFijosIniciales = Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? 80000);
-          dec.brandEquityInicial    = resPrev.brandEquityFinal ?? 50;
-          dec.vendedoresIniciales   = Math.max(1, resPrev.vendedoresFinales ?? 2);
-          dec.operariosIniciales    = Math.max(1, resPrev.operariosFinales  ?? 4);
-          dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
-          dec.inventarioInicial     = 0;
-          dec.saldoIUEcompensable   = Math.max(0, resPrev.saldoIUEfinal ?? 0);  // FASE 4
-          dec.ivaAPagarAnterior     = Math.max(0, resPrev.ivaAPagar       ?? 0);  // IVA pago diferido
+          dec = propagarEstado(dec, resPrev, sim.parametros);
           console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
           console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
@@ -922,16 +912,7 @@ async function route(req, res, body) {
         const resPrev = Object.values(resObj).find(r =>
           r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
         );
-        if (resPrev) {
-          dec.cajaInicial           = Math.max(0, resPrev.cajaFinal ?? 0);
-          dec.cxcInicial            = Math.max(0, resPrev.cxcFinal ?? 0);
-          dec.deudaInicial          = Math.max(0, resPrev.deudaFinal ?? 0);
-          dec.activosFijosIniciales = Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? 80000);
-          dec.brandEquityInicial    = resPrev.brandEquityFinal ?? 50;
-          dec.vendedoresIniciales   = Math.max(1, resPrev.vendedoresFinales ?? 2);
-          dec.operariosIniciales    = Math.max(1, resPrev.operariosFinales ?? 4);
-          dec.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
-        }
+        if (resPrev) dec = propagarEstado(dec, resPrev, sim.parametros);
         return dec;
       });
     }
@@ -1193,15 +1174,7 @@ async function route(req, res, body) {
         const resPrev2 = Object.values(resObj2).find(r =>
           r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
         );
-        if (resPrev2) {
-          dec.cajaInicial           = Math.max(0, resPrev2.cajaFinal ?? 0);
-          dec.cxcInicial            = Math.max(0, resPrev2.cxcFinal ?? 0);
-          dec.deudaInicial          = Math.max(0, resPrev2.deudaFinal ?? 0);
-          dec.activosFijosIniciales = Math.max(0, resPrev2.afNetos ?? resPrev2.activosFijosNetos ?? 80000);
-          dec.brandEquityInicial    = resPrev2.brandEquityFinal ?? 50;
-          dec.vendedoresIniciales   = Math.max(1, resPrev2.vendedoresFinales ?? 2);
-          dec.operariosIniciales    = Math.max(1, resPrev2.operariosFinales ?? 4);
-        }
+        if (resPrev2) dec = propagarEstado(dec, resPrev2, sim.parametros);
         return dec;
       });
     }

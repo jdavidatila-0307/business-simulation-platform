@@ -436,8 +436,8 @@ function calcularVentas(d, share, demandaFormal, costoUnitario, params = {}) {
 
   // Precio facturado al cliente (incluye IVA) → extraer IVA para obtener ingreso real
   const totalFacturado  = roundBs(ventasReales * (d.precioVenta || 0));
-  const ivaDebitoVentas = roundBs(totalFacturado * tasaIVA);   // IVA que la empresa cobra al cliente para el Estado
-  const ventasBrutas    = roundBs(totalFacturado - ivaDebitoVentas);  // ingreso real de la empresa sin IVA
+  const ivaDebitoVentas = Math.round(totalFacturado * 13/100);  // S1: IVA = monto × 13/100 → entero exacto
+  const ventasBrutas    = totalFacturado - ivaDebitoVentas;          // S1: ingreso real sin IVA → entero exacto
 
   // Comisión: promedio si hay canal secundario
   const canalesArr = [d.canalPrincipal];
@@ -494,11 +494,13 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Costo de ventas — S7: solo costos VARIABLES de producción
   // Los costos fijos (operarios, admin, planta) van en gastosOp — NO duplicar aquí
   // S11: comisión neta en ER (×87%)
-  const comisionesNeto  = roundBs(comisiones * netIVA);
+  const ivaCredComis    = Math.round(comisiones * 13/100);       // S11: IVA crédito comisión
+  const comisionesNeto  = comisiones - ivaCredComis;              // S11: gasto neto ER — entero exacto
   const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
 
   // CU variable real por par (solo costos variables)
-  const cuVarMP    = roundBs((d.costoMPunitario || 0) * netIVA);   // MP neto por par
+  const ivaCredMPunit2 = Math.round((d.costoMPunitario || 0) * 13/100);  // IVA crédito MP por par
+  const cuVarMP    = (d.costoMPunitario || 0) - ivaCredMPunit2;   // S4: MP neto por par → entero exacto
   const cuVarCalid = roundBs(0.20 * (d.calidad || 5));              // calidad por par
   const cuVar      = roundBs(cuVarMP + cuVarCalid);                 // CU variable total
 
@@ -509,14 +511,21 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const costoVentas    = roundBs(cuVar * ventasReales);
   const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
-  // Gastos CON factura → precio neto en P&L
-  const gastoPublicidad     = roundBs((d.publicidad         || 0) * netIVA);
-  const gastoPromocion      = roundBs((d.promocion          || 0) * netIVA);
-  const gastoEventos        = roundBs((d.eventos            || 0) * netIVA);
-  const gastoMktRedes       = roundBs((d.marketingRedes     || 0) * netIVA);
-  const gastoRRPP           = roundBs((d.relacionesPublicas || 0) * netIVA);
-  const gastoInnovacionNeto = roundBs(gastoInnovacion            * netIVA);
-  const gastoInvMktNeto     = roundBs(gastoInvestigacion_mkt     * netIVA);
+  // Gastos CON factura → precio neto = monto − Math.round(monto × 13/100) → entero exacto
+  const ivaCredPub   = Math.round((d.publicidad         || 0) * 13/100);
+  const ivaCredProm  = Math.round((d.promocion          || 0) * 13/100);
+  const ivaCredEv    = Math.round((d.eventos            || 0) * 13/100);
+  const ivaCredRed   = Math.round((d.marketingRedes     || 0) * 13/100);
+  const ivaCredRRPP  = Math.round((d.relacionesPublicas || 0) * 13/100);
+  const ivaCredInnov = Math.round(gastoInnovacion             * 13/100);
+  const ivaCredInvMkt= Math.round(gastoInvestigacion_mkt      * 13/100);
+  const gastoPublicidad     = (d.publicidad         || 0) - ivaCredPub;
+  const gastoPromocion      = (d.promocion          || 0) - ivaCredProm;
+  const gastoEventos        = (d.eventos            || 0) - ivaCredEv;
+  const gastoMktRedes       = (d.marketingRedes     || 0) - ivaCredRed;
+  const gastoRRPP           = (d.relacionesPublicas || 0) - ivaCredRRPP;
+  const gastoInnovacionNeto = gastoInnovacion - ivaCredInnov;
+  const gastoInvMktNeto     = gastoInvestigacion_mkt - ivaCredInvMkt;
   // comisiones: se descuentan de ventasBrutas para llegar a ventasNetas (ya aplicado)
   // Su precio neto ya está reflejado en ventasNetas
 
@@ -626,7 +635,18 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
   // baseInsumos también usa el monto bruto (costoMPporPar = precio factura proveedor)
 
-  const ivaCredito = roundBs((baseInsumos + baseServicios) * tasaIVA);
+  // ivaCredito = suma de Math.round(item × 13/100) por cada gasto — enteros exactos
+  const ivaCredito = Math.round(costoMPporPar * (d.produccion||0) * 13/100)
+    + Math.round((d.publicidad||0)         * 13/100)
+    + Math.round((d.promocion||0)          * 13/100)
+    + Math.round((d.eventos||0)            * 13/100)
+    + Math.round((d.marketingRedes||0)     * 13/100)
+    + Math.round((d.relacionesPublicas||0) * 13/100)
+    + Math.round(gastoInvestigacion_mkt    * 13/100)
+    + Math.round(gastoInnovacion           * 13/100)
+    + Math.round(comisiones                * 13/100)
+    + Math.round(comisionApertura          * 13/100)
+    + Math.round(costoAlmacenamiento       * 13/100);
   const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
   const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
 
@@ -1373,8 +1393,37 @@ function calcularPreSimulacionConsolidada(decisiones, cfg) {
   };
 }
 
+/**
+ * propagarEstado — transfiere el estado de cierre de R(n) al input de R(n+1)
+ * Función pura: no modifica ninguno de sus argumentos.
+ *
+ * @param {Object} decision     — decisión del equipo para la nueva ronda
+ * @param {Object} resPrev      — resultado del engine de la ronda anterior
+ * @param {Object} params       — parámetros de la simulación (fallbacks)
+ * @returns {Object}            — decisión enriquecida con estado propagado
+ */
+function propagarEstado(decision, resPrev, params = {}) {
+  if (!resPrev) return decision;
+  return {
+    ...decision,
+    cajaInicial:                Math.max(0, resPrev.cajaFinal            ?? 0),
+    cxcInicial:                 Math.max(0, resPrev.cxcFinal             ?? 0),
+    deudaInicial:               Math.max(0, resPrev.deudaFinal           ?? 0),
+    activosFijosIniciales:      Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? params.activosFijosIniciales ?? 80000),
+    brandEquityInicial:         resPrev.brandEquityFinal                 ?? 50,
+    vendedoresIniciales:        Math.max(1, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 2),
+    operariosIniciales:         Math.max(1, resPrev.operariosFinales     ?? params.operariosIniciales  ?? 4),
+    resultadoAcumuladoAnterior: resPrev.resultadoAcumulado               ?? 0,
+    ivaAPagarAnterior:          Math.max(0, resPrev.ivaAPagar            ?? 0),
+    saldoIUEcompensable:        Math.max(0, resPrev.saldoIUEfinal        ?? 0),
+    pedidosPendientes:          resPrev.pedidosPendientesResta           ?? [],
+    inventarioInicial:          resPrev.inventarioFinal                  ?? 0,
+  };
+}
+
 module.exports = {
   ejecutarSimulador,
+  propagarEstado,
   calcularMercadoSegmentos,
   calcularPreSimulacion,
   calcularPreSimulacionConsolidada,
