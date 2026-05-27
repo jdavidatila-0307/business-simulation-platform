@@ -4208,31 +4208,58 @@ window.mostrarFinanciero = (n) => {
           })() : ''
         }
 
-        ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
-        ${finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false, 'neg')}
-        ${finRowSub('= Ventas netas',          r.ventasNetasReal||r.ventasNetas, true)}
-        ${finRow('(−) Costo de ventas',        -r.costoVentas,         false, 'neg')}
-        ${finRowSub('= Utilidad bruta',        r.utilidadBruta,        true)}
-        <div style="height:6px"></div>
-        <!-- GASTOS COMERCIALES -->
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Comerciales</div>
-        ${finRow('Publicidad',                 -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),   false,'neg')}
-        ${finRow('Promoción',                  -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),     false,'neg')}
-        ${finRow('Eventos',                    -(r.gastoEventos||Math.round((r.eventos||0)*0.87)),         false,'neg')}
-        ${finRow('Marketing en redes',         -(r.gastoMktRedes||Math.round((r.marketingRedes||0)*0.87)), false,'neg')}
-        ${finRow('Relaciones públicas',        -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')}
-        ${finRow('Fuerza de ventas',           -r.costoVendedores,     false,'neg')}
+        ${(() => {
+          // Opción 1: consolidar gastos de todos los productos para multiproducto
+          const prods = r.productos?.length > 1 ? r.productos : null;
+          const sumP  = (fn) => prods ? prods.reduce((s,p) => s + (fn(p)||0), 0) : null;
 
-        <!-- GASTOS ADMINISTRATIVOS -->
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Administrativos</div>
-        ${finRow('Sueldos administrativos (operarios)', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')}
-        ${finRow('Gastos administrativos fijos',        -r.gastoAdminFijo,      false,'neg')}
+          // Gastos comerciales — suma todos los productos
+          const gPub  = prods ? sumP(p=>p.gastoPublicidad||Math.round((p.publicidad||0)*0.87))
+                               : (r.gastoPublicidad||Math.round((r.publicidad||0)*0.87));
+          const gProm = prods ? sumP(p=>p.gastoPromocion||Math.round((p.promocion||0)*0.87))
+                               : (r.gastoPromocion||Math.round((r.promocion||0)*0.87));
+          const gEv   = prods ? sumP(p=>p.gastoEventos||Math.round((p.eventos||0)*0.87))
+                               : (r.gastoEventos||Math.round((r.eventos||0)*0.87));
+          const gRed  = prods ? sumP(p=>p.gastoMktRedes||Math.round((p.marketingRedes||0)*0.87))
+                               : (r.gastoMktRedes||Math.round((r.marketingRedes||0)*0.87));
+          const gRRPP = prods ? sumP(p=>p.gastoRRPP||Math.round((p.relacionesPublicas||0)*0.87))
+                               : (r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87));
+          // Fuerza de ventas y operarios — específicos por producto
+          const gVend = prods ? sumP(p=>p.costoVendedores||p.gastoCostoVend||0)
+                               : (r.costoVendedores||0);
+          const gOper = prods ? sumP(p=>p.pagoOperarios||p.costoOperarios||0)
+                               : (r.pagoOperarios||r.costoOperarios||0);
+          // Costos fijos comunes — solo prod_1 (Alternativa 3)
+          const gAdmin  = r.gastoAdminFijo || 0;
+          const gPlanta = r.gastoFijoPlanta || 0;
+          const gAlmac  = prods ? sumP(p=>p.costoAlmacenamiento||0) : (r.costoAlmacenamiento||0);
+          const gInnov  = prods ? sumP(p=>p.gastoInnovacionNeto||Math.round((p.gastoInnovacion||0)*0.87))
+                                 : (r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87));
+          const tieneInnov = prods ? prods.some(p=>p.gastoInnovacion>0) : r.gastoInnovacion>0;
 
-        <!-- GASTOS OPERATIVOS DE PLANTA -->
-        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Operativos de Planta</div>
-        ${finRow('Gasto fijo de planta',       -r.gastoFijoPlanta,     false,'neg')}
-        ${finRow('Almacenamiento inventario',  -r.costoAlmacenamiento, false,'neg')}
-        ${r.gastoInnovacion>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)), false,'neg') : ''}
+          return finRow('Ventas brutas', r.ventasBrutas, false, 'neutral')
+            + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false, 'neg')
+            + finRowSub('= Ventas netas', r.ventasNetasReal||r.ventasNetas, true)
+            + finRow('(−) Costo de ventas', -r.costoVentas, false, 'neg')
+            + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
+            + '<div style="height:6px"></div>'
+            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Comerciales'
+            + (prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '') + '</div>'
+            + finRow('Publicidad', -gPub, false, 'neg')
+            + finRow('Promoción', -gProm, false, 'neg')
+            + finRow('Eventos', -gEv, false, 'neg')
+            + finRow('Marketing en redes', -gRed, false, 'neg')
+            + finRow('Relaciones públicas', -gRRPP, false, 'neg')
+            + finRow('Fuerza de ventas', -gVend, false, 'neg')
+            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Administrativos'
+            + (prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '') + '</div>'
+            + finRow('Sueldos operarios', -gOper, false, 'neg')
+            + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
+            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Operativos de Planta</div>'
+            + finRow('Gasto fijo de planta', -gPlanta, false, 'neg')
+            + finRow('Almacenamiento inventario', -gAlmac, false, 'neg')
+            + (tieneInnov ? finRow('Innovación / desarrollo', -gInnov, false, 'neg') : '');
+        })()}
 
         <!-- EBITDA -->
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
