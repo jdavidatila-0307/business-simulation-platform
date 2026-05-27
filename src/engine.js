@@ -499,8 +499,14 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
 
   // CU variable real por par (solo costos variables)
-  const ivaCredMPunit2 = Math.round((d.costoMPunitario || 0) * 13/100);  // IVA crédito MP por par
-  const cuVarMP    = (d.costoMPunitario || 0) - ivaCredMPunit2;   // S4: MP neto por par → entero exacto
+  // S4: IVA crédito MP se calcula sobre el TOTAL (no por unidad) para evitar pérdida de decimales
+  //   Math.round(119.20 × 13/100) = 15 (pierde 0.496)
+  //   Math.round(119.200 × 13/100) = 15.496 (correcto)
+  const produccionMP    = Math.max(1, d.produccion || 1);
+  const costoMPtotal    = (d.costoMPunitario || 0) * produccionMP;
+  const ivaCredMPtotal  = Math.round(costoMPtotal * 13/100);        // IVA sobre total → sin pérdida
+  const costoMPnetoTot  = costoMPtotal - ivaCredMPtotal;            // neto total exacto
+  const cuVarMP    = costoMPnetoTot / produccionMP;                  // neto por par — sin roundBs para preservar precisión
   const cuVarCalid = roundBs(0.20 * (d.calidad || 5));              // calidad por par
   const cuVar      = roundBs(cuVarMP + cuVarCalid);                 // CU variable total
 
