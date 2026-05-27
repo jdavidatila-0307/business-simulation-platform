@@ -1626,7 +1626,50 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       + '<div style="font-weight:700;font-size:.9rem;color:'+color+';margin-bottom:14px;letter-spacing:.3px">'+nombre+'</div>';
 
     if (tab === 'pl') {
-      // ── ER idéntico al panel estudiante ──
+      // ── ER por producto (multiproducto) ──
+      if (r.productos && r.productos.length > 1) {
+        const PROD_COLORS2 = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+        const fR2 = (lbl,v,neg,tipo) => {
+          const val=neg?-(v||0):(v||0);
+          const col=tipo==='pos'?'var(--accent2)':tipo==='neg'?'var(--accent4)':'var(--text1)';
+          return '<tr><td style="padding:3px 8px;font-size:.74rem;color:var(--text2)">'+lbl+'</td>'
+            +'<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.74rem;color:'+col+'">'
+            +(val<0?'(':'')+'Bs '+Math.round(Math.abs(val)).toLocaleString('es')+(val<0?')':'')+'</td></tr>';
+        };
+        const fRS2 = (lbl,v) => {
+          const col=(v||0)>=0?'var(--accent2)':'var(--accent4)';
+          return '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;font-size:.74rem;font-weight:700">'+lbl+'</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-size:.74rem;font-weight:700;color:'+col+'">'
+            +'Bs '+Math.round(v||0).toLocaleString('es')+'</td></tr>';
+        };
+        const cards2 = r.productos.map((p,i) => {
+          const col = PROD_COLORS2[i % PROD_COLORS2.length];
+          const utilColor = (p.utilidadNeta||0)>=0?'var(--accent2)':'var(--accent4)';
+          const ebit = p.ebit??((p.utilidadBruta||0)-(p.gastosOp||0));
+          const margenPct = (p.ventasNetas||0)>0?((p.utilidadNeta||0)/(p.ventasNetas)*100).toFixed(1)+'%':'—';
+          return '<div style="background:var(--bg3);border:0.5px solid var(--border);border-top:3px solid '+col
+            +';border-radius:var(--r);padding:10px 12px;min-width:180px;flex:1">'
+            +'<div style="font-weight:700;font-size:.75rem;color:'+col+';margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(p.producto||'Prod '+(i+1))+'</div>'
+            +'<table style="width:100%;border-collapse:collapse">'
+            +fR2('Ventas netas',p.ventasNetas||0,false,'neutral')
+            +fR2('(−) Costo ventas',p.costoVentas||0,true,'neg')
+            +fRS2('= Util. bruta',p.utilidadBruta||0)
+            +fR2('(−) Gastos op.',p.gastosOp||0,true,'neg')
+            +fRS2('= EBIT',ebit)
+            +fR2('(−) IT',p.impuestoIT||0,true,'neg')
+            +'<tr style="border-top:2px solid var(--border2)">'
+            +'<td style="padding:4px 8px;font-size:.74rem;font-weight:700">= Util. neta</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-size:.74rem;font-weight:700;color:'+utilColor+'">'
+            +'Bs '+Math.round(p.utilidadNeta||0).toLocaleString('es')+'</td></tr>'
+            +'<tr><td style="padding:2px 8px;font-size:.7rem;color:var(--text3)">Margen</td>'
+            +'<td style="padding:2px 8px;text-align:right;font-family:var(--font-mono);font-size:.7rem;color:'+utilColor+'">'+margenPct+'</td></tr>'
+            +'</table></div>';
+        }).join('');
+        html += '<div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px">📦 ER por Producto</div>'
+          +'<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">'+cards2+'</div>'
+          +'<div style="font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">📋 ER Consolidado</div>';
+      }
+      // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
       html += finRow('Precio facturado al cliente', r.totalFacturado||0, false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
@@ -4085,53 +4128,83 @@ window.mostrarFinanciero = (n) => {
       </div>
       <div style="padding:16px 20px">
 
-        ${/* Tabla desglose por producto */
+        ${/* ER desglosado por producto — multiproducto */
           (r.productos && r.productos.length > 1) ? (() => {
-            const filas = r.productos.map((p,i) => {
-              const mb     = p.utilidadBruta || 0;
-              const mbPct  = (p.ventasNetas||0) > 0 ? (mb/(p.ventasNetas)*100).toFixed(1) + '%' : '—';
-              const color  = mb >= 0 ? 'var(--accent2)' : 'var(--accent4)';
-              return '<tr style="border-bottom:1px solid var(--border)">'
-                + '<td style="padding:5px 10px;font-weight:600;white-space:nowrap">' + (p.producto||'—') + '</td>'
-                + '<td style="padding:5px 10px;font-size:.74rem;color:var(--text3)">' + (p.segmento||'—').substring(0,22) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.num(p.ventasReales||0) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.precioVenta||0) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoUnitario||0) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.ventasNetas||0) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoVentas||0) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+color+'">' + fmt.bs(mb) + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);color:'+color+'">' + mbPct + '</td>'
-                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.pct(p.shareReal||0) + '</td>'
-                + '</tr>';
+            const PROD_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+            const fR = (lbl, v, neg, tipo) => {
+              const val = neg ? -(v||0) : (v||0);
+              const color = tipo==='pos'?'var(--accent2)':tipo==='neg'?'var(--accent4)':'var(--text1)';
+              return '<tr><td style="padding:3px 8px;font-size:.75rem;color:var(--text2)">' + lbl + '</td>'
+                + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.75rem;color:'+color+'">'
+                + (val<0?'(':'') + 'Bs ' + Math.round(Math.abs(val)).toLocaleString('es') + (val<0?')':'') + '</td></tr>';
+            };
+            const fRS = (lbl, v) => {
+              const color = (v||0)>=0?'var(--accent2)':'var(--accent4)';
+              return '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;font-size:.75rem;font-weight:700">' + lbl + '</td>'
+                + '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-size:.75rem;font-weight:700;color:'+color+'">'
+                + 'Bs ' + Math.round(v||0).toLocaleString('es') + '</td></tr>';
+            };
+            const secR = lbl => '<tr><td colspan="2" style="padding:4px 8px 2px;font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">' + lbl + '</td></tr>';
+
+            const cards = r.productos.map((p,i) => {
+              const col = PROD_COLORS[i % PROD_COLORS.length];
+              const utilColor = (p.utilidadNeta||0)>=0?'var(--accent2)':'var(--accent4)';
+              const gastosOp = p.gastosOp || 0;
+              const ebit     = p.ebit ?? ((p.utilidadBruta||0) - gastosOp);
+              const utilNeta = p.utilidadNeta || 0;
+              const margenPct = (p.ventasNetas||0)>0 ? ((utilNeta/(p.ventasNetas))*100).toFixed(1)+'%' : '—';
+              return '<div style="background:var(--bg2);border:0.5px solid var(--border);border-top:3px solid '+col
+                + ';border-radius:var(--r);padding:12px 14px;min-width:200px;flex:1">'
+                + '<div style="font-weight:700;font-size:.78rem;color:'+col+';margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                + (p.producto||'Producto '+(i+1)) + '</div>'
+                + '<table style="width:100%;border-collapse:collapse">'
+                + fR('Ventas netas', p.ventasNetas||0, false, 'neutral')
+                + fR('(−) Costo ventas', p.costoVentas||0, true, 'neg')
+                + fRS('= Utilidad bruta', p.utilidadBruta||0)
+                + fR('(−) Gastos operativos', gastosOp, true, 'neg')
+                + fRS('= EBIT', ebit)
+                + fR('(−) Impuesto IT', p.impuestoIT||0, true, 'neg')
+                + '<tr style="border-top:2px solid var(--border2);background:rgba(255,255,255,.03)">'
+                + '<td style="padding:5px 8px;font-size:.76rem;font-weight:700">= Utilidad neta</td>'
+                + '<td style="padding:5px 8px;text-align:right;font-family:var(--font-mono);font-size:.78rem;font-weight:700;color:'+utilColor+'">'
+                + 'Bs ' + Math.round(utilNeta).toLocaleString('es') + '</td></tr>'
+                + '<tr><td style="padding:3px 8px;font-size:.72rem;color:var(--text3)">Margen neto</td>'
+                + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:'+utilColor+'">' + margenPct + '</td></tr>'
+                + '<tr><td style="padding:3px 8px;font-size:.72rem;color:var(--text3)">Unidades vendidas</td>'
+                + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem">' + Math.round(p.ventasReales||0).toLocaleString('es') + '</td></tr>'
+                + '</table></div>';
             }).join('');
-            const colorTot = r.utilidadBruta>=0?'var(--accent2)':'var(--accent4)';
-            const mbPctTot = (r.ventasNetas||0)>0 ? (r.utilidadBruta/r.ventasNetas*100).toFixed(1)+'%' : '—';
-            return '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 6px 0;border-bottom:1px solid var(--border);margin-bottom:8px">📦 Desglose por Producto</div>'
-              + '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:.79rem">'
-              + '<thead><tr style="background:rgba(255,255,255,.04)">'
-              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Producto</th>'
-              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Segmento</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>unid</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Precio<br>venta</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>unitario</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>netas</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>ventas</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--accent2);text-transform:uppercase">Margen<br>bruto</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Margen<br>%</th>'
-              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Market<br>share</th>'
-              + '</tr></thead>'
-              + '<tbody>' + filas + '</tbody>'
-              + '<tfoot><tr style="background:rgba(6,255,165,.06);border-top:2px solid var(--border2)">'
-              + '<td colspan="2" style="padding:5px 10px;font-weight:700;font-size:.78rem">TOTAL EMPRESA</td>'
-              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.num(r.ventasReales||0) + '</td>'
-              + '<td></td><td></td>'
-              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.ventasNetas||0) + '</td>'
-              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.costoVentas||0) + '</td>'
-              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + fmt.bs(r.utilidadBruta||0) + '</td>'
-              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + mbPctTot + '</td>'
-              + '<td></td></tr></tfoot>'
+
+            // Totales empresa
+            const totVN   = r.ventasNetas||0;
+            const totCV   = r.costoVentas||0;
+            const totUB   = r.utilidadBruta||0;
+            const totGO   = r.gastosOp||0;
+            const totEBIT = r.ebit||0;
+            const totIT   = r.impuestoIT||0;
+            const totUN   = r.utilidadNeta||0;
+            const totMgn  = totVN>0 ? (totUN/totVN*100).toFixed(1)+'%' : '—';
+            const totColor= totUN>=0?'var(--accent2)':'var(--accent4)';
+
+            return '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 8px 0;border-bottom:1px solid var(--border);margin-bottom:10px">📦 ER por Producto</div>'
+              + '<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">' + cards + '</div>'
+              + '<div style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--r);padding:10px 14px;margin-bottom:14px">'
+              + '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📊 Consolidado empresa</div>'
+              + '<table style="width:100%;border-collapse:collapse">'
+              + fR('Ventas netas', totVN, false, 'neutral')
+              + fR('(−) Costo ventas', totCV, true, 'neg')
+              + fRS('= Utilidad bruta', totUB)
+              + fR('(−) Gastos operativos', totGO, true, 'neg')
+              + fRS('= EBIT', totEBIT)
+              + fR('(−) Impuesto IT', totIT, true, 'neg')
+              + '<tr style="border-top:2px solid var(--border2);background:rgba(255,255,255,.03)">'
+              + '<td style="padding:5px 8px;font-size:.76rem;font-weight:700">= Utilidad neta empresa</td>'
+              + '<td style="padding:5px 8px;text-align:right;font-family:var(--font-mono);font-size:.78rem;font-weight:700;color:'+totColor+'">'
+              + 'Bs ' + Math.round(totUN).toLocaleString('es') + '</td></tr>'
+              + '<tr><td style="padding:3px 8px;font-size:.72rem;color:var(--text3)">Margen neto empresa</td>'
+              + '<td style="padding:3px 8px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:'+totColor+'">' + totMgn + '</td></tr>'
               + '</table></div>'
-              + '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px">📊 Estado de Resultados Consolidado</div>';
+              + '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px">📋 Estado de Resultados Detallado</div>';
           })() : ''
         }
 
