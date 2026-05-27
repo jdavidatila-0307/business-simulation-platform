@@ -2102,6 +2102,45 @@ function buildAdminResultsHTML(rd) {
       + '</div></div>';
   })();
 
+  // ── Reporte Tributario comparativo ───────────────────────
+  const tributHTML = (() => {
+    const secT = titulo =>
+      '<tr style="background:rgba(255,255,255,.04)"><td colspan="'+(N+1)+'" style="padding:5px 14px;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1;font-family:var(--font-mono);font-size:.62rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1.2px">'+titulo+'</td></tr>';
+    const rowT = (lbl, fn) => {
+      const vals = eqs.map(r => '<td style="padding:5px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)">'+bsBO(fn(r))+'</td>').join('');
+      return '<tr><td style="padding:5px 14px;font-size:.78rem;color:var(--text2);border-bottom:1px solid rgba(255,255,255,.04);position:sticky;left:0;background:var(--bg);z-index:1">'+lbl+'</td>'+vals+'</tr>';
+    };
+    const rowTS = (lbl, fn) => {
+      const vals = eqs.map(r => { const v=fn(r); const c=(v||0)>=0?'#10B981':'#EF4444'; return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;font-weight:700;border-bottom:2px solid var(--border2);color:'+c+'">'+bsBO(v)+'</td>'; }).join('');
+      return '<tr style="background:rgba(255,255,255,.04)"><td style="padding:6px 14px;font-size:.78rem;font-weight:700;border-bottom:2px solid var(--border2);position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">'+lbl+'</td>'+vals+'</tr>';
+    };
+    return '<div style="padding:4px"><div class="table-wrap" style="overflow-x:auto">'
+      + '<table style="width:100%;border-collapse:collapse"><thead>'+hdr()+'</thead><tbody>'
+      + secT('1. IVA — Impuesto al Valor Agregado')
+      + rowT('IVA Débito Fiscal (ventas)', r => r.ivaDebito||0)
+      + rowT('(−) IVA Crédito Fiscal (compras)', r => -(r.ivaCredito||0))
+      + rowTS('= IVA neto del período', r => (r.ivaDebito||0)-(r.ivaCredito||0))
+      + rowT('IVA por pagar (pasivo)', r => r.ivaAPagar||0)
+      + secT('2. IT — Impuesto a las Transacciones (3%)')
+      + rowT('Ventas facturadas (con IVA)', r => r.totalFacturado||Math.round((r.impuestoIT||0)/0.03)||0)
+      + rowTS('= IT determinado', r => r.impuestoIT||0)
+      + rowT('(−) Compensación con IUE', r => -(r.compensacionIT||r.compensacionIUE||0))
+      + rowT('= IT en efectivo', r => r.ITefectivoCaja!=null?r.ITefectivoCaja:(r.impuestoIT||0))
+      + secT('3. IUE — Impuesto Utilidades (25%)')
+      + rowT('Utilidad antes de impuestos', r => (r.ebit||0)-(r.gastoFinanciero||0))
+      + rowT('IUE determinado (25%)', r => r.impuestoIUE||Math.max(0,((r.ebit||0)-(r.gastoFinanciero||0))*0.25))
+      + rowTS('= IUE por pagar', r => r.impuestoIUE||0)
+      + rowT('Saldo IUE compensable', r => r.saldoIUEfinal||0)
+      + secT('4. Resumen Caja Tributaria')
+      + rowT('IVA período anterior pagado', r => r.pagoIVAPeriodoAnterior||0)
+      + rowT('IT pagado en efectivo', r => r.ITefectivoCaja!=null?r.ITefectivoCaja:(r.impuestoIT||0))
+      + rowT('IUE pagado', r => r.impuestoIUE||0)
+      + rowTS('= Salida total por impuestos', r => (r.pagoIVAPeriodoAnterior||0)+(r.ITefectivoCaja!=null?r.ITefectivoCaja:(r.impuestoIT||0))+(r.impuestoIUE||0))
+      + '</tbody></table></div>'
+      + '<div style="font-size:.72rem;color:var(--text3);padding:8px 4px;font-style:italic">'
+      + 'ⓘ IVA neutro Ley 843. IT=3% ventas facturadas. IUE=25% utilidad anual — liquida en R4/R8/R12.</div></div>';
+  })();
+
   return '<div id="' + pfx + 'Content">'
     + shockBanner + encabezado + tabs
     + '<div id="' + pfx + 'pane1">' + dashHTML + '</div>'
@@ -2109,13 +2148,14 @@ function buildAdminResultsHTML(rd) {
     + '<div id="' + pfx + 'pane3" style="display:none">' + bgHTML + '</div>'
     + '<div id="' + pfx + 'pane4" style="display:none">' + feHTML + '</div>'
     + '<div id="' + pfx + 'pane5" style="display:none">' + kpiHTML + '</div>'
+    + '<div id="' + pfx + 'pane6" style="display:none">' + tributHTML + '</div>'
     + '</div>';
 }
 
 window.adminEFTab = (n, pfx) => {
   // F7-FIX: pfx identifica la instancia correcta de los tabs
   // Soporte legado: si no hay pfx busca IDs antiguos
-  [1,2,3,4,5].forEach(i => {
+  [1,2,3,4,5,6].forEach(i => {
     const pane = document.getElementById(pfx ? pfx+'pane'+i : 'adminEFPane'+i);
     const btn  = document.getElementById(pfx ? pfx+'btn'+i  : 'btnEFT'+i);
     if (pane) pane.style.display = i===n ? '' : 'none';
