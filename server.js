@@ -1515,12 +1515,16 @@ async function route(req, res, body) {
         porEmpresa[eqId] = { ...r, productos: [r] };
       } else {
         // Acumular campos variables (ventas, costos, márgenes)
+        // Campos ACUMULABLES por producto (variables — se suman)
+        // cxcFinal e invFinalValorizado son campos DE EMPRESA — NO sumar
+        // (representan saldo al cierre, no acumulables por producto)
         const sumar = ['ventasBrutas','ventasNetas','ventasReales','costoVentas',
           'utilidadBruta','gastosOp','utilidadNeta','ebit',
           'ivaAPagar','impuestoIT','impuestoIUE','totalImpuestos',
           'pagoProduccion','pagoMktTotal','totalPagos','cobrosContado',
-          'cxcFinal','invFinalValorizado','inventarioFinal','ingresoPrestamo',
+          'inventarioFinal','ingresoPrestamo',
           'publicidad','comisiones','roiMarketing','demandaAsignada','demandaFormal'];
+        // cxcFinal e invFinalValorizado: usar del primer producto (ya en ...r inicial)
         sumar.forEach(k => {
           porEmpresa[eqId][k] = (porEmpresa[eqId][k] || 0) + (r[k] || 0);
         });
