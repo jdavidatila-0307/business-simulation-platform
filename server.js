@@ -1935,25 +1935,30 @@ async function route(req, res, body) {
         const consolidado = { ...todosProductos[0] };
         const sumar = ['ventasBrutas','ventasNetas','ventasNetasReal','ventasReales','costoVentas',
           'utilidadBruta','gastosOp','utilidadNeta','ebit',
-          'ivaAPagar','impuestoIT','impuestoIUE','totalImpuestos',
+          'impuestoIT','impuestoIUE','totalImpuestos',
           'pagoProduccion','pagoMktTotal','totalPagos',
           'cobrosContado','inventarioFinal',
           'ingresoPrestamo','publicidad','comisiones','comisionesNeto',
           'gastoCostoVend','gastoOperarios',
+          'ivaDebito','ivaCredito',
           'roiMarketing'];
         // cxcFinal e invFinalValorizado: campos de empresa — tomar del primer producto
         sumar.forEach(k => {
           consolidado[k] = todosProductos.reduce((s,p) => s + (p[k]||0), 0);
         });
-        // Campos de empresa (tomar del primer producto)
+        // Campos de empresa (tomar del primer producto — pasivos y balance únicos)
         consolidado.cajaFinal      = todosProductos[0].cajaFinal;
         consolidado.deudaFinal     = todosProductos[0].deudaFinal;
         consolidado.patrimonio     = todosProductos[0].patrimonio;
         consolidado.totalActivos   = todosProductos[0].totalActivos;
+        consolidado.totalPasivos   = todosProductos[0].totalPasivos;
         consolidado.capitalContable= todosProductos[0].capitalContable;
         consolidado.afNetos        = todosProductos[0].afNetos;
         consolidado.brandEquityFinal = todosProductos[0].brandEquityFinal;
         consolidado.sobregiro      = todosProductos[0].sobregiro;
+        // ivaAPagar es pasivo de empresa — NO se suma por producto
+        consolidado.ivaAPagar      = todosProductos[0].ivaAPagar;
+        consolidado.resultadoAcumulado = todosProductos[0].resultadoAcumulado;
         consolidado.producto       = 'Multiproducto (' + todosProductos.length + ')';
         consolidado.productos      = todosProductos; // array completo para el desglose
         resultado = consolidado;
