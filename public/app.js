@@ -4116,6 +4116,7 @@ window.mostrarFinanciero = (n) => {
   const el = document.getElementById('eq-financiero-content');
   if (!item || !el) return;
   const r = item.resultado;
+  if (!r || typeof r !== 'object') { el.innerHTML = '<p style="padding:20px;color:var(--text3)">Sin datos para esta ronda.</p>'; return; }
 
   el.innerHTML = `
   <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
