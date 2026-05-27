@@ -67,7 +67,8 @@ function expandirDecisionesMultiproducto(decisiones) {
         contratarOperarios:   decisionEmpresa.contratarOperarios   || 0,
         despedirOperarios:    decisionEmpresa.despedirOperarios    || 0,
         brandEquityInicial:   decisionEmpresa.brandEquityInicial,
-        inventarioInicial:    decisionEmpresa.inventarioInicial,
+        // inventarioInicial: viene del producto específico (producto.inventarioInicial)
+        // NO sobreescribir con el total de empresa — cada producto tiene su propio inventario
         tipoPrestamo:         decisionEmpresa.tipoPrestamo,
         montoPrestamo:        decisionEmpresa.montoPrestamo,
         plazoPrestamo:        decisionEmpresa.plazoPrestamo,
