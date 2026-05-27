@@ -4185,8 +4185,8 @@ window.mostrarFinanciero = (n) => {
                 + '</table></div>';
             }).join('');
 
-            // Totales empresa
-            const totVN   = r.ventasNetas||0;
+            // Totales empresa — usar ventasNetasReal (S11: comisiones netas)
+            const totVN   = r.ventasNetasReal||r.ventasNetas||0;
             const totCV   = r.costoVentas||0;
             const totUB   = r.utilidadBruta||0;
             const totGO   = r.gastosOp||0;
