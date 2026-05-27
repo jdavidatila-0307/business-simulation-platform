@@ -463,7 +463,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // costoVentas y ventasNetasReal se calculan abajo (requieren netIVA)
 
   // Inventario final valorizado
-  const invFinalValorizado = roundBs(inventarioFinal * costoUnitario);
+  // invFinalValorizado usa CU variable real para consistencia con costoVentas
+  // (no el CU estándar del costoBase que incluye transformación no pagada)
+  const invFinalValorizado = roundBs(inventarioFinal * cuVar);
   const costoAlmacenamiento = roundBs(inventarioFinal * params.costoAlmacenamientoUnidad);
 
   // Innovación (gasto operativo)
@@ -497,10 +499,14 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // S11: comisión neta en ER (×87%)
   const comisionesNeto  = roundBs(comisiones * netIVA);
   const ventasNetasReal = roundBs(ventasBrutas - comisionesNeto);
-  const produccionPL    = d.produccion || 0;
-  const cvMP    = roundBs((d.costoMPunitario || 0) * netIVA * produccionPL);  // MP neto
-  const cvCalid = roundBs(0.20 * (d.calidad || 5) * produccionPL);           // S10 calidad
-  const costoVentas    = roundBs(cvMP + cvCalid);
+
+  // CU variable real por par (solo costos variables)
+  const cuVarMP    = roundBs((d.costoMPunitario || 0) * netIVA);   // MP neto por par
+  const cuVarCalid = roundBs(0.20 * (d.calidad || 5));              // calidad por par
+  const cuVar      = roundBs(cuVarMP + cuVarCalid);                 // CU variable total
+
+  // costoVentas = CU variable × ventasReales (solo lo vendido — no el inventario)
+  const costoVentas    = roundBs(cuVar * ventasReales);
   const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
   // Gastos CON factura → precio neto en P&L
