@@ -1299,15 +1299,12 @@ async function route(req, res, body) {
     for (const rondaBase of rondas) {
       const n = rondaBase.numero;
 
-      // Si el fallback JSONB ya trajo las decisiones, usarlas directamente.
-      // Si no (tabla normalizada sin decisiones), cargar con getRonda.
-      let ronda = rondaBase;
-      if (!rondaBase.decisiones || !Object.keys(rondaBase.decisiones).length) {
-        ronda = await storage.getRonda(sim.id, n);
-        if (!ronda) {
-          console.log(`[recalc] R${n}: no encontrada — omitida`);
-          continue;
-        }
+      // Siempre usar getRonda() para obtener las decisiones más recientes
+      // (evita usar decisiones antiguas del JSONB cuando hay duplicados)
+      const ronda = await storage.getRonda(sim.id, n);
+      if (!ronda) {
+        console.log(`[recalc] R${n}: no encontrada — omitida`);
+        continue;
       }
 
       const resObj = ronda.resultados?.resultados || ronda.resultados || {};
