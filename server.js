@@ -1531,7 +1531,9 @@ async function route(req, res, body) {
     const eqMap = {};
     equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
     // Consolidar por empresa (equipoOriginal) — multiproducto puede tener N resultados por equipo
-    const rawResultados = Object.values(ronda.resultados);
+    // La BD puede guardar resultados en ronda.resultados o ronda.resultados.resultados
+    const resDataObj = ronda.resultados?.resultados || ronda.resultados || {};
+    const rawResultados = Object.values(resDataObj).filter(r => r && typeof r === 'object' && r.equipo);
     const porEmpresa = {};
     rawResultados.forEach(r => {
       const eqId = r.equipoOriginal || r.equipo;
