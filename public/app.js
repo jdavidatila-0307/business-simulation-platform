@@ -2072,6 +2072,7 @@ function buildAdminResultsHTML(rd) {
     + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn3" onclick="adminEFTab(3,\'' + pfx + '\')">🏦 Balance General</button>'
     + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn4" onclick="adminEFTab(4,\'' + pfx + '\')">💧 Flujo de Efectivo</button>'
     + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn5" onclick="adminEFTab(5,\'' + pfx + '\')">📐 Análisis KPI</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="' + pfx + 'btn6" onclick="adminEFTab(6,\'' + pfx + '\')">📊 Reporte Tributario</button>'
     + '</div>';
 
   // Construir KPI panel (3 tabs de ratios financieros)
