@@ -656,8 +656,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     + Math.round(gastoInvestigacion_mkt    * 13/100)
     + Math.round(gastoInnovacion           * 13/100)
     + Math.round(comisiones                * 13/100)
-    + Math.round(comisionApertura          * 13/100)
-    + Math.round(costoAlmacenamiento       * 13/100);
+    + Math.round(comisionApertura          * 13/100);
+    // costoAlmacenamiento: costo interno sin factura — coherente con S6 y S10
+    // NO genera IVA crédito (igual que calidad y operarios)
   const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
   const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
 
