@@ -292,6 +292,7 @@ function setupNav(screenId) {
 function initLogin() {
   document.getElementById('loginId').addEventListener('keydown', e => e.key==='Enter' && doLogin());
   document.getElementById('loginPass').addEventListener('keydown', e => e.key==='Enter' && doLogin());
+  document.getElementById('loginCodigo').addEventListener('keydown', e => e.key==='Enter' && doLogin());
   document.getElementById('btnLogin').addEventListener('click', doLogin);
   const btnManual = document.getElementById('btnVerManualLogin');
   if (btnManual) btnManual.addEventListener('click', buildManual);
@@ -299,8 +300,9 @@ function initLogin() {
 }
 
 async function doLogin() {
-  const id   = document.getElementById('loginId').value.trim();
-  const pass = document.getElementById('loginPass').value;
+  const id     = document.getElementById('loginId').value.trim();
+  const pass   = document.getElementById('loginPass').value;
+  const codigo = (document.getElementById('loginCodigo')?.value || '').trim().toUpperCase();
   const errEl  = document.getElementById('loginError');
   const hintEl = document.getElementById('loginHint');
   errEl.textContent = '';
@@ -308,7 +310,7 @@ async function doLogin() {
   const btn = document.getElementById('btnLogin');
   btn.textContent = 'Ingresando...'; btn.disabled = true;
   try {
-    const data = await api('POST','/auth/login',{id,password:pass});
+    const data = await api('POST','/auth/login',{id,password:pass,codigoSimulacion:codigo});
     state.me = data;
     wsClient.conectar(data.simulacionId || state.currentSimId);  // ← NUEVA LÍNEA
     if (data.rol === 'admin' || data.rol === 'superadmin' || data.rol === 'profesor') await initAdmin();

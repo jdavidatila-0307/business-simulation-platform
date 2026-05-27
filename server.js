@@ -335,7 +335,7 @@ async function route(req, res, body) {
 
   // ═══ AUTH ════════════════════════════════════════════════════
   if (url === '/auth/login' && method === 'POST') {
-    const { id, password } = body;
+    const { id, password, codigoSimulacion } = body;
     if (!id || !password) return send(res, 400, { error: 'Credenciales requeridas' });
     const identifier = id.trim();
     console.log(`[LOGIN] intento | identifier: "${identifier}"`);
@@ -345,11 +345,21 @@ async function route(req, res, body) {
     let sessionSimulacionId = null;
 
     // ── 2. Si no encontrado, buscar equipo por nombre en simulaciones ──
-    //    Necesario porque los equipos NO están en 'usuarios' y Render
-    //    reinicia el servidor (perdiendo sesiones en memoria).
     if (!user) {
       const found = await storage.findEquipoByNombre(identifier);
       if (found) {
+        // ── Opción A: validar código del simulador para equipos ──
+        const codigoRequerido = found.sim?.codigo_acceso;
+        if (codigoRequerido) {
+          const codigoIngresado = (codigoSimulacion || '').trim().toUpperCase();
+          if (!codigoIngresado) {
+            return send(res, 401, { error: 'Se requiere el código del simulador para ingresar como equipo' });
+          }
+          if (codigoIngresado !== codigoRequerido.trim().toUpperCase()) {
+            console.log(`[LOGIN] código incorrecto | equipo: ${identifier} | ingresado: ${codigoIngresado} | requerido: ${codigoRequerido}`);
+            return send(res, 401, { error: 'Código del simulador incorrecto' });
+          }
+        }
         user = {
           id:            found.equipo.id,
           nombre:        found.equipo.nombre,

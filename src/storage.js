@@ -58,7 +58,7 @@ async function findEquipoByNombre(nombre) {
     const users = sim.users || [];
     const equipo = users.find(u => u.nombre && u.nombre.toLowerCase() === nombreLower);
     if (equipo) {
-      return { equipo, simulacionId: sim.id };
+      return { equipo, simulacionId: sim.id, sim };
     }
   }
   return null;
