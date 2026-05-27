@@ -4237,28 +4237,57 @@ window.mostrarFinanciero = (n) => {
                                  : (r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87));
           const tieneInnov = prods ? prods.some(p=>p.gastoInnovacion>0) : r.gastoInnovacion>0;
 
-          return finRow('Ventas brutas', r.ventasBrutas, false, 'neutral')
-            + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false, 'neg')
-            + finRowSub('= Ventas netas', r.ventasNetasReal||r.ventasNetas, true)
-            + finRow('(−) Costo de ventas', -r.costoVentas, false, 'neg')
+          // Consolidados de ventas
+          const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
+          const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
+          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||0);
+          const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
+          const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
+          // Costo de ventas detalle
+          const totCVmp    = prods ? sumP(p=>p.cvMP||(p.costoVentas-(p.pagoCalidad||0))||0) : (r.cvMP||(r.costoVentas-(r.pagoCalidad||0))||0);
+          const totCVcalid = prods ? sumP(p=>p.pagoCalidad||0) : (r.pagoCalidad||0);
+          // Gastos operativos adicionales
+          const gCostoVend = prods ? sumP(p=>p.gastoCostoVend||p.costoVendedores||0) : (r.gastoCostoVend||r.costoVendedores||0);
+          const gInvMkt    = prods ? sumP(p=>p.gastoInvMktNeto||0) : (r.gastoInvMktNeto||0);
+          const tieneInvMkt= prods ? prods.some(p=>(p.gastoInvestigacion_mkt||0)>0) : (r.gastoInvestigacion_mkt||0)>0;
+
+          const multiLabel = prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '';
+          const secER = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+multiLabel+'</div>';
+
+          return ''
+            // ── VENTAS ──────────────────────────────────────────
+            + secER('Ingresos')
+            + finRow('Precio facturado al cliente (con IVA)', totTotalFact, false, 'neutral')
+            + finRow('(−) IVA débito fiscal (13%)', -totIvaDebito, false, 'neg')
+            + finRowSub('= Ventas brutas (sin IVA)', totVentasBrutas, true)
+            + finRow('(−) Comisiones canal (neto)', -totComisNeto, false, 'neg')
+            + finRowSub('= Ventas netas', totVentasNetas, true)
+            + '<div style="height:4px"></div>'
+            // ── COSTO DE VENTAS ─────────────────────────────────
+            + secER('Costo de Ventas')
+            + finRow('Costo materia prima neto', -totCVmp, false, 'neg')
+            + finRow('Costo calidad / control', -totCVcalid, false, 'neg')
+            + finRowSub('= Total costo de ventas', -r.costoVentas, true)
             + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
-            + '<div style="height:6px"></div>'
-            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Comerciales'
-            + (prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '') + '</div>'
+            + '<div style="height:4px"></div>'
+            // ── GASTOS COMERCIALES ──────────────────────────────
+            + secER('(-) Gastos Comerciales')
             + finRow('Publicidad', -gPub, false, 'neg')
-            + finRow('Promoción', -gProm, false, 'neg')
-            + finRow('Eventos', -gEv, false, 'neg')
+            + finRow('Promoción y descuentos', -gProm, false, 'neg')
+            + finRow('Eventos y activaciones', -gEv, false, 'neg')
             + finRow('Marketing en redes', -gRed, false, 'neg')
             + finRow('Relaciones públicas', -gRRPP, false, 'neg')
-            + finRow('Fuerza de ventas', -gVend, false, 'neg')
-            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Administrativos'
-            + (prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '') + '</div>'
-            + finRow('Sueldos operarios', -gOper, false, 'neg')
+            + finRow('Fuerza de ventas (sueldos)', -gCostoVend, false, 'neg')
+            + (tieneInvMkt ? finRow('Investigación de mercado', -gInvMkt, false, 'neg') : '')
+            // ── GASTOS ADMINISTRATIVOS ──────────────────────────
+            + secER('(-) Gastos Administrativos')
+            + finRow('Sueldos operarios de producción', -gOper, false, 'neg')
             + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
-            + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Operativos de Planta</div>'
+            // ── GASTOS PLANTA ───────────────────────────────────
+            + secER('(-) Gastos Operativos de Planta')
             + finRow('Gasto fijo de planta', -gPlanta, false, 'neg')
-            + finRow('Almacenamiento inventario', -gAlmac, false, 'neg')
-            + (tieneInnov ? finRow('Innovación / desarrollo', -gInnov, false, 'neg') : '');
+            + finRow('Almacenamiento de inventario', -gAlmac, false, 'neg')
+            + (tieneInnov ? finRow('Innovación y desarrollo', -gInnov, false, 'neg') : '');
         })()}
 
         <!-- EBITDA -->

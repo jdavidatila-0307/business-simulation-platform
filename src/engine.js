@@ -797,13 +797,14 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // Gastos netos (×87% para ER — Ley 843)
     gastoPublicidad, gastoPromocion, gastoEventos,
     gastoMktRedes, gastoRRPP,
-    gastoInnovacionNeto,
+    gastoInnovacionNeto, gastoInvMktNeto,
+    gastoCostoVend, gastoOperarios,
     // Comisiones netas y ventas netas reales
     comisionesNeto, ventasNetasReal,
     gastoAdminFijo:     params.gastoAdminFijo,
     gastoFijoPlanta:    params.gastoFijoPlanta,
     depreciacion:       params.depreciacionTrimestral,
-    costoAlmacenamiento, gastoInnovacion,
+    costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro, gastoFinanciero,
     gastosOp, utilidadNeta,
 
