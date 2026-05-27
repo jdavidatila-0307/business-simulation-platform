@@ -468,14 +468,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // Innovación (gasto operativo)
   const gastoInnovacion = d.innovacion ? (d.montoInnovacion || 0) : 0;
 
-  // Investigación de mercado (gasto operativo — sale de caja y del P&L)
-  const gastoInvestigacion_mkt = (() => {
-    const tipo = d.tipoInvestigacion || 'No';
-    if (tipo === 'Básica')      return params.costoInvestigacionBasica      || 5000;
-    if (tipo === 'Premium')     return params.costoInvestigacionPremium     || 12000;
-    if (tipo === 'Estratégico') return params.costoInvestigacionEstrategico || 20000;
-    return 0;
-  })();
+  // Investigación de mercado — se calcula después de esProductoPrincipal (ver abajo)
 
   // Financiamiento
   const montoP = d.montoPrestamo || 0;
@@ -552,6 +545,17 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   COMUNES (se cobran UNA sola vez, en prod_1): admin, planta, depreciación
   //   ESPECÍFICOS (por cada línea activa): operarios ← ya arriba
   const esProductoPrincipal = (d.productoId === 'prod_1' || !d.productoId);
+
+  // Investigación de mercado — costo común de empresa (Alternativa 3)
+  // Solo se reconoce en prod_1 — coherente con admin, planta y depreciación
+  const gastoInvestigacion_mkt = esProductoPrincipal ? (() => {
+    const tipo = d.tipoInvestigacion || 'No';
+    if (tipo === 'Básica')      return params.costoInvestigacionBasica      || 5000;
+    if (tipo === 'Premium')     return params.costoInvestigacionPremium     || 12000;
+    if (tipo === 'Estratégico') return params.costoInvestigacionEstrategico || 20000;
+    return 0;
+  })() : 0;
+
   const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
   const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
   const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
