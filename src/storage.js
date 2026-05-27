@@ -248,7 +248,7 @@ async function getRonda(simulacionId, n, ownerId = null) {
          WHERE  simulacion_id = $1
            AND  ronda_numero  = $2
            AND  producto_id   = 'prod_1'
-         ORDER BY enviada_at ASC`,
+         ORDER BY enviada_at DESC`,
         [simulacionId, n]
       );
 
