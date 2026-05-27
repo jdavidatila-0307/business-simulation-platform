@@ -4248,8 +4248,9 @@ window.mostrarFinanciero = (n) => {
           const totCVcalid = prods ? sumP(p=>p.pagoCalidad||0) : (r.pagoCalidad||0);
           // Gastos operativos adicionales
           const gCostoVend = prods ? sumP(p=>p.gastoCostoVend||p.costoVendedores||0) : (r.gastoCostoVend||r.costoVendedores||0);
-          const gInvMkt    = prods ? sumP(p=>p.gastoInvMktNeto||0) : (r.gastoInvMktNeto||0);
-          const tieneInvMkt= prods ? prods.some(p=>(p.gastoInvestigacion_mkt||0)>0) : (r.gastoInvestigacion_mkt||0)>0;
+          // gastoInvMkt es decisión de empresa (no por producto) — usar consolidado r
+          const gInvMkt    = r.gastoInvMktNeto || 0;
+          const tieneInvMkt= gInvMkt > 0;
 
           const multiLabel = prods ? ' <span style="font-size:.58rem;color:var(--accent3)">(suma todos los productos)</span>' : '';
           const secER = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+multiLabel+'</div>';
