@@ -4548,6 +4548,99 @@ window.mostrarFinanciero = (n) => {
         ${(r.sobregiro||0)>0 ? '<div style="padding:6px 0;font-size:.76rem;color:var(--accent4)">⚠ Sobregiro activado: Bs ' + fmt.num(r.sobregiro) + ' · Interés: Bs ' + fmt.num(r.interesSobregiro||0) + '</div>' : ''}
       </div>
     </div>
+  </div>
+
+  <!-- Reporte Tributario -->
+  <div id="finTR" style="display:none">
+    <div class="result-round-card">
+      <div class="result-round-header">
+        <h3>📊 Reporte Gerencial Tributario — Ronda ${n}</h3>
+      </div>
+      <div style="padding:16px 20px;max-width:640px">
+        ${(() => {
+          const sec = (num, titulo) =>
+            '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:16px 0 8px">'
+            + num + '. ' + titulo + '</div>';
+          const rowT = (lbl, v, neg) => {
+            const val = neg ? -(v||0) : (v||0);
+            const col = val < 0 ? 'var(--accent4)' : 'var(--text1)';
+            return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.82rem">'
+              + '<span style="color:var(--text2)">' + lbl + '</span>'
+              + '<span style="font-family:var(--font-mono);color:' + col + '">'
+              + (val<0?'(':'' ) + 'Bs ' + Math.abs(Math.round(val)).toLocaleString('es') + (val<0?')':'')
+              + '</span></div>';
+          };
+          const rowSubT = (lbl, v, color) => {
+            const c = color || ((v||0)>=0?'var(--accent2)':'var(--accent4)');
+            return '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:.84rem;font-weight:700;border-top:1px solid var(--border2);margin-top:2px">'
+              + '<span>' + lbl + '</span>'
+              + '<span style="font-family:var(--font-mono);color:'+c+'">Bs ' + Math.round(v||0).toLocaleString('es') + '</span></div>';
+          };
+          const badgeT = (lbl, v, tipo) => {
+            const c = tipo==='pos'?'var(--accent2)':tipo==='neg'?'var(--accent4)':'var(--accent3)';
+            return '<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:4px;background:rgba(255,255,255,.05);margin:4px 4px 4px 0;font-size:.78rem">'
+              + '<span style="color:var(--text3)">' + lbl + ':</span>'
+              + '<span style="font-family:var(--font-mono);font-weight:700;color:'+c+'">Bs ' + Math.round(v||0).toLocaleString('es') + '</span></div>';
+          };
+
+          const ivaDebito  = r.ivaDebito  || 0;
+          const ivaCredito = r.ivaCredito || 0;
+          const ivaAPagar  = r.ivaAPagar  || 0;
+          const ivaFavor   = ivaCredito > ivaDebito ? ivaCredito - ivaDebito : 0;
+          const totalFact  = r.totalFacturado || ((r.ventasBrutas||0) + ivaDebito);
+          const itDet      = r.impuestoIT  || 0;
+          const itComp     = r.compensacionIUE || 0;
+          const itPagar    = Math.max(0, itDet - itComp);
+          const utilAntesIT= (r.ebit||0) - (r.gastoFinanciero||0);
+          const iueDet     = r.impuestoIUE || 0;
+          const saldoIUE   = r.saldoIUEfinal || 0;
+          const pagoIVAAnt = r.pagoIVAPeriodoAnterior || 0;
+
+          return sec('1','IVA — Impuesto al Valor Agregado')
+            + rowT('IVA Débito Fiscal por ventas', ivaDebito)
+            + rowT('(−) IVA Crédito Fiscal por compras y gastos', ivaCredito, true)
+            + rowSubT('= IVA neto del período', ivaDebito - ivaCredito)
+            + '<div style="margin-top:6px">'
+            + (ivaAPagar > 0 ? badgeT('IVA por pagar', ivaAPagar, 'neg') : badgeT('IVA a favor', ivaFavor, 'pos'))
+            + '</div>'
+
+            + sec('2','IT — Impuesto a las Transacciones')
+            + rowT('Ventas facturadas del período (con IVA)', totalFact)
+            + rowT('× Alícuota IT (3%)', Math.round(totalFact * 0.03))
+            + rowSubT('= IT determinado', itDet)
+            + rowT('(−) Compensación con IUE pagado disponible', itComp, true)
+            + rowSubT('= IT por pagar en efectivo', itPagar)
+
+            + sec('3','IUE — Impuesto a las Utilidades de las Empresas')
+            + rowT('Utilidad antes de impuestos', utilAntesIT)
+            + rowT('(+/−) Ajustes tributarios', 0)
+            + rowSubT('= Utilidad imponible', utilAntesIT)
+            + rowT('× Alícuota IUE (25%)', utilAntesIT > 0 ? Math.round(utilAntesIT * 0.25) : 0)
+            + rowSubT('= IUE determinado', iueDet)
+            + rowT('(−) Pagos a cuenta', 0, true)
+            + rowSubT('= IUE por pagar', Math.max(0, iueDet))
+
+            + sec('4','Saldo de IUE Compensable')
+            + rowT('IUE pagado en la gestión', iueDet)
+            + rowT('(−) IT compensado con IUE', itComp, true)
+            + rowSubT('= Saldo IUE disponible para compensar IT futuro', saldoIUE, 'var(--accent3)')
+
+            + sec('5','Resumen de Caja Tributaria')
+            + rowT('IVA período anterior pagado en efectivo', pagoIVAAnt)
+            + rowT('IT pagado en efectivo', itPagar)
+            + rowT('IUE pagado en efectivo', Math.max(0, iueDet))
+            + rowSubT('= Salida total de caja por impuestos', pagoIVAAnt + itPagar + Math.max(0, iueDet))
+
+            + sec('6','Situación Tributaria Final')
+            + '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'
+            + badgeT('IVA ' + (ivaAPagar>0?'por pagar':'a favor'), ivaAPagar>0?ivaAPagar:ivaFavor, ivaAPagar>0?'neg':'pos')
+            + badgeT('IT por pagar', itPagar, itPagar>0?'neg':'pos')
+            + badgeT('IUE por pagar', Math.max(0,iueDet), iueDet>0?'neg':'pos')
+            + badgeT('Saldo IUE compensable', saldoIUE, 'pos')
+            + '</div>';
+        })()}
+      </div>
+    </div>
   </div>`;
 };
 
