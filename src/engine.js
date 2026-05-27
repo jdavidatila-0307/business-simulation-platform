@@ -546,10 +546,15 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
   // Gastos SIN factura → precio completo en P&L
   const gastoCostoVend  = d.costoVendedores || 0;   // sueldos: relación laboral
-  const gastoOperarios  = d.costoOperarios  || 0;   // sueldos: relación laboral
-  const gastoAdminFijo  = params.gastoAdminFijo;     // mixto: simplificado sin IVA
-  const gastoPlantaFijo = params.gastoFijoPlanta;    // mixto: simplificado sin IVA
-  const gastoDepre      = params.depreciacionTrimestral; // no es compra del período
+  const gastoOperarios  = d.costoOperarios  || 0;   // sueldos: relación laboral — específico por línea
+
+  // Alternativa 3 — Costos mixtos multiproducto:
+  //   COMUNES (se cobran UNA sola vez, en prod_1): admin, planta, depreciación
+  //   ESPECÍFICOS (por cada línea activa): operarios ← ya arriba
+  const esProductoPrincipal = (d.productoId === 'prod_1' || !d.productoId);
+  const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
+  const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
+  const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
   let gastosOp = roundBs(

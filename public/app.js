@@ -1507,19 +1507,19 @@ function buildAdminKPIHTML(eqs, tc, pfx='kpi_') {
   // ── TAB 3 — RRHH ─────────────────────────────────────────────────────────
   const tab3 = tableWrap(
     secRow('👥 Fuerza de Ventas')
-    + kpiRow('Vendedores finales', v.map(e=>e.vendFin), num,
+    + kpiRow('Vendedores finales (por producto)', v.map(e=>e.vendFin), num,
         [{val:3,color:S.verde},{val:1,color:S.ambar},{val:0,color:S.rojo}])
-    + kpiRow('Ventas por vendedor (unid)', v.map(e=>e.ventasPorVend), num,
+    + kpiRow('Ventas por vendedor (unid / producto)', v.map(e=>e.ventasPorVend), num,
         [{val:200,color:S.verde},{val:100,color:S.ambar},{val:0,color:S.rojo}],
-        'Productividad comercial: unidades vendidas / vendedores')
-    + kpiRow('Ingresos netos por vendedor (Bs)', v.map(e=>e.ingPorVend), bs,
+        'Productividad comercial: unidades vendidas / vendedores por producto')
+    + kpiRow('Ingresos netos por vendedor (Bs / producto)', v.map(e=>e.ingPorVend), bs,
         [{val:50000,color:S.verde},{val:20000,color:S.ambar},{val:0,color:S.rojo}],
-        'Ventas netas / vendedores. Mide eficiencia de la fuerza de ventas')
+        'Ventas netas / vendedores por producto. Mide eficiencia de la fuerza de ventas')
     + secRow('🏭 Personal de Planta')
-    + kpiRow('Operarios finales', v.map(e=>e.operarios), num,
+    + kpiRow('Operarios finales (por producto)', v.map(e=>e.operarios), num,
         [{val:0,color:S.gris}])
-    + kpiRow('Costo total operarios (Bs)', v.map(e=>e.costoOper), bs,
-        [{val:0,color:S.gris}], 'Sueldos + contratación + despidos + capacitación')
+    + kpiRow('Costo operarios (Bs / producto)', v.map(e=>e.costoOper), bs,
+        [{val:0,color:S.gris}], 'Sueldos operarios por línea de producto (específico)')
   );
 
   // ── TAB 4 — Financiero ───────────────────────────────────────────────────
@@ -1685,7 +1685,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('Activos fijos netos', r.afNetos||0, false,'neutral')
         + finRowSub('= Total Activo No Corriente', r.afNetos||0, false)
         + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
-        + finRowSub('= TOTAL ACTIVOS', totalA, true)
+        + finRowSub('= TOTAL ACTIVOS', r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0), true)
         + sec('Pasivo Corriente')
         + ((r.ivaAPagar||0)>0 ? finRow('IVA por pagar (saldo trimestre)', r.ivaAPagar, false,'neg') : '')
         + ((r.sobregiro||0)>0 ? finRow('Sobregiro bancario', r.sobregiro, false,'neg') : '')
@@ -3954,11 +3954,34 @@ window.mostrarKpiRonda = (n, historial) => {
       <div class="result-round-card">
         <div class="result-round-header"><h3>👥 Gerente de RRHH</h3></div>
         <table style="width:100%;border-collapse:collapse">
-          ${kpiRow('Vendedores finales',             vendFin)}
-          ${kpiRow('Ventas por vendedor (unid)',     ventasPorVend)}
-          ${kpiRow('Ingresos netos por vendedor',    ingrPorVend)}
-          ${kpiRow('Operarios finales',              fmt.num(r.operariosFinales ?? '—'))}
-          ${kpiRow('Costo operarios (Bs)',           r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—')}
+          ${(() => {
+            const prods = r.productos?.length > 1 ? r.productos : null;
+            if (prods) {
+              // Multiproducto: mostrar por producto
+              return prods.map((p, i) => {
+                const vf  = p.vendedoresFinales || 0;
+                const vpu = vf>0 ? fmt.num(Math.round((p.ventasReales||0)/vf)) : '—';
+                const ipu = vf>0 ? fmt.bs(Math.round((p.ventasNetas||0)/vf)) : '—';
+                const of  = p.operariosFinales || 0;
+                const co  = p.costoOperarios!=null ? fmt.bs(p.costoOperarios) : '—';
+                const hdr = '<tr><td colspan="2" style="padding:4px 12px;font-family:var(--font-mono);'
+                  + 'font-size:.6rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;'
+                  + 'background:rgba(255,255,255,.03)">Producto ' + (i+1) + ': ' + (p.producto||'—') + '</td></tr>';
+                return hdr
+                  + kpiRow('Vendedores finales', fmt.num(vf))
+                  + kpiRow('Ventas por vendedor (unid)', vpu)
+                  + kpiRow('Ingresos netos por vendedor', ipu)
+                  + kpiRow('Operarios finales', fmt.num(of))
+                  + kpiRow('Costo operarios (Bs)', co);
+              }).join('');
+            }
+            // Monoproducto: vista simple
+            return kpiRow('Vendedores finales', vendFin)
+              + kpiRow('Ventas por vendedor (unid)', ventasPorVend)
+              + kpiRow('Ingresos netos por vendedor', ingrPorVend)
+              + kpiRow('Operarios finales', fmt.num(r.operariosFinales ?? '—'))
+              + kpiRow('Costo operarios (Bs)', r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—');
+          })()}
         </table>
       </div>
 
@@ -4204,7 +4227,7 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
-            ${finRowSub('= TOTAL ACTIVOS', (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0), true)}
+            ${finRowSub('= TOTAL ACTIVOS', r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0), true)}
           </div>
         </div>
       </div>
@@ -4257,7 +4280,7 @@ window.mostrarFinanciero = (n) => {
         <div class="result-round-card">
           <div style="padding:12px 16px">
             ${(() => {
-              const totalA   = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
+              const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
               const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
               const patrim   = r.patrimonio || (totalA - totalP);
               const totalPP  = totalP + patrim;
