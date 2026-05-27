@@ -337,7 +337,7 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
          resultados   = CASE
                           WHEN $5::jsonb = '{}'::jsonb
                           THEN COALESCE(sim_rondas.resultados, '{}'::jsonb)
-                          ELSE COALESCE(sim_rondas.resultados, '{}'::jsonb) || $5::jsonb
+                          ELSE $5::jsonb
                         END`,
       [simulacionId, n, estadoNuevo, calculadaAt, JSON.stringify(hayResultados ? camposResultados : {})]
     );
