@@ -4122,6 +4122,7 @@ window.mostrarFinanciero = (n) => {
     <button class="btn btn-ghost" id="tabPL" onclick="showFinTab('pl')" style="background:var(--accent);color:#fff">📋 Estado de Resultados</button>
     <button class="btn btn-ghost" id="tabBG" onclick="showFinTab('bg')">🏦 Balance General</button>
     <button class="btn btn-ghost" id="tabFC" onclick="showFinTab('fc')">💧 Flujo de Efectivo</button>
+    <button class="btn btn-ghost" id="tabTR" onclick="showFinTab('tr')">📊 Reporte Tributario</button>
   </div>
 
   <!-- Estado de Resultados -->
@@ -4587,7 +4588,11 @@ window.mostrarFinanciero = (n) => {
           const ivaCredito = r.ivaCredito || 0;
           const ivaAPagar  = r.ivaAPagar  || 0;
           const ivaFavor   = ivaCredito > ivaDebito ? ivaCredito - ivaDebito : 0;
-          const totalFact  = r.totalFacturado || ((r.ventasBrutas||0) + ivaDebito);
+          // totalFacturado: usar directo, o calcular desde IT (IT = totalFact × 3%)
+          // o reconstruir desde ventasBrutas + ivaDebito
+          const totalFact  = r.totalFacturado
+            || (itDet > 0 ? Math.round(itDet / 0.03) : 0)
+            || ((r.ventasBrutas||0) + ivaDebito);
           const itDet      = r.impuestoIT  || 0;
           const itComp     = r.compensacionIUE || 0;
           const itPagar    = Math.max(0, itDet - itComp);
@@ -4662,11 +4667,11 @@ function finRowSub(label, value, bold=false) {
 }
 
 window.showFinTab = (tab) => {
-  ['pl','bg','fc'].forEach(t => {
+  ['pl','bg','fc','tr'].forEach(t => {
     const el = document.getElementById(`fin${t.toUpperCase()}`);
     if (el) el.style.display = t===tab ? '' : 'none';
   });
-  const labels = {pl:'tabPL',bg:'tabBG',fc:'tabFC'};
+  const labels = {pl:'tabPL',bg:'tabBG',fc:'tabFC',tr:'tabTR'};
   Object.entries(labels).forEach(([t,id]) => {
     const btn = document.getElementById(id);
     if (btn) { btn.style.background = t===tab?'var(--accent)':''; btn.style.color = t===tab?'#fff':''; }
