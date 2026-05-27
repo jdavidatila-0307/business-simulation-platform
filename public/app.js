@@ -4621,9 +4621,14 @@ window.mostrarFinanciero = (n) => {
             + rowT('(+/−) Ajustes tributarios', 0)
             + rowSubT('= Utilidad imponible', utilAntesIT)
             + rowT('× Alícuota IUE (25%)', utilAntesIT > 0 ? Math.round(utilAntesIT * 0.25) : 0)
-            + rowSubT('= IUE determinado', iueDet)
+            + rowSubT('= IUE determinado (acumulado)', utilAntesIT > 0 ? Math.round(utilAntesIT * 0.25) : 0)
+            + '<div style="padding:4px 0 6px;font-size:.74rem;color:var(--accent3);font-style:italic">'
+            + 'ⓘ El IUE se liquida al cierre del año fiscal (R4 / R8 / R12). '
+            + 'El monto acumulado queda disponible para compensar IT en trimestres siguientes.'
+            + '</div>'
+            + rowT('IUE efectivamente pagado este período', iueDet)
             + rowT('(−) Pagos a cuenta', 0, true)
-            + rowSubT('= IUE por pagar', Math.max(0, iueDet))
+            + rowSubT('= IUE por pagar en efectivo este trimestre', Math.max(0, iueDet))
 
             + sec('4','Saldo de IUE Compensable')
             + rowT('IUE pagado en la gestión', iueDet)
