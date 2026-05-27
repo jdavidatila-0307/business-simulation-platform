@@ -1349,23 +1349,33 @@ async function route(req, res, body) {
 
         // Multiproducto: propagar campos financieros a cada producto[]
         // ivaAPagarAnterior y saldoIUE solo en prod_1 (controla la caja)
+        // inventarioInicial: cada producto recibe su propio inventario de la ronda anterior
         if (Array.isArray(decRepropagada.productos)) {
-          decRepropagada.productos = decRepropagada.productos.map((p, idx) => ({
-            ...p,
-            cajaInicial:                idx === 0 ? decRepropagada.cajaInicial : 0,
-            cxcInicial:                 idx === 0 ? decRepropagada.cxcInicial : 0,
-            deudaInicial:               idx === 0 ? decRepropagada.deudaInicial : 0,
-            activosFijosIniciales:      idx === 0 ? decRepropagada.activosFijosIniciales : 0,
-            brandEquityInicial:         decRepropagada.brandEquityInicial,
-            vendedoresIniciales:        decRepropagada.vendedoresIniciales,
-            operariosIniciales:         decRepropagada.operariosIniciales,
-            inventarioInicial:          idx === 0 ? decRepropagada.inventarioInicial : 0,
-            stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
-            pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
-            resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
-            ivaAPagarAnterior:          idx === 0 ? (decRepropagada.ivaAPagarAnterior ?? 0) : 0,
-            saldoIUEcompensable:        decRepropagada.saldoIUEcompensable ?? 0,
-          }));
+          decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
+            // Buscar el resultado previo específico de este producto
+            const prodId     = p.productoId || ('prod_' + (idx + 1));
+            const keyPrevProd = eq.id + '__' + prodId;
+            const resPrevProd = resObj[keyPrevProd] || null;
+            // inventario específico por producto (no el total consolidado)
+            const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
+
+            return {
+              ...p,
+              cajaInicial:                idx === 0 ? decRepropagada.cajaInicial : 0,
+              cxcInicial:                 idx === 0 ? decRepropagada.cxcInicial : 0,
+              deudaInicial:               idx === 0 ? decRepropagada.deudaInicial : 0,
+              activosFijosIniciales:      idx === 0 ? decRepropagada.activosFijosIniciales : 0,
+              brandEquityInicial:         decRepropagada.brandEquityInicial,
+              vendedoresIniciales:        decRepropagada.vendedoresIniciales,
+              operariosIniciales:         decRepropagada.operariosIniciales,
+              inventarioInicial:          invInicialProd,  // específico por producto ✅
+              stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
+              pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
+              resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
+              ivaAPagarAnterior:          idx === 0 ? (decRepropagada.ivaAPagarAnterior ?? 0) : 0,
+              saldoIUEcompensable:        decRepropagada.saldoIUEcompensable ?? 0,
+            };
+          });
         }
 
         decisiones.push(decRepropagada);
