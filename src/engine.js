@@ -462,10 +462,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
   // costoVentas y ventasNetasReal se calculan abajo (requieren netIVA)
 
-  // Inventario final valorizado
-  // invFinalValorizado usa CU variable real para consistencia con costoVentas
-  // (no el CU estándar del costoBase que incluye transformación no pagada)
-  const invFinalValorizado = roundBs(inventarioFinal * cuVar);
+  // invFinalValorizado se calcula después de cuVar (ver abajo)
   const costoAlmacenamiento = roundBs(inventarioFinal * params.costoAlmacenamientoUnidad);
 
   // Innovación (gasto operativo)
@@ -505,7 +502,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const cuVarCalid = roundBs(0.20 * (d.calidad || 5));              // calidad por par
   const cuVar      = roundBs(cuVarMP + cuVarCalid);                 // CU variable total
 
-  // costoVentas = CU variable × ventasReales (solo lo vendido — no el inventario)
+  // invFinalValorizado usa cuVar (CU variable real) — consistente con costoVentas
+  const invFinalValorizado = roundBs(inventarioFinal * cuVar);
+
+  // costoVentas = CU variable × ventasReales (solo lo vendido)
   const costoVentas    = roundBs(cuVar * ventasReales);
   const utilidadBruta  = roundBs(ventasNetasReal - costoVentas);
 
