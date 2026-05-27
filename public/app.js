@@ -4113,18 +4113,18 @@ window.mostrarFinanciero = (n) => {
         }
 
         ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
-        ${finRow('(−) Comisiones canal',       -r.comisiones,          false, 'neg')}
-        ${finRowSub('= Ventas netas',          r.ventasNetas,          true)}
+        ${finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false, 'neg')}
+        ${finRowSub('= Ventas netas',          r.ventasNetasReal||r.ventasNetas, true)}
         ${finRow('(−) Costo de ventas',        -r.costoVentas,         false, 'neg')}
         ${finRowSub('= Utilidad bruta',        r.utilidadBruta,        true)}
         <div style="height:6px"></div>
         <!-- GASTOS COMERCIALES -->
         <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">(-) Gastos Comerciales</div>
-        ${finRow('Publicidad',                 -r.publicidad,          false,'neg')}
-        ${finRow('Promoción',                  -r.promocion,           false,'neg')}
-        ${finRow('Eventos',                    -r.eventos,             false,'neg')}
-        ${finRow('Marketing en redes',         -r.marketingRedes,      false,'neg')}
-        ${finRow('Relaciones públicas',        -r.relacionesPublicas,  false,'neg')}
+        ${finRow('Publicidad',                 -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),   false,'neg')}
+        ${finRow('Promoción',                  -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),     false,'neg')}
+        ${finRow('Eventos',                    -(r.gastoEventos||Math.round((r.eventos||0)*0.87)),         false,'neg')}
+        ${finRow('Marketing en redes',         -(r.gastoMktRedes||Math.round((r.marketingRedes||0)*0.87)), false,'neg')}
+        ${finRow('Relaciones públicas',        -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')}
         ${finRow('Fuerza de ventas',           -r.costoVendedores,     false,'neg')}
 
         <!-- GASTOS ADMINISTRATIVOS -->
@@ -4136,7 +4136,7 @@ window.mostrarFinanciero = (n) => {
         <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">(-) Gastos Operativos de Planta</div>
         ${finRow('Gasto fijo de planta',       -r.gastoFijoPlanta,     false,'neg')}
         ${finRow('Almacenamiento inventario',  -r.costoAlmacenamiento, false,'neg')}
-        ${r.gastoInnovacion>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacion), false,'neg') : ''}
+        ${r.gastoInnovacion>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)), false,'neg') : ''}
 
         <!-- EBITDA -->
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
