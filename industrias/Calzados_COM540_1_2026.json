@@ -18,6 +18,7 @@
     "moneda": "Bs",
     "trimestresPorAnio": 4,
     "capitalInicial": 680000,
+    "capitalContable": 680000,
     "cajaInicial": 600000,
     "activosFijosIniciales": 80000,
     "inventarioInicialUnid": 0,
