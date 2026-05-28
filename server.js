@@ -827,7 +827,7 @@ async function route(req, res, body) {
     const ronda = await storage.getRonda(sim.id, cfg.currentRound);
     const equipos = await storage.getEquipos(sim.id);
     // Contar enviados: primero ronda.decisiones, luego sim_decisiones como fallback
-    let enviados = ronda ? equipos.filter(eq => ronda.decisiones[eq.id]?.submitted).length : 0;
+    let enviados = ronda ? equipos.filter(eq => (ronda.decisiones||{})[eq.id]?.submitted).length : 0;
     if (enviados === 0 && ronda) {
       // Multiproducto: buscar en claves expandidas eq_xxx__prod_N
       const envSet = new Set();
@@ -912,13 +912,14 @@ async function route(req, res, body) {
     if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
     const equipos = await storage.getEquipos(sim.id);
     // Si no hay decisiones en ronda.decisiones, usar defaultDecision para todos
-    let decisiones = equipos.filter(eq => ronda.decisiones[eq.id]).map(eq => ({...ronda.decisiones[eq.id]}));
+    const decisionesRonda = ronda.decisiones || {};
+    let decisiones = equipos.filter(eq => decisionesRonda[eq.id]).map(eq => ({...decisionesRonda[eq.id]}));
     if (!decisiones.length) {
       // Generar defaultDecision con datos financieros de ronda anterior
       const prevRonda = await storage.getRonda(sim.id, n-1);
       const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
       decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
-        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
         const resPrev = Object.values(resObj).find(r =>
           r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
         );
@@ -1769,6 +1770,7 @@ async function route(req, res, body) {
     if (!ronda) {
       ronda = await storage.ensureRonda(sim.id, n);
     }
+    if (!ronda.decisiones) ronda.decisiones = {};
     if (!ronda.decisiones[equipoId]) {
       const equipos = await storage.getEquipos(sim.id);
       const eq = equipos.find(e => e.id === equipoId);
@@ -1863,6 +1865,7 @@ async function route(req, res, body) {
     if (!ronda) return send(res, 400, { error: 'Sin ronda' });
     if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ronda simulada' });
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
+    if (!ronda.decisiones) ronda.decisiones = {};
     const cur = ronda.decisiones[equipoId] || {};
     ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: cur.submitted||false };
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
