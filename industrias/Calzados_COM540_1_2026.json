@@ -53,6 +53,7 @@
     "factorInnovacionProceso": 0.333,
     "unidadesMPporUnidad": 1.0,
     "costoAlmacenamientoMP": 0.05,
+    "pctMateriaPrima": 0.40,
     "tasaIVA": 0.13,
     "tasaIT": 0.03,
     "tasaIUE": 0.25,
