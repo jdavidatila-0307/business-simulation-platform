@@ -575,6 +575,12 @@ async function loadAdminEquipos() {
         <td style="padding:14px 16px;text-align:center;font-family:var(--font-mono);font-size:.85rem">${nMiemb}</td>
         <td style="padding:14px 16px;text-align:center">${estadoBadge}</td>
         <td style="padding:14px 16px;font-size:.78rem;color:var(--text3)">${fecha}</td>
+        <td style="padding:14px 16px;text-align:right;white-space:nowrap">
+          <span style="font-family:var(--font-mono);font-size:.85rem">
+            ${eq.capitalInicial ? 'Bs ' + eq.capitalInicial.toLocaleString('es-BO') : '<span style="color:var(--text3)">global</span>'}
+          </span>
+          <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="editarCapital('${eq.id}','${eq.nombre}',${eq.capitalInicial||0})">✏</button>
+        </td>
         <td style="padding:14px 16px;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="cambiarClave('${eq.id}','${eq.nombre}')">🔑 Clave</button>
           <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="resetearEnvio('${eq.id}','${eq.nombre}')">↺ Resetear</button>
@@ -594,6 +600,7 @@ async function loadAdminEquipos() {
               <th style="padding:10px 16px;text-align:center">#</th>
               <th style="padding:10px 16px;text-align:center">Estado Ronda</th>
               <th style="padding:10px 16px;text-align:left">Registrado</th>
+              <th style="padding:10px 16px;text-align:right">Capital Inicial</th>
               <th style="padding:10px 16px;text-align:left">Acciones</th>
             </tr>
           </thead>
@@ -628,6 +635,19 @@ async function loadAdminEquipos() {
       try {
         await api('DELETE', '/admin/equipos/' + id);
         toast('✅ Equipo eliminado', 'success');
+        loadAdminEquipos();
+      } catch(e) { toast(e.message, 'error'); }
+    };
+    window.editarCapital = async (id, nombre, actual) => {
+      const globalCap = state.ref?.parametros?.capitalInicial || 680000;
+      const hint = actual ? `Actual: Bs ${actual.toLocaleString('es-BO')}` : `Sin definir (usa global: Bs ${globalCap.toLocaleString('es-BO')})`;
+      const valor = prompt(`Capital inicial para "${nombre}"\n${hint}\n\nIngresa el nuevo valor en Bs (entero).\nDeja vacío para usar el capital global de la simulación.`);
+      if (valor === null) return;
+      const num = valor.trim() === '' ? null : parseInt(valor.replace(/[.,\s]/g,''), 10);
+      if (num !== null && (isNaN(num) || num <= 0)) return toast('❌ Valor inválido — ingresa un número entero positivo', 'error');
+      try {
+        await api('PUT', '/admin/equipos/' + id + '/capital', { capitalInicial: num });
+        toast(num ? `✅ Capital de "${nombre}" → Bs ${num.toLocaleString('es-BO')}` : `✅ Capital de "${nombre}" restablecido al global`, 'success');
         loadAdminEquipos();
       } catch(e) { toast(e.message, 'error'); }
     };
