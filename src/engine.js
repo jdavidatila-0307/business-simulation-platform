@@ -223,12 +223,6 @@ function procesarPedidosMP(d, rondaNumero, params) {
     // costoMPbase = costoBase del producto × pctMateriaPrima
     // Aquí no tenemos el costoBase por producto directamente, usamos el costoUnitario
     // como aproximación del pagoMP (pago al momento del pedido)
-    const pctMP_mp    = params.pctMateriaPrima ?? 0.40;
-    const factorC     = provData?.factorCosto ?? 1.0;
-    // costoUnitMP = costoBaseRef × pctMP × factorCosto
-    // costoBaseRef: usamos el promedio de costoBase de los tipos de producto
-    // o el valor de referencia si está disponible en params
-    const costoBaseRef = params.costoBaseReferencia ?? 200;  // valor de referencia industria
     // FIX 2: pagoMP = 0 porque el costo MP ya está en el CU (componenteMP)
     // y sale de caja a través de pagoProduccion = produccion × costoUnitario
     // El módulo MP sigue restringiendo producción via stock (lead time activo)
@@ -937,7 +931,7 @@ function ejecutarSimulador(decisiones, cfg) {
       const gOper    = oper * (params.costoOperario            || 0);
       const gFijo       = gAdmin + gPlanta + gVend + gOper + dep;
       // Intereses sobre deuda existente
-      const tasaTrim    = (params.tasaInteresTrimestral||0.055);
+      const tasaTrim    = (params.tasaSobregiro||0.055);
       const intDeuda    = Math.round((d.deudaInicial||0) * tasaTrim);
       const totalGastos = gFijo + intDeuda;
       // CONTABILIDAD: depreciación es gasto NO desembolsable
