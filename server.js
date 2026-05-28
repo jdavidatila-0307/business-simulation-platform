@@ -15,6 +15,7 @@ const { hashPassword, verifyPassword } = require('./src/auth');
 const { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault } = require('./src/plantillas');
 const { generarDecisionBot, PERFILES_BOT } = require('./src/bot_service');
 const { initWebSocket, broadcast, clientesConectados } = require('./src/ws_service');
+const { validarYCompletarParams } = require('./src/validar_params');
 
 inicializarPlantillaDefault();
 
@@ -562,6 +563,17 @@ async function route(req, res, body) {
         users:  [],
       };
   
+      // ── Validar y completar params (R1 completitud, R2 balance, R3 cobros) ──
+      const validacion = validarYCompletarParams(simData.parametros, plantillaCfg?.params || {});
+      if (!validacion.ok) {
+        return send(res, 400, { error: '❌ Parámetros inválidos:\n' + validacion.errores.join('\n') });
+      }
+      if (validacion.advertencias.length) {
+        console.log(`[validar_params] ${simId}: ${validacion.advertencias.length} advertencia(s) al crear sim`);
+        validacion.advertencias.filter(a => a.includes('RIESGO')).forEach(a => console.warn('[validar_params]', a));
+      }
+      simData.parametros = validacion.params;  // params completados y validados
+
       await storage.createSimulacion(ownerId, simData);
       console.log(`[server] Simulación creada | id: ${simId} | industria: ${simData.config.industria}`);
       return send(res, 200, { ok: true, simId, codigoAcceso, industria: simData.config.industria });
