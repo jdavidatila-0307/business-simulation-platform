@@ -1156,6 +1156,7 @@ async function route(req, res, body) {
             const decisionBot = await generarDecisionBot(bot, historialBot, simCfg);
 
             // Guardar la decisión del bot en la ronda (dual-write)
+            if (!ronda.decisiones) ronda.decisiones = {};
             ronda.decisiones[bot.id] = decisionBot;
             await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
 
@@ -1171,7 +1172,7 @@ async function route(req, res, body) {
     // Recargar la ronda para incluir las decisiones de bots recién guardadas
     const rondaActualizada = await storage.getRonda(sim.id, n);
     // Combinar decisiones de ronda original + rondaActualizada (bots pueden estar en cualquiera)
-    const decsCombinadas = { ...ronda.decisiones, ...(rondaActualizada.decisiones||{}) };
+    const decsCombinadas = { ...(ronda.decisiones||{}), ...(rondaActualizada.decisiones||{}) };
     let decisiones = equipos
       .filter(eq => decsCombinadas[eq.id])
       .map(eq => ({ ...decsCombinadas[eq.id] }));
@@ -1181,7 +1182,7 @@ async function route(req, res, body) {
       const prevRonda2 = await storage.getRonda(sim.id, n-1);
       const resObj2 = prevRonda2?.resultados?.resultados || prevRonda2?.resultados || {};
       decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
-        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
         const resPrev2 = Object.values(resObj2).find(r =>
           r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
         );
@@ -1204,6 +1205,7 @@ async function route(req, res, body) {
       rondaActualizada.empresas         = result.empresas;
       rondaActualizada.shock            = shock;
 
+      if (!rondaActualizada.resultados) rondaActualizada.resultados = {};
       result.resultados.forEach(r => { rondaActualizada.resultados[r.equipo] = r; });
 
       // Resultados de la ronda anterior (para Estratégico: elasticidad y comparativa)
