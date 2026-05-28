@@ -15,7 +15,6 @@ const { hashPassword, verifyPassword } = require('./src/auth');
 const { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault } = require('./src/plantillas');
 const { generarDecisionBot, PERFILES_BOT } = require('./src/bot_service');
 const { initWebSocket, broadcast, clientesConectados } = require('./src/ws_service');
-const { validarYCompletarParams } = require('./src/validar_params');
 
 inicializarPlantillaDefault();
 
@@ -563,17 +562,6 @@ async function route(req, res, body) {
         users:  [],
       };
   
-      // ── Validar y completar params (R1 completitud, R2 balance, R3 cobros) ──
-      const validacion = validarYCompletarParams(simData.parametros, plantillaCfg?.params || {});
-      if (!validacion.ok) {
-        return send(res, 400, { error: '❌ Parámetros inválidos:\n' + validacion.errores.join('\n') });
-      }
-      if (validacion.advertencias.length) {
-        console.log(`[validar_params] ${simId}: ${validacion.advertencias.length} advertencia(s) al crear sim`);
-        validacion.advertencias.filter(a => a.includes('RIESGO')).forEach(a => console.warn('[validar_params]', a));
-      }
-      simData.parametros = validacion.params;  // params completados y validados
-
       await storage.createSimulacion(ownerId, simData);
       console.log(`[server] Simulación creada | id: ${simId} | industria: ${simData.config.industria}`);
       return send(res, 200, { ok: true, simId, codigoAcceso, industria: simData.config.industria });
@@ -710,7 +698,7 @@ async function route(req, res, body) {
       const submitted    = dec?.submitted || false;
       const submittedAt  = dec?.submittedAt || null;
       return { id:eq.id, nombre:eq.nombre, miembros:eq.miembros||[],
-        submitted, submittedAt,
+        submitted, submittedAt, capitalInicial: eq.capitalInicial || null,
         registradoAt:eq.registradoAt||null, passwordPlain:eq.passwordPlain||null };
     });
     return send(res, 200, out);
@@ -829,6 +817,26 @@ async function route(req, res, body) {
     equipos.splice(idx, 1);
     await storage.updateSimulacion(sim.id, { users: equipos });
     return send(res, 200, { ok: true });
+  }
+
+  // PUT /admin/equipos/:id/capital — asignar capital inicial específico a un equipo
+  if (url.match(/^\/admin\/equipos\/[^/]+\/capital$/) && method === 'PUT') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const eqId = url.split('/')[3];
+    const { capitalInicial } = body;
+    const equipos = await storage.getEquipos(sim.id);
+    const eq = equipos.find(e => e.id === eqId);
+    if (!eq) return send(res, 404, { error: 'Equipo no encontrado' });
+    if (capitalInicial !== null && capitalInicial !== undefined) {
+      if (typeof capitalInicial !== 'number' || capitalInicial <= 0)
+        return send(res, 400, { error: 'capitalInicial debe ser un número positivo o null' });
+      eq.capitalInicial = capitalInicial;
+    } else {
+      delete eq.capitalInicial;  // null = volver al global
+    }
+    await storage.updateSimulacion(sim.id, { users: equipos });
+    return send(res, 200, { ok: true, capitalInicial: eq.capitalInicial || null });
   }
 
   // ─── ADMIN — Rondas ───────────────────────────────────────────
