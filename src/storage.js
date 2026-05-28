@@ -194,50 +194,10 @@ async function updateSimulacion(id, updates, ownerId = null) {
 }
 
 async function deleteSimulacion(id, ownerId = null) {
-  // Borrado completo y atómico de una simulación y TODO lo que depende de ella.
-  // - Hijas duras: sim_decisiones y sim_rondas (defensa en profundidad; si la BD
-  //   ya tiene ON DELETE CASCADE, estos DELETE simplemente no encuentran filas).
-  // - Puntero blando: sesiones.simulacion_id se desvincula (SET NULL), NO se borran
-  //   sesiones para no expulsar logins activos.
-  // - Equipos y reportes viven en columnas JSONB (users / resultados) y se van con
-  //   su fila padre.
-  // Todo o nada: cualquier error revierte la transacción completa.
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Verificar propiedad ANTES de borrar nada (no borrar hijas de una sim ajena).
-    let chk = 'SELECT id FROM simulaciones WHERE id = $1';
-    const chkParams = [id];
-    if (ownerId) { chk += ' AND owner_id = $2'; chkParams.push(ownerId); }
-    const owned = await client.query(chk, chkParams);
-    if (owned.rowCount === 0) {
-      // No existe o no autorizada: mismo efecto que antes (no se borra nada).
-      await client.query('ROLLBACK');
-      return;
-    }
-
-    await client.query('DELETE FROM sim_decisiones WHERE simulacion_id = $1', [id]);
-    await client.query('DELETE FROM sim_rondas     WHERE simulacion_id = $1', [id]);
-
-    // SET NULL en sesiones solo si la tabla existe (to_regclass evita abortar la tx).
-    const ses = await client.query("SELECT to_regclass('public.sesiones') AS t");
-    if (ses.rows[0] && ses.rows[0].t) {
-      await client.query('UPDATE sesiones SET simulacion_id = NULL WHERE simulacion_id = $1', [id]);
-    }
-
-    let del = 'DELETE FROM simulaciones WHERE id = $1';
-    const delParams = [id];
-    if (ownerId) { del += ' AND owner_id = $2'; delParams.push(ownerId); }
-    await client.query(del, delParams);
-
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
+  let query = 'DELETE FROM simulaciones WHERE id = $1';
+  const params = [id];
+  if (ownerId) { query += ' AND owner_id = $2'; params.push(ownerId); }
+  await pool.query(query, params);
 }
 
 // ============================================================
@@ -466,8 +426,17 @@ async function saveDecision(simulacionId, rondaNumero, equipoId, productoId, dec
 
 
 
-function defaultDecision(equipoId, equipoNombre, params) {
+function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
   const p = params || {};
+
+  // Capital por equipo: si el equipo tiene capitalInicial propio, deriva cajaInicial (R2: caja = cap − AF)
+  // Si no tiene, usa los parámetros globales de la simulación (comportamiento original)
+  const equipoCap  = equipo?.capitalInicial || null;
+  const af         = p.activosFijosIniciales || 80000;
+  const cajaInicial = equipoCap
+    ? Math.max(0, equipoCap - af)
+    : (p.cajaInicial || 50000);
+  const capitalInicial = equipoCap || p.capitalInicial || (af + (p.cajaInicial || 50000));
 
    const productoBase = {
     productoId: 'prod_1',
@@ -584,8 +553,9 @@ function defaultDecision(equipoId, equipoNombre, params) {
 
     // Estado inicial financiero
     vendedoresIniciales: p.vendedoresIniciales || 2,
-    cajaInicial: p.cajaInicial || 50000,
-    activosFijosIniciales: p.activosFijosIniciales || 80000,
+    cajaInicial,                                      // por equipo si eq.capitalInicial, sino global
+    capitalInicial,                                   // para que el motor calcule capitalContable correcto
+    activosFijosIniciales: af,
     cxcInicial: p.cxcInicial || 0,
     deudaInicial: p.deudaInicial || 0,
     inventarioInicial: p.inventarioInicialUnid || 0,
@@ -621,7 +591,7 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
           // Solo se propagan campos financieros de continuidad (estado real de la empresa)
           // Campos comerciales siempre en cero: producto, precio, producción,
           // canal, publicidad, calidad, vendedores, operarios, préstamo, investigación
-          const decNueva = defaultDecision(eq.id, eq.nombre, sim.parametros);
+          const decNueva = defaultDecision(eq.id, eq.nombre, sim.parametros, eq);
 
           // Buscar resultado de la ronda anterior para campos financieros
           // NOTA: resultados puede estar en prevRonda.resultados.resultados (estructura del motor)
@@ -662,11 +632,11 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
         }
       } else {
         for (const eq of equipos)
-          rondaBase.decisiones[eq.id] = defaultDecision(eq.id, eq.nombre, sim.parametros);
+          rondaBase.decisiones[eq.id] = defaultDecision(eq.id, eq.nombre, sim.parametros, eq);
       }
     } else {
       for (const eq of equipos)
-        rondaBase.decisiones[eq.id] = defaultDecision(eq.id, eq.nombre, sim.parametros);
+        rondaBase.decisiones[eq.id] = defaultDecision(eq.id, eq.nombre, sim.parametros, eq);
     }
     await updateRonda(simulacionId, n, rondaBase, ownerId);
     ronda = rondaBase;
