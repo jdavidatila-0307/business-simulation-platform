@@ -2267,6 +2267,7 @@ async function loadAdminParametros() {
       <div class="param-card">
         <div class="param-card-title">💼 Apertura Financiera por Equipo</div>
         ${pf('Capital inicial (Bs)','capitalInicial','= Caja inicial + Activos fijos')}
+        ${pf('Capital contable inicial (Bs)','capitalContable','Patrimonio inicial. Si no se define, el motor usa Capital inicial. Si hay deuda inicial: capitalInicial − deudaInicial')}
         ${pf('Caja inicial (Bs)','cajaInicial','Efectivo en cuenta al arrancar')}
         ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales','Maquinaria y equipos')}
         ${pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')}
@@ -2340,6 +2341,12 @@ async function loadAdminParametros() {
         ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
         ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
         ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">📈 Demanda y Marca</div>
+        ${pf('Factor canibalización','factorCanibalizacion','0.15 = penaliza 15% el atractivo al competir en varios segmentos · 0 = sin penalización')}
+        ${pf('Tasa de decaimiento de marca','tasaDecaimiento','0.05 = Brand Equity cae 5% por ronda sin ventas · 0 = sin decaimiento')}
       </div>
 
       <div class="param-card">
