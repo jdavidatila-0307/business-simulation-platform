@@ -1,21 +1,27 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 30000,
+});
 async function main() {
-  // Resetear roundState y currentRound en todas las simulaciones
-  await pool.query(`
-    UPDATE simulaciones
-    SET config = config
-      || '{"roundState":"pending"}'::jsonb
-      || '{"currentRound":0}'::jsonb
-  `);
-  
-  const r = await pool.query('SELECT nombre, config FROM simulaciones');
-  r.rows.forEach(s => {
-    console.log(`✅ ${s.nombre} | roundState: ${s.config.roundState} | currentRound: ${s.config.currentRound}`);
-  });
-  
-  await pool.end();
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `SELECT config FROM simulaciones WHERE id=$1`, ['sim_mpi8g7y5']
+    );
+    const config = r.rows[0]?.config || {};
+    console.log('Config actual:', JSON.stringify(config, null, 2));
+
+    const nuevoConfig = {
+      ...config,
+      roundState: 'pending',
+    };
+    await client.query(
+      `UPDATE simulaciones SET config=$1 WHERE id=$2`,
+      [JSON.stringify(nuevoConfig), 'sim_mpi8g7y5']
+    );
+    console.log('✅ roundState = pending');
+  } finally { client.release(); await pool.end(); }
 }
-main().catch(e => { console.error('ERROR:', e.message); process.exit(1); });
+main().catch(e => console.error('ERROR:', e.message));
