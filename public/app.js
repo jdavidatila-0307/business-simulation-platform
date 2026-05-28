@@ -2309,6 +2309,16 @@ async function loadAdminParametros() {
       </div>
 
       <div class="param-card">
+        <div class="param-card-title">👷 Operarios y Producción</div>
+        ${pf('Operarios iniciales por equipo','operariosIniciales','Aplica desde la próxima ronda','1')}
+        ${pf('Productividad base (unid/operario)','productividadBase','Unidades por operario por trimestre')}
+        ${pf('Costo trimestral / operario (Bs)','costoOperario')}
+        ${pf('Costo contratación / operario (Bs)','costoContratacionOperario')}
+        ${pf('Costo despido / operario (Bs)','costoDespidoOperario')}
+        ${pf('Factor capacitación','factorCapacitacion','0.05 = +5% productividad por inversión en capacitación')}
+      </div>
+
+      <div class="param-card">
         <div class="param-card-title">🔍 Investigación de Mercado</div>
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
