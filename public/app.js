@@ -2309,16 +2309,6 @@ async function loadAdminParametros() {
       </div>
 
       <div class="param-card">
-        <div class="param-card-title">👷 Operarios y Producción</div>
-        ${pf('Operarios iniciales por equipo','operariosIniciales','Aplica desde la próxima ronda','1')}
-        ${pf('Productividad base (unid/operario)','productividadBase','Unidades por operario por trimestre')}
-        ${pf('Costo trimestral / operario (Bs)','costoOperario')}
-        ${pf('Costo contratación / operario (Bs)','costoContratacionOperario')}
-        ${pf('Costo despido / operario (Bs)','costoDespidoOperario')}
-        ${pf('Factor capacitación','factorCapacitacion','0.05 = +5% productividad por inversión en capacitación')}
-      </div>
-
-      <div class="param-card">
         <div class="param-card-title">🔍 Investigación de Mercado</div>
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
@@ -2340,6 +2330,19 @@ async function loadAdminParametros() {
         ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
         ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
         ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">⚙ Modelo de Costos</div>
+        <div class="param-row">
+          <label class="param-label">Asignación de costos fijos</label>
+          <select class="param-input" data-pkey-str="modeloCostos" style="height:2.2rem;padding:0 8px">
+            <option value="mixto"     ${p.modeloCostos==='mixto'     ||!p.modeloCostos?'selected':''}>Mixto — fijos solo en prod_1 (recomendado COM540)</option>
+            <option value="absorcion" ${p.modeloCostos==='absorcion'?'selected':''}>Absorción — cada producto paga fijos completos</option>
+            <option value="directo"   ${p.modeloCostos==='directo'  ?'selected':''}>Directo — solo costos variables</option>
+          </select>
+          <span class="param-hint" style="color:#f59e0b">⚠ Cambiar afecta la asignación de costos fijos en rondas siguientes</span>
+        </div>
       </div>
 
       <div class="param-card">
@@ -2452,6 +2455,7 @@ async function cambiarCodigoAcceso() {
 async function saveParametros() {
   const parametros = {};
   document.querySelectorAll('[data-pkey]').forEach(el => { parametros[el.dataset.pkey] = +el.value; });
+  document.querySelectorAll('[data-pkey-str]').forEach(el => { parametros[el.dataset.pkeyStr] = el.value; });
 
   // Guardar estado de módulos como params booleanos (1=activo, 0=inactivo)
   document.querySelectorAll('[data-modulo]').forEach(el => {
