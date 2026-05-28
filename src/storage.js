@@ -194,10 +194,50 @@ async function updateSimulacion(id, updates, ownerId = null) {
 }
 
 async function deleteSimulacion(id, ownerId = null) {
-  let query = 'DELETE FROM simulaciones WHERE id = $1';
-  const params = [id];
-  if (ownerId) { query += ' AND owner_id = $2'; params.push(ownerId); }
-  await pool.query(query, params);
+  // Borrado completo y atómico de una simulación y TODO lo que depende de ella.
+  // - Hijas duras: sim_decisiones y sim_rondas (defensa en profundidad; si la BD
+  //   ya tiene ON DELETE CASCADE, estos DELETE simplemente no encuentran filas).
+  // - Puntero blando: sesiones.simulacion_id se desvincula (SET NULL), NO se borran
+  //   sesiones para no expulsar logins activos.
+  // - Equipos y reportes viven en columnas JSONB (users / resultados) y se van con
+  //   su fila padre.
+  // Todo o nada: cualquier error revierte la transacción completa.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verificar propiedad ANTES de borrar nada (no borrar hijas de una sim ajena).
+    let chk = 'SELECT id FROM simulaciones WHERE id = $1';
+    const chkParams = [id];
+    if (ownerId) { chk += ' AND owner_id = $2'; chkParams.push(ownerId); }
+    const owned = await client.query(chk, chkParams);
+    if (owned.rowCount === 0) {
+      // No existe o no autorizada: mismo efecto que antes (no se borra nada).
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    await client.query('DELETE FROM sim_decisiones WHERE simulacion_id = $1', [id]);
+    await client.query('DELETE FROM sim_rondas     WHERE simulacion_id = $1', [id]);
+
+    // SET NULL en sesiones solo si la tabla existe (to_regclass evita abortar la tx).
+    const ses = await client.query("SELECT to_regclass('public.sesiones') AS t");
+    if (ses.rows[0] && ses.rows[0].t) {
+      await client.query('UPDATE sesiones SET simulacion_id = NULL WHERE simulacion_id = $1', [id]);
+    }
+
+    let del = 'DELETE FROM simulaciones WHERE id = $1';
+    const delParams = [id];
+    if (ownerId) { del += ' AND owner_id = $2'; delParams.push(ownerId); }
+    await client.query(del, delParams);
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // ============================================================
