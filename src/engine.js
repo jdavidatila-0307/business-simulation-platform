@@ -1005,7 +1005,7 @@ function ejecutarSimulador(decisiones, cfg) {
         operariosIniciales:  d.operariosIniciales || oper,
         operariosFinales:    oper,
         // Otros
-        capitalContable:  680000,  // capital inicial fijo del simulador
+        capitalContable:  params.capitalContable || params.capitalInicial || 680000,  // usa param configurado por el profesor
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,
