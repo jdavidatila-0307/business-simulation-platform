@@ -1,307 +1,305 @@
 {
-  "meta": {
-    "id": "Calzados_COM540_1_2026",
-    "nombre": "Calzados Especializados — COM540 Ing. Comercial 2026",
-    "version": "1.0",
-    "moneda": "Bs",
-    "unidad": "par",
-    "autor": "SimNego — UAGRM Ing. Comercial | Docente: Jhonny Atila",
-    "descripcion": "Industria del calzado especializado en Santa Cruz de la Sierra. Seis empresas compiten en nichos de alto valor: calzado terapéutico, ortopédico, infantil, biomecánico y lifestyle cultural. Mercado total: ~57.000 pares/trimestre en los segmentos formales.",
-    "notas": [
-      "Costos de producción extraídos directamente de los formularios de diseño de industria (2026).",
-      "Tamaños de mercado calibrados combinando estimaciones de los equipos con factores de escala pedagógica.",
-      "Todos los módulos activos: MP, Operarios, IVA 13%, IT 3%, IUE 25%, Brand Equity, Canibalización.",
-      "Moneda: bolivianos (Bs). Unidad: par de zapatos."
+    "meta": {
+        "id": "Calzados_COM540_1_2026",
+        "nombre": "Calzados Especializados — COM540 Ing. Comercial 2026",
+        "version": "1.0",
+        "moneda": "Bs",
+        "unidad": "par",
+        "autor": "SimNego — UAGRM Ing. Comercial | Docente: Jhonny Atila",
+        "descripcion": "Industria del calzado especializado en Santa Cruz de la Sierra. Seis empresas compiten en nichos de alto valor: calzado terapéutico, ortopédico, infantil, biomecánico y lifestyle cultural. Mercado total: ~57.000 pares/trimestre en los segmentos formales.",
+        "notas": [
+            "Costos de producción extraídos directamente de los formularios de diseño de industria (2026).",
+            "Tamaños de mercado calibrados combinando estimaciones de los equipos con factores de escala pedagógica.",
+            "Todos los módulos activos: MP, Operarios, IVA 13%, IT 3%, IUE 25%, Brand Equity, Canibalización.",
+            "Moneda: bolivianos (Bs). Unidad: par de zapatos."
+        ]
+    },
+    "params": {
+        "moneda": "Bs",
+        "trimestresPorAnio": 4,
+        "cajaInicial": 600000,
+        "activosFijosIniciales": 80000,
+        "inventarioInicialUnid": 0,
+        "cxcInicial": 0,
+        "deudaInicial": 0,
+        "capacidadMaxProduccion": 1500,
+        "gastoAdminFijo": 165000,
+        "gastoFijoPlanta": 45000,
+        "depreciacionTrimestral": 2500,
+        "costoAlmacenamientoUnidad": 5,
+        "pctVentasContado": 0.85,
+        "pctVentasCredito": 0.15,
+        "plazoCobro": 2,
+        "tasaPrestamoOperativo": 0.035,
+        "tasaPrestamoInversion": 0.025,
+        "tasaSobregiro": 0.055,
+        "comisionAperturaPrestamo": 0.015,
+        "plazoPrestamoOperativo": 2,
+        "plazoPrestamoInversion": 6,
+        "vendedoresIniciales": 2,
+        "sueldoTrimestralVendedor": 15000,
+        "costoContratacionVendedor": 6000,
+        "costoDespidoVendedor": 9000,
+        "operariosIniciales": 4,
+        "productividadBase": 440,
+        "costoOperario": 9600,
+        "costoContratacionOperario": 2400,
+        "costoDespidoOperario": 3600,
+        "factorCapacitacion": 0.05,
+        "costoInvestigacionBasica": 5000,
+        "costoInvestigacionPremium": 12000,
+        "factorInnovacionProducto": 0.333,
+        "factorInnovacionProceso": 0.333,
+        "unidadesMPporUnidad": 1.0,
+        "costoAlmacenamientoMP": 0.05,
+        "pctMateriaPrima": 0.4,
+        "tasaIVA": 0.13,
+        "tasaIT": 0.03,
+        "tasaIUE": 0.25,
+        "periodosIUE": 4,
+        "tasaDecaimiento": 0.05,
+        "lambdaLogit": 1.0,
+        "factorCanibalizacion": 0.15,
+        "coefPrecio": -0.005,
+        "costoInvestigacionEstrategico": 20000,
+        "modeloCostos": "mixto"
+    },
+    "tiposProducto": {
+        "Sandalia Infantil Ajustable": {
+            "costoBase": 79.0,
+            "descripcion": "Sandalia con sistema Slide & Lock que crece hasta 3 tallas. Diseñada para niños de 2-4 años. Materiales: EVA, goma, velcro, tela, LED opcional. [GrowStep Kids — Eq. 4]"
+        },
+        "Calzado Sensorial TEA": {
+            "costoBase": 120.0,
+            "descripcion": "Calzado especializado para niños con Trastorno del Espectro Autista. Prioriza comodidad sensorial, ergonomía y facilidad de uso. Materiales: memory foam, microfibra PU, velcro alta resistencia, TPU. [TE Acompaña Kids — Eq. 2]"
+        },
+        "Calzado Ortopédico Laboral": {
+            "costoBase": 136.0,
+            "descripcion": "Calzado para personas que trabajan largas jornadas de pie. Plantilla con gel de silicona, soporte lumbar, amortiguación. Materiales: EVA/PU, gel silicona, cuero sintético. [ORTHO STEP — Eq. 5 / LEVITA Casual — Eq. 7]"
+        },
+        "Calzado Biomecánico Formal": {
+            "costoBase": 153.0,
+            "descripcion": "Calzado biomecánico con diseño formal para personas con escoliosis o dismetría. Equilibra la pisada sin cambiar el estilo. Materiales: cuero/microfibra, suela EVA/TPU, plantilla biomecánica. [LEVITA Formal — Eq. 7]"
+        },
+        "Calzado Médico Especializado": {
+            "costoBase": 226.57,
+            "descripcion": "Calzado ergonómico de alto soporte para fascitis plantar. Soporte anatómico del arco, amortiguación premium, estabilidad talón. No vendemos zapatos, vendemos salud y bienestar. [BIOPASO — Eq. 3]"
+        },
+        "Sneaker Cultural Premium": {
+            "costoBase": 298.0,
+            "descripcion": "Sneaker urbano de identidad boliviana. Diseño que exalta la cultura regional con estándares internacionales. Objeto de deseo de alto impacto emocional. Materiales: cuero plena flor, goma vulcanizada, textiles artesanales. [Raíz — Grupo 1]"
+        }
+    },
+    "canales": {
+        "Tienda Propia": {
+            "costoAdicionalUnitario": 18,
+            "comisionPct": 0.0,
+            "factorImpactoVendedores": 1.5,
+            "bonoAtractivo": 4,
+            "descripcion": "Venta directa en local propio o taller. Alto control de marca y experiencia del cliente. Propuesto por: Eq.2, Eq.3, Eq.5, Eq.7"
+        },
+        "Venta Digital": {
+            "costoAdicionalUnitario": 8,
+            "comisionPct": 0.03,
+            "factorImpactoVendedores": 0.4,
+            "bonoAtractivo": 3,
+            "descripcion": "Redes sociales (TikTok, Facebook, Instagram), WhatsApp Business y delivery. Bajo costo operativo, alta conversión digital. Propuesto por: Eq.2, Eq.4, Eq.5"
+        },
+        "Distribuidores B2B": {
+            "costoAdicionalUnitario": 12,
+            "comisionPct": 0.15,
+            "factorImpactoVendedores": 0.7,
+            "bonoAtractivo": 2,
+            "descripcion": "Venta a distribuidores, tiendas de calzado infantil y retail. Amplia cobertura pero mayor comisión. Propuesto por: Grupo 1, Eq.4"
+        },
+        "Ferias y Eventos": {
+            "costoAdicionalUnitario": 12,
+            "comisionPct": 0.0,
+            "factorImpactoVendedores": 1.2,
+            "bonoAtractivo": 3,
+            "descripcion": "Ferias infantiles, eventos de salud, activaciones y expos. Alta visibilidad y contacto directo con el cliente. Propuesto por: Eq.4"
+        },
+        "Convenios Institucionales": {
+            "costoAdicionalUnitario": 10,
+            "comisionPct": 0.08,
+            "factorImpactoVendedores": 0.8,
+            "bonoAtractivo": 3,
+            "descripcion": "Convenios con centros de salud, clínicas, guarderías, colegios y empresas. Volumen garantizado con condiciones pactadas. Propuesto por: Eq.4, Eq.7"
+        }
+    },
+    "segmentos": [
+        {
+            "nombre": "Padres y familias con niños (0-10 años)",
+            "demandaBase": 7000,
+            "pctContrabando": 0.18,
+            "indiceExterno": 6.5,
+            "tendencia": "Alto crecimiento",
+            "tasaCrecimiento": 0.06,
+            "descripcion": "Padres y madres que buscan calzado cómodo, seguro y funcional para sus hijos. Compran en tiendas infantiles, online y ferias. Valoran durabilidad, seguridad y relación precio-calidad. Tamaño base calibrado sobre estimaciones del Eq.4 (5.000-20.000)."
+        },
+        {
+            "nombre": "Personas con condición postural",
+            "demandaBase": 5500,
+            "pctContrabando": 0.12,
+            "indiceExterno": 7.0,
+            "tendencia": "Alto crecimiento",
+            "tasaCrecimiento": 0.06,
+            "descripcion": "Personas con escoliosis, dismetría o dolor lumbar crónico (18-55 años). Buscan soluciones biomecánicas discretas que no cambien su estilo. Compran en centros de salud y tiendas. Referencia: 9.500 unid/trim (Eq.7 LEVITA)."
+        },
+        {
+            "nombre": "Personas con fascitis y dolor plantar",
+            "demandaBase": 3000,
+            "pctContrabando": 0.1,
+            "indiceExterno": 6.0,
+            "tendencia": "Estable",
+            "tasaCrecimiento": 0.0,
+            "descripcion": "Adultos de 40-60 años con fascitis plantar o dolor recurrente. Trabajan largas jornadas de pie. Priorizan alivio real sobre precio. Dispuestos a pagar premium por solución efectiva. Referencia: 918 unid/trim (Eq.3 BIOPASO, nicho especializado)."
+        },
+        {
+            "nombre": "Comerciantes y trabajadores de mercado",
+            "demandaBase": 8000,
+            "pctContrabando": 0.18,
+            "indiceExterno": 7.5,
+            "tendencia": "Creciente",
+            "tasaCrecimiento": 0.03,
+            "descripcion": "Comerciantes, vendedores, personal de ferias y mercados que permanecen 8+ horas de pie. Buscan comodidad funcional a precio accesible. Alta sensibilidad al precio. Referencia directa: 8.000 unid/trim (Eq.5 ORTHO STEP)."
+        },
+        {
+            "nombre": "Jóvenes urbanos / lifestyle boliviano",
+            "demandaBase": 4500,
+            "pctContrabando": 0.45,
+            "indiceExterno": 8.0,
+            "tendencia": "Creciente",
+            "tasaCrecimiento": 0.03,
+            "descripcion": "Jóvenes y adultos (18-35) que buscan calzado con identidad cultural boliviana y estética urbana. Alta influencia digital. Compiten fuertemente con importaciones informales y marcas chinas. Referencia: Grupo 1 Raíz; ajustado por alta informalidad (75%)."
+        },
+        {
+            "nombre": "Personal de salud y bienestar",
+            "demandaBase": 5000,
+            "pctContrabando": 0.1,
+            "indiceExterno": 7.2,
+            "tendencia": "Alto crecimiento",
+            "tasaCrecimiento": 0.06,
+            "descripcion": "Enfermeras, médicos, fisioterapeutas y personal hospitalario. Jornadas largas de pie, exigen comodidad, higiene y soporte profesional. Receptivos a convenios institucionales. Referencia: 6.500 unid/trim (Eq.5 ORTHO STEP, segmento 2)."
+        }
+    ],
+    "afinidadMatrix": {
+        "Sandalia Infantil Ajustable": [
+            4,
+            -2,
+            -2,
+            -1,
+            -1,
+            0
+        ],
+        "Calzado Sensorial TEA": [
+            3,
+            -1,
+            -1,
+            -2,
+            -2,
+            0
+        ],
+        "Calzado Ortopédico Laboral": [
+            -1,
+            1,
+            2,
+            3,
+            -1,
+            2
+        ],
+        "Calzado Biomecánico Formal": [
+            -2,
+            4,
+            2,
+            0,
+            -1,
+            2
+        ],
+        "Calzado Médico Especializado": [
+            -2,
+            2,
+            4,
+            -1,
+            -2,
+            3
+        ],
+        "Sneaker Cultural Premium": [
+            -1,
+            -2,
+            -2,
+            -1,
+            4,
+            -1
+        ]
+    },
+    "competenciaExterna": [
+        {
+            "segmento": "Jóvenes urbanos / lifestyle boliviano",
+            "nombre": "Importaciones informales (contrabando China/Brasil)",
+            "precio": 80,
+            "calidad": 3,
+            "marketing": 0,
+            "participacionRef": 0.4,
+            "descripcion": "Calzado de bajo costo ingresado por frontera. Muy competitivo en precio, baja calidad y durabilidad. Domina el mercado informal de jóvenes urbanos."
+        },
+        {
+            "segmento": "Comerciantes y trabajadores de mercado",
+            "nombre": "Calzado boliviano de mercado (Ramadas/Los Pozos)",
+            "precio": 65,
+            "calidad": 2,
+            "marketing": 0,
+            "participacionRef": 0.3,
+            "descripcion": "Calzado local no especializado vendido en mercados populares. Precio muy accesible sin soporte técnico ni garantía. Principal competencia informal para comerciantes."
+        },
+        {
+            "segmento": "Personas con condición postural",
+            "nombre": "Marcas ortopédicas importadas (Scholl / Dr. Martens)",
+            "precio": 320,
+            "calidad": 7,
+            "marketing": 15000,
+            "participacionRef": 0.2,
+            "descripcion": "Marcas internacionales con presencia en farmacias y tiendas especializadas. Reconocimiento de marca fuerte. Mayor precio que las marcas locales."
+        },
+        {
+            "segmento": "Personas con fascitis y dolor plantar",
+            "nombre": "Plantillas y calzado genérico de farmacia",
+            "precio": 150,
+            "calidad": 4,
+            "marketing": 5000,
+            "participacionRef": 0.25,
+            "descripcion": "Soluciones genéricas (plantillas, zapatos estándar con soporte) vendidas en farmacias. Primera opción asequible pero no especializada."
+        },
+        {
+            "segmento": "Padres y familias con niños (0-10 años)",
+            "nombre": "Calzado infantil chino (Bata Kids / marcas genéricas)",
+            "precio": 55,
+            "calidad": 3,
+            "marketing": 8000,
+            "participacionRef": 0.3,
+            "descripcion": "Calzado infantil de bajo costo y alta rotación. Disponible en tiendas de barrio y supermercados. No tiene propuesta de valor especial."
+        }
+    ],
+    "proveedores": [
+        {
+            "id": "prov_1",
+            "nombre": "Proveedor Nacional (Santa Cruz)",
+            "costoMP": 12.0,
+            "calidad": 7,
+            "leadTime": 1,
+            "loteMin": 100,
+            "loteMax": 2000,
+            "descripcion": "Materiales locales: suela EVA/goma, tela, velcro, plantillas estándar, pegamento industrial. Entrega en el trimestre. Mayor costo pero sin riesgo de stockout por lead time."
+        },
+        {
+            "id": "prov_2",
+            "nombre": "Proveedor Importado (Brasil / China)",
+            "costoMP": 7.0,
+            "calidad": 5,
+            "leadTime": 2,
+            "loteMin": 200,
+            "loteMax": 4000,
+            "descripcion": "Materiales importados: cuero sintético PU, TPU, gel de silicona, componentes LED, espumas especiales. Llega al siguiente trimestre. Menor costo pero requiere planificación anticipada."
+        }
     ]
-  },
-  "params": {
-    "moneda": "Bs",
-    "trimestresPorAnio": 4,
-    "capitalInicial": 680000,
-    "capitalContable": 680000,
-    "cajaInicial": 600000,
-    "activosFijosIniciales": 80000,
-    "inventarioInicialUnid": 0,
-    "cxcInicial": 0,
-    "deudaInicial": 0,
-    "capacidadMaxProduccion": 1500,
-    "gastoAdminFijo": 165000,
-    "gastoFijoPlanta": 45000,
-    "depreciacionTrimestral": 2500,
-    "costoAlmacenamientoUnidad": 5,
-    "pctVentasContado": 0.85,
-    "pctVentasCredito": 0.15,
-    "plazoCobro": 2,
-    "tasaPrestamoOperativo": 0.035,
-    "tasaPrestamoInversion": 0.025,
-    "tasaSobregiro": 0.055,
-    "comisionAperturaPrestamo": 0.015,
-    "plazoPrestamoOperativo": 2,
-    "plazoPrestamoInversion": 6,
-    "vendedoresIniciales": 2,
-    "sueldoTrimestralVendedor": 15000,
-    "costoContratacionVendedor": 6000,
-    "costoDespidoVendedor": 9000,
-    "operariosIniciales": 4,
-    "productividadBase": 440,
-    "costoOperario": 9600,
-    "costoContratacionOperario": 2400,
-    "costoDespidoOperario": 3600,
-    "factorCapacitacion": 0.05,
-    "costoInvestigacionBasica": 5000,
-    "costoInvestigacionPremium": 12000,
-    "factorInnovacionProducto": 0.333,
-    "factorInnovacionProceso": 0.333,
-    "unidadesMPporUnidad": 1.0,
-    "costoAlmacenamientoMP": 0.05,
-    "pctMateriaPrima": 0.40,
-    "tasaIVA": 0.13,
-    "tasaIT": 0.03,
-    "tasaIUE": 0.25,
-    "periodosIUE": 4,
-    "tasaDecaimiento": 0.05,
-    "lambdaLogit": 1.0,
-    "factorCanibalizacion": 0.15,
-    "coefPrecio": -0.005,
-    "costoInvestigacionEstrategico": 20000,
-    "modeloCostos": "mixto"
-  },
-  "tiposProducto": {
-    "Sandalia Infantil Ajustable": {
-      "costoBase": 79.0,
-      "descripcion": "Sandalia con sistema Slide & Lock que crece hasta 3 tallas. Diseñada para niños de 2-4 años. Materiales: EVA, goma, velcro, tela, LED opcional. [GrowStep Kids — Eq. 4]"
-    },
-    "Calzado Sensorial TEA": {
-      "costoBase": 120.0,
-      "descripcion": "Calzado especializado para niños con Trastorno del Espectro Autista. Prioriza comodidad sensorial, ergonomía y facilidad de uso. Materiales: memory foam, microfibra PU, velcro alta resistencia, TPU. [TE Acompaña Kids — Eq. 2]"
-    },
-    "Calzado Ortopédico Laboral": {
-      "costoBase": 136.0,
-      "descripcion": "Calzado para personas que trabajan largas jornadas de pie. Plantilla con gel de silicona, soporte lumbar, amortiguación. Materiales: EVA/PU, gel silicona, cuero sintético. [ORTHO STEP — Eq. 5 / LEVITA Casual — Eq. 7]"
-    },
-    "Calzado Biomecánico Formal": {
-      "costoBase": 153.0,
-      "descripcion": "Calzado biomecánico con diseño formal para personas con escoliosis o dismetría. Equilibra la pisada sin cambiar el estilo. Materiales: cuero/microfibra, suela EVA/TPU, plantilla biomecánica. [LEVITA Formal — Eq. 7]"
-    },
-    "Calzado Médico Especializado": {
-      "costoBase": 226.57,
-      "descripcion": "Calzado ergonómico de alto soporte para fascitis plantar. Soporte anatómico del arco, amortiguación premium, estabilidad talón. No vendemos zapatos, vendemos salud y bienestar. [BIOPASO — Eq. 3]"
-    },
-    "Sneaker Cultural Premium": {
-      "costoBase": 298.0,
-      "descripcion": "Sneaker urbano de identidad boliviana. Diseño que exalta la cultura regional con estándares internacionales. Objeto de deseo de alto impacto emocional. Materiales: cuero plena flor, goma vulcanizada, textiles artesanales. [Raíz — Grupo 1]"
-    }
-  },
-  "canales": {
-    "Tienda Propia": {
-      "costoAdicionalUnitario": 18,
-      "comisionPct": 0.0,
-      "factorImpactoVendedores": 1.5,
-      "bonoAtractivo": 4,
-      "descripcion": "Venta directa en local propio o taller. Alto control de marca y experiencia del cliente. Propuesto por: Eq.2, Eq.3, Eq.5, Eq.7"
-    },
-    "Venta Digital": {
-      "costoAdicionalUnitario": 8,
-      "comisionPct": 0.03,
-      "factorImpactoVendedores": 0.4,
-      "bonoAtractivo": 3,
-      "descripcion": "Redes sociales (TikTok, Facebook, Instagram), WhatsApp Business y delivery. Bajo costo operativo, alta conversión digital. Propuesto por: Eq.2, Eq.4, Eq.5"
-    },
-    "Distribuidores B2B": {
-      "costoAdicionalUnitario": 12,
-      "comisionPct": 0.15,
-      "factorImpactoVendedores": 0.7,
-      "bonoAtractivo": 2,
-      "descripcion": "Venta a distribuidores, tiendas de calzado infantil y retail. Amplia cobertura pero mayor comisión. Propuesto por: Grupo 1, Eq.4"
-    },
-    "Ferias y Eventos": {
-      "costoAdicionalUnitario": 12,
-      "comisionPct": 0.0,
-      "factorImpactoVendedores": 1.2,
-      "bonoAtractivo": 3,
-      "descripcion": "Ferias infantiles, eventos de salud, activaciones y expos. Alta visibilidad y contacto directo con el cliente. Propuesto por: Eq.4"
-    },
-    "Convenios Institucionales": {
-      "costoAdicionalUnitario": 10,
-      "comisionPct": 0.08,
-      "factorImpactoVendedores": 0.8,
-      "bonoAtractivo": 3,
-      "descripcion": "Convenios con centros de salud, clínicas, guarderías, colegios y empresas. Volumen garantizado con condiciones pactadas. Propuesto por: Eq.4, Eq.7"
-    }
-  },
-  "segmentos": [
-    {
-      "nombre": "Padres y familias con niños (0-10 años)",
-      "demandaBase": 7000,
-      "pctContrabando": 0.18,
-      "indiceExterno": 6.5,
-      "tendencia": "Alto crecimiento",
-      "tasaCrecimiento": 0.06,
-      "descripcion": "Padres y madres que buscan calzado cómodo, seguro y funcional para sus hijos. Compran en tiendas infantiles, online y ferias. Valoran durabilidad, seguridad y relación precio-calidad. Tamaño base calibrado sobre estimaciones del Eq.4 (5.000-20.000)."
-    },
-    {
-      "nombre": "Personas con condición postural",
-      "demandaBase": 5500,
-      "pctContrabando": 0.12,
-      "indiceExterno": 7.0,
-      "tendencia": "Alto crecimiento",
-      "tasaCrecimiento": 0.06,
-      "descripcion": "Personas con escoliosis, dismetría o dolor lumbar crónico (18-55 años). Buscan soluciones biomecánicas discretas que no cambien su estilo. Compran en centros de salud y tiendas. Referencia: 9.500 unid/trim (Eq.7 LEVITA)."
-    },
-    {
-      "nombre": "Personas con fascitis y dolor plantar",
-      "demandaBase": 3000,
-      "pctContrabando": 0.1,
-      "indiceExterno": 6.0,
-      "tendencia": "Estable",
-      "tasaCrecimiento": 0.0,
-      "descripcion": "Adultos de 40-60 años con fascitis plantar o dolor recurrente. Trabajan largas jornadas de pie. Priorizan alivio real sobre precio. Dispuestos a pagar premium por solución efectiva. Referencia: 918 unid/trim (Eq.3 BIOPASO, nicho especializado)."
-    },
-    {
-      "nombre": "Comerciantes y trabajadores de mercado",
-      "demandaBase": 8000,
-      "pctContrabando": 0.18,
-      "indiceExterno": 7.5,
-      "tendencia": "Creciente",
-      "tasaCrecimiento": 0.03,
-      "descripcion": "Comerciantes, vendedores, personal de ferias y mercados que permanecen 8+ horas de pie. Buscan comodidad funcional a precio accesible. Alta sensibilidad al precio. Referencia directa: 8.000 unid/trim (Eq.5 ORTHO STEP)."
-    },
-    {
-      "nombre": "Jóvenes urbanos / lifestyle boliviano",
-      "demandaBase": 4500,
-      "pctContrabando": 0.45,
-      "indiceExterno": 8.0,
-      "tendencia": "Creciente",
-      "tasaCrecimiento": 0.03,
-      "descripcion": "Jóvenes y adultos (18-35) que buscan calzado con identidad cultural boliviana y estética urbana. Alta influencia digital. Compiten fuertemente con importaciones informales y marcas chinas. Referencia: Grupo 1 Raíz; ajustado por alta informalidad (75%)."
-    },
-    {
-      "nombre": "Personal de salud y bienestar",
-      "demandaBase": 5000,
-      "pctContrabando": 0.1,
-      "indiceExterno": 7.2,
-      "tendencia": "Alto crecimiento",
-      "tasaCrecimiento": 0.06,
-      "descripcion": "Enfermeras, médicos, fisioterapeutas y personal hospitalario. Jornadas largas de pie, exigen comodidad, higiene y soporte profesional. Receptivos a convenios institucionales. Referencia: 6.500 unid/trim (Eq.5 ORTHO STEP, segmento 2)."
-    }
-  ],
-  "afinidadMatrix": {
-    "Sandalia Infantil Ajustable": [
-      4,
-      -2,
-      -2,
-      -1,
-      -1,
-      0
-    ],
-    "Calzado Sensorial TEA": [
-      3,
-      -1,
-      -1,
-      -2,
-      -2,
-      0
-    ],
-    "Calzado Ortopédico Laboral": [
-      -1,
-      1,
-      2,
-      3,
-      -1,
-      2
-    ],
-    "Calzado Biomecánico Formal": [
-      -2,
-      4,
-      2,
-      0,
-      -1,
-      2
-    ],
-    "Calzado Médico Especializado": [
-      -2,
-      2,
-      4,
-      -1,
-      -2,
-      3
-    ],
-    "Sneaker Cultural Premium": [
-      -1,
-      -2,
-      -2,
-      -1,
-      4,
-      -1
-    ]
-  },
-  "competenciaExterna": [
-    {
-      "segmento": "Jóvenes urbanos / lifestyle boliviano",
-      "nombre": "Importaciones informales (contrabando China/Brasil)",
-      "precio": 80,
-      "calidad": 3,
-      "marketing": 0,
-      "participacionRef": 0.4,
-      "descripcion": "Calzado de bajo costo ingresado por frontera. Muy competitivo en precio, baja calidad y durabilidad. Domina el mercado informal de jóvenes urbanos."
-    },
-    {
-      "segmento": "Comerciantes y trabajadores de mercado",
-      "nombre": "Calzado boliviano de mercado (Ramadas/Los Pozos)",
-      "precio": 65,
-      "calidad": 2,
-      "marketing": 0,
-      "participacionRef": 0.3,
-      "descripcion": "Calzado local no especializado vendido en mercados populares. Precio muy accesible sin soporte técnico ni garantía. Principal competencia informal para comerciantes."
-    },
-    {
-      "segmento": "Personas con condición postural",
-      "nombre": "Marcas ortopédicas importadas (Scholl / Dr. Martens)",
-      "precio": 320,
-      "calidad": 7,
-      "marketing": 15000,
-      "participacionRef": 0.2,
-      "descripcion": "Marcas internacionales con presencia en farmacias y tiendas especializadas. Reconocimiento de marca fuerte. Mayor precio que las marcas locales."
-    },
-    {
-      "segmento": "Personas con fascitis y dolor plantar",
-      "nombre": "Plantillas y calzado genérico de farmacia",
-      "precio": 150,
-      "calidad": 4,
-      "marketing": 5000,
-      "participacionRef": 0.25,
-      "descripcion": "Soluciones genéricas (plantillas, zapatos estándar con soporte) vendidas en farmacias. Primera opción asequible pero no especializada."
-    },
-    {
-      "segmento": "Padres y familias con niños (0-10 años)",
-      "nombre": "Calzado infantil chino (Bata Kids / marcas genéricas)",
-      "precio": 55,
-      "calidad": 3,
-      "marketing": 8000,
-      "participacionRef": 0.3,
-      "descripcion": "Calzado infantil de bajo costo y alta rotación. Disponible en tiendas de barrio y supermercados. No tiene propuesta de valor especial."
-    }
-  ],
-  "proveedores": [
-    {
-      "id": "prov_1",
-      "nombre": "Proveedor Nacional (Santa Cruz)",
-      "costoMP": 12.0,
-      "calidad": 7,
-      "leadTime": 1,
-      "loteMin": 100,
-      "loteMax": 2000,
-      "descripcion": "Materiales locales: suela EVA/goma, tela, velcro, plantillas estándar, pegamento industrial. Entrega en el trimestre. Mayor costo pero sin riesgo de stockout por lead time."
-    },
-    {
-      "id": "prov_2",
-      "nombre": "Proveedor Importado (Brasil / China)",
-      "costoMP": 7.0,
-      "calidad": 5,
-      "leadTime": 2,
-      "loteMin": 200,
-      "loteMax": 4000,
-      "descripcion": "Materiales importados: cuero sintético PU, TPU, gel de silicona, componentes LED, espumas especiales. Llega al siguiente trimestre. Menor costo pero requiere planificación anticipada."
-    }
-  ]
 }
