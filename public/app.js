@@ -2347,6 +2347,7 @@ async function loadAdminParametros() {
         ${pf('Costo despido / operario (Bs)','costoDespidoOperario')}
         ${pf('Factor capacitación','factorCapacitacion','0.05 = +5% productividad por inversión en capacitación')}
         ${pf('% Costo por punto de calidad sobre/bajo 5 (ej. 0.08 = 8% del costoBase)','pctCostoCalidad','0.08')}
+        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40% del costo base es MP)','pctMateriaPrima','0.40')}
       </div>
 
       <div class="param-card">
@@ -2354,7 +2355,6 @@ async function loadAdminParametros() {
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
         ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
-        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40%)','pctMateriaPrima')}
       </div>
 
       <div class="param-card">
