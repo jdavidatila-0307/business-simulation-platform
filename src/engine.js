@@ -276,7 +276,8 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
   }
 
   const costoBase    = tp.costoBase;
-  const costoCalidad = 0.20 * (d.calidad || 5);
+  const _pctCal      = params?.pctCostoCalidad ?? 0.08;   // % del costoBase por punto sobre/bajo 5
+  const costoCalidad = costoBase * _pctCal * ((d.calidad || 5) - 5);
 
   // Costo canal: promedio si hay canal secundario
   const cp = canales[d.canalPrincipal]?.costoAdicionalUnitario ?? 0;
@@ -506,7 +507,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaCredMPtotal  = Math.round(costoMPtotal * 13/100);        // IVA sobre total → sin pérdida
   const costoMPnetoTot  = costoMPtotal - ivaCredMPtotal;            // neto total exacto
   const cuVarMP    = costoMPnetoTot / produccionMP;                  // neto por par — sin roundBs para preservar precisión
-  const cuVarCalid = 0.20 * (d.calidad || 5);        // calidad por par — sin roundBs
+  const _pctCalVar  = params?.pctCostoCalidad ?? 0.08;
+  const cuVarCalid  = tp_cu ? tp_cu.costoBase * _pctCalVar * ((d.calidad || 5) - 5) : 0;  // calidad por par
   const cuVar      = cuVarMP + cuVarCalid;           // CU variable — sin roundBs, preserva precisión
 
   // invFinalValorizado usa cuVar (CU variable real) — consistente con costoVentas
@@ -712,7 +714,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
-  const pagoCalidad    = roundBs(0.20 * (d.calidad || 5) * (d.produccion || 0)); // S10: calidad
+  const _pctCalPago  = params?.pctCostoCalidad ?? 0.08;
+  const _costoBasePago = (tiposProducto[d.producto]?.costoBase || 0);
+  const pagoCalidad    = roundBs(_costoBasePago * _pctCalPago * Math.max(0, (d.calidad||5) - 5) * (d.produccion || 0)); // S10: calidad
   const pagoComisiones = comisiones;             // S3: comisión sale de caja
   const pagoMP         = pagoMPbruto;            // S4: MP bruto sale de caja
 
@@ -1121,7 +1125,7 @@ function ejecutarSimulador(decisiones, cfg) {
       ...d,
       costoMPunitario:   costoMPunit,
       costoBaseProducto: cbProd,
-      costoCalidadUnit:  roundBs(0.20 * (d.calidad || 5)),
+      costoCalidadUnit:  roundBs((tiposProducto[d.producto]?.costoBase||0) * (params?.pctCostoCalidad??0.08) * ((d.calidad||5)-5)),
     };
     const fin        = calcularResultadosFinancieros(dEnriquecido, ventas, cu, dEnriquecido.gastoTotalMarketing, paramsConProveedores, canales);
 
@@ -1161,7 +1165,7 @@ function ejecutarSimulador(decisiones, cfg) {
       costoCanal_calc: (() => {
         const trans    = roundBs(cbProd * (1 - pctMP_enr));
         const mpNeto   = roundBs(costoMPunit * (1 - (paramsConProveedores.tasaIVA ?? 0.13)));
-        const calidad  = roundBs(0.20 * (d.calidad || 5));
+        const calidad  = roundBs((tiposProducto[d.producto]?.costoBase||0) * (params?.pctCostoCalidad??0.08) * ((d.calidad||5)-5));
         const ef       = (() => {
           if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
           const bf = d.montoInnovacion / d.produccion;

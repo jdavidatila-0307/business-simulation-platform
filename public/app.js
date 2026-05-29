@@ -2349,6 +2349,7 @@ async function loadAdminParametros() {
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
         ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
         ${pf('% Materia Prima del costoBase (ej. 0.40 = 40%)','pctMateriaPrima')}
+        ${pf('% Costo por punto de calidad sobre 5 (ej. 0.08 = 8% del costoBase)','pctCostoCalidad','0.08')}
       </div>
 
       <div class="param-card">
@@ -2992,7 +2993,7 @@ async function loadDecisionForm() {
         <div class="form-grid">
           <div class="form-group"><label class="form-label">🎯 Segmento objetivo</label>${sel('segmentoObjetivo',segOpts)}</div>
           <div class="form-group"><label class="form-label">🧪 Tipo de producto</label>${sel('tipoProducto',prodOpts)}</div>
-          <div class="form-group"><label class="form-label">⭐ Calidad (1–10)</label>${inp('calidad',d.calidad,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+4% costo/punto sobre 5</span></div>
+          <div class="form-group"><label class="form-label">⭐ Calidad (1–10)</label>${inp('calidad',d.calidad,'type="number" min="1" max="10" step="1"')}<span class="form-hint">5 = estándar · Cada punto extra sube costo unitario +0.20 Bs y mejora atractivo</span></div>
           <div class="form-group"><label class="form-label">💡 Diferenciación (1–10)</label>${inp('diferenciacion',d.diferenciacion,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+3% costo/punto sobre 5</span></div>
         </div>
       </div>
@@ -3581,7 +3582,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td></td></tr>
           <tr><td class="hoja-label">⭐ Calidad (1–10)</td>
               <td>${inp('calidad',productoActivo.calidad,'number','min="1" max="10" step="1"')}</td>
-              <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
+              <td class="hoja-ref">5 = estándar de mercado. Cada punto sobre/bajo 5 sube/baja el costo unitario un ${((p.pctCostoCalidad??0.08)*100).toFixed(0)}% del costo base. Máx 10.</td>
               <td></td></tr>
           <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
               <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
