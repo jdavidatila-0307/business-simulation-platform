@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Manual del Estudiante · SimNeg UAGRM</title>
+<title>Manual del Estudiante · SimNego v3.2 UAGRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -1257,8 +1257,8 @@
             <div class="dc-icon dc-gold">⭐</div>
             <h4>3.2 Calidad</h4>
           </div>
-          <p class="insight">Cada punto de calidad sobre 5 añade Bs 0,20 al costo unitario y aumenta tu atractivo competitivo. Maximizar calidad no siempre es óptimo: depende de la elasticidad precio del segmento.</p>
-          <div class="tip">Equilibra calidad percibida y precio de venta para no salir del rango aceptable del segmento.</div>
+          <p class="insight">Calidad 5 es el estándar neutro — no añade ni quita costo. Cada punto <strong>sobre o bajo 5</strong> cambia el costo unitario en un porcentaje del costoBase (definido por el profesor en Parámetros, default 8%). Con 8%: calidad 7 en TEA añade Bs 19.20/par; calidad 3 ahorra Bs 19.20/par. El efecto sobre el atractivo competitivo es proporcional a la calidad declarada.</p>
+          <div class="tip">Fórmula: ΔCU = costoBase × pctCostoCalidad × (calidad − 5). Un proveedor de alta calidad amplifica el diferencial de calidad en el mercado.</div>
           <p class="dc-refs">Aaker (1996) · Mizik (2014)</p>
         </div>
 
@@ -1321,11 +1321,12 @@
           <div class="dc-icon dc-green">📦</div>
             <h4>3.8 Materia Prima</h4>
           </div>
-          <p class="insight">La producción está restringida por el stock de materia prima disponible. Elegir el proveedor importado requiere planificar con <strong>un trimestre de anticipación</strong>.</p>
+          <p class="insight">La producción está restringida por el stock de materia prima disponible. Elegir el proveedor importado requiere planificar con <strong>dos trimestres de anticipación</strong>. Los tres proveedores aplican un factor multiplicador sobre el costo estándar de MP (costoBase × pctMateriaPrima).</p>
           <ul class="decision-list">
-            <li><strong>Proveedor Nacional (Santa Cruz):</strong> Bs 12/unid MP — entrega el mismo trimestre (lead time 1).</li>
-            <li><strong>Proveedor Importado (Brasil/China):</strong> Bs 7/unid MP — entrega al siguiente trimestre (lead time 2).</li>
-            <li>1 unidad de MP produce 1 par de calzado.</li>
+            <li><strong>Cueros Bolivia S.A. (factor ×1.10):</strong> 10% más caro — calidad 8/10. Entrega inmediata (lead time 1 trim.).</li>
+            <li><strong>Insumos Locales Cochabamba (factor ×0.90):</strong> 10% más barato — calidad 6/10. Entrega inmediata.</li>
+            <li><strong>Importado Asia vía Oruro (factor ×0.75):</strong> 25% más barato — calidad 5/10. Lead time 2 trimestres. ⚠ Pide con anticipación o no podrás producir.</li>
+            <li>Ejemplo TEA (costoBase Bs 120, pctMP 40%): MP estándar = Bs 48. Con Cueros Bolivia = Bs 52.80; con Asia = Bs 36.</li>
             <li>Stock sobrante se acumula (almacenamiento: Bs 0.05/unid/trim).</li>
           </ul>
         </div>
@@ -1801,25 +1802,32 @@
           </div>
         </div>
         <div class="formula-box">
-          <span class="f-label">Fórmula de costo parcial</span>
-          Costo unitario = Costo base + (0.20 × Calidad) + Costo MP + Costo canal
-          <br><span style="color:var(--muted);font-size:.73rem;">Costo base = fabricación sin MP. MP Nacional +Bs 12 | Importado +Bs 7. Canal: Tienda Propia +Bs 18 | Venta Digital +Bs 15 | Ferias +Bs 10 | Distribuidores +Bs 22. El total base+MP coincide con el costo diseñado por cada equipo.</span>
+          <span class="f-label">Fórmula de costo unitario completa</span>
+          CU = (costoBase × (1 − pctMP)) + (costoBase × pctMP × factorProveedor) + (costoBase × pctCalidad × (calidad−5)) + costoCanal
+          <br><br>
+          <strong style="color:var(--gold)">Donde:</strong><br>
+          · pctMP = % Materia Prima (default 40%) · definido por el profesor<br>
+          · factorProveedor: Cueros Bolivia ×1.10 | Insumos Locales ×0.90 | Importado Asia ×0.75<br>
+          · pctCalidad = % Costo por punto de calidad (default 8%) · definido por el profesor<br>
+          · calidad−5: negativo si calidad &lt; 5 (ahorra), positivo si &gt; 5 (encarece)<br>
+          · costoCanal: Tienda Propia Bs 18 | Venta Digital Bs 8 | Distribuidores Bs 12 | Ferias Bs 12 | Convenios Bs 10
         </div>
         <div class="anx-table-wrap">
           <table class="anx-table">
             <thead>
-              <tr><th>Producto</th><th>Costo base (Bs/par)</th><th>Calidad = 1</th><th>Calidad = 5</th><th>Calidad = 10</th></tr>
+              <tr><th>Producto</th><th>Costo base (Bs/par)</th><th>Calidad = 3 (−16%)</th><th>Calidad = 5 (neutro)</th><th>Calidad = 7 (+16%)</th><th>Calidad = 10 (+40%)</th></tr>
             </thead>
             <tbody>
-              <tr><td>Sandalia Infantil Ajustable</td><td class="mono">Bs 79.00</td><td class="mono">Bs 79.20</td><td class="mono val-gold">Bs 80.00</td><td class="mono">Bs 81.00</td></tr>
-              <tr><td>Calzado Sensorial TEA</td><td class="mono">Bs 120.00</td><td class="mono">Bs 120.20</td><td class="mono val-gold">Bs 121.00</td><td class="mono">Bs 122.00</td></tr>
-              <tr><td>Calzado Ortopédico Laboral</td><td class="mono">Bs 136.00</td><td class="mono">Bs 136.20</td><td class="mono val-gold">Bs 137.00</td><td class="mono">Bs 138.00</td></tr>
-              <tr><td>Calzado Biomecánico Formal</td><td class="mono">Bs 153.00</td><td class="mono">Bs 153.20</td><td class="mono val-gold">Bs 154.00</td><td class="mono">Bs 155.00</td></tr>
-              <tr><td>Calzado Médico Especializado</td><td class="mono">Bs 226.57</td><td class="mono">Bs 226.77</td><td class="mono val-gold">Bs 227.57</td><td class="mono">Bs 228.57</td></tr>
-              <tr><td>Sneaker Cultural Premium</td><td class="mono">Bs 298.00</td><td class="mono">Bs 298.20</td><td class="mono val-gold">Bs 299.00</td><td class="mono">Bs 300.00</td></tr>
+              <tr><td>Sandalia Infantil Ajustable</td><td class="mono">Bs 79.00</td><td class="mono val-neg">Bs 66.36</td><td class="mono val-gold">Bs 79.00</td><td class="mono">Bs 91.64</td><td class="mono">Bs 110.60</td></tr>
+              <tr><td>Calzado Sensorial TEA</td><td class="mono">Bs 120.00</td><td class="mono val-neg">Bs 100.80</td><td class="mono val-gold">Bs 120.00</td><td class="mono">Bs 139.20</td><td class="mono">Bs 168.00</td></tr>
+              <tr><td>Calzado Ortopédico Laboral</td><td class="mono">Bs 136.00</td><td class="mono val-neg">Bs 114.24</td><td class="mono val-gold">Bs 136.00</td><td class="mono">Bs 157.76</td><td class="mono">Bs 190.40</td></tr>
+              <tr><td>Calzado Biomecánico Formal</td><td class="mono">Bs 153.00</td><td class="mono val-neg">Bs 128.52</td><td class="mono val-gold">Bs 153.00</td><td class="mono">Bs 177.48</td><td class="mono">Bs 214.20</td></tr>
+              <tr><td>Calzado Médico Especializado</td><td class="mono">Bs 226.57</td><td class="mono val-neg">Bs 190.32</td><td class="mono val-gold">Bs 226.57</td><td class="mono">Bs 262.82</td><td class="mono">Bs 317.20</td></tr>
+              <tr><td>Sneaker Cultural Premium</td><td class="mono">Bs 298.00</td><td class="mono val-neg">Bs 250.32</td><td class="mono val-gold">Bs 298.00</td><td class="mono">Bs 345.68</td><td class="mono">Bs 417.20</td></tr>
             </tbody>
           </table>
         </div>
+        <div class="note-box"><span class="note-icon">📌</span> Los valores usan pctCostoCalidad=8% (default). El profesor puede modificar este porcentaje en Panel → Parámetros → Operarios y Producción. Fórmula: ΔCU = costoBase × 0.08 × (calidad − 5). Calidad 5 es siempre el punto neutro.</div>
         <div class="anx-table-wrap" style="margin-top:16px;">
           <table class="anx-table">
             <thead><tr><th>Producto</th><th>Descripción y equipo de origen</th></tr></thead>
@@ -1834,33 +1842,33 @@
           </table>
         </div>
         <div style="margin-top:16px;">
-  <p style="font-size:.82rem;color:var(--muted);margin-bottom:8px;">
-    <strong>Costo unitario total según proveedor elegido:</strong>
-    (costoBase + costoMP). Este es el costo que el motor calcula al simular.
-  </p>
-  <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:.83rem">
-      <thead style="background:rgba(158,216,48,0.07)">
-        <tr>
-          <th style="padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Producto</th>
-          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Costo base</th>
-          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">+ MP Nacional (Bs 12)</th>
-          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">+ MP Importado (Bs 7)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Sandalia Infantil Ajustable</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 79.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 91.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 86.00</td></tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Sensorial TEA</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 120.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 132.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 127.00</td></tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Ortopédico Laboral</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 136.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 148.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 143.00</td></tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Biomecánico Formal</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 153.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 165.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 160.00</td></tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Médico Especializado</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 226.57</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 238.57</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 233.57</td></tr>
-        <tr><td style="padding:10px 14px">Sneaker Cultural Premium</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 298.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 310.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 305.00</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="note-box"><span class="note-icon">📌</span> El costo base representa <strong>solo los costos de fabricación</strong> (mano de obra, energía, planta) <strong>sin la materia prima</strong>. El motor suma: Costo base + Costo MP del proveedor + Canal + Calidad. Así el costo unitario total coincide exactamente con lo que cada equipo calculó en su formulario de diseño de industria.</div>
+          <p style="font-size:.82rem;color:var(--muted);margin-bottom:8px;">
+            <strong>Costo de MP según proveedor (costoBase × 40% × factor):</strong>
+            Los factores multiplican el costo estándar de MP — no son precios absolutos.
+          </p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+              <thead style="background:rgba(158,216,48,0.07)">
+                <tr>
+                  <th style="padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Producto</th>
+                  <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">MP estándar (40%)</th>
+                  <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Cueros Bolivia ×1.10</th>
+                  <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Insumos Locales ×0.90</th>
+                  <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:.72rem;color:#9ED830">Importado Asia ×0.75</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Sandalia Infantil</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 31.60</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 34.76</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 28.44</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 23.70</td></tr>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Sensorial TEA</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 48.00</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 52.80</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 43.20</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 36.00</td></tr>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Ortopédico</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 54.40</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 59.84</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 48.96</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 40.80</td></tr>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Biomecánico</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 61.20</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 67.32</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 55.08</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 45.90</td></tr>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"><td style="padding:10px 14px">Calzado Médico</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 90.63</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 99.69</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 81.57</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 67.97</td></tr>
+                <tr><td style="padding:10px 14px">Sneaker Premium</td><td style="padding:10px 14px;text-align:right;font-family:monospace">Bs 119.20</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#F39C12">Bs 131.12</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 107.28</td><td style="padding:10px 14px;text-align:right;font-family:monospace;color:#58D68D">Bs 89.40</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="note-box"><span class="note-icon">📌</span> El factor multiplica el <strong>costo estándar de MP</strong> (costoBase × pctMateriaPrima). Con pctMP=40%: MP estándar TEA = 120 × 0.40 = Bs 48. Cueros Bolivia (×1.10) = Bs 52.80. Importado Asia (×0.75) = Bs 36. La diferencia es proporcional al costoBase: el ahorro es mayor en productos más caros.</div>
       </div>
 
       <!-- ── ANEXO B  ──────────────────────────────── -->
@@ -2085,46 +2093,61 @@
         <p class="step-badge">E.7 · Operarios de producción</p>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th></tr></thead>
+            <thead><tr><th>Parámetro</th><th>Valor (configurable)</th><th>Descripción</th></tr></thead>
             <tbody>
-              <tr><td>Operarios iniciales</td><td class="mono">4</td><td>Todos los equipos comienzan con 4 operarios activos.</td></tr>
-              <tr><td>Sueldo trimestral/operario</td><td class="mono">Bs 9,600</td><td>Se paga a todos los operarios finales del trimestre (Bs 3,200/mes × 3).</td></tr>
-              <tr><td>Costo de contratación</td><td class="mono">Bs 2,400 por operario</td><td>Costo único al contratar en ese trimestre. Se suma al sueldo.</td></tr>
-              <tr><td>Costo de despido</td><td class="mono">Bs 3,600 por operario</td><td>Indemnización pagada en el trimestre en que se despide.</td></tr>
-              <tr><td>Productividad base</td><td class="mono">440 pares/operario/trim</td><td>Capacidad de producción por operario sin capacitación adicional.</td></tr>
-              <tr><td>Capacidad efectiva</td><td class="mono">Op. × 440 × (1 + factor cap.)</td><td>Límite real de producción. Máximo: 1,500 pares/trimestre.</td></tr>
+              <tr><td>Operarios iniciales</td><td class="mono">Definido por el profesor</td><td>Número de operarios con que inicia cada equipo. Por defecto: 1 operario.</td></tr>
+              <tr><td>Sueldo trimestral/operario</td><td class="mono">Bs 9,600</td><td>Se paga a todos los operarios finales del trimestre (Bs 3,200/mes × 3). Va al Costo de Ventas como MOD.</td></tr>
+              <tr><td>Costo de contratación</td><td class="mono">Bs 3,000 por operario</td><td>Costo único al contratar en ese trimestre.</td></tr>
+              <tr><td>Costo de despido</td><td class="mono">Bs 5,000 por operario</td><td>Indemnización pagada en el trimestre en que se despide.</td></tr>
+              <tr><td>Productividad base</td><td class="mono">500 pares/operario/trim</td><td>Capacidad de producción por operario sin capacitación adicional.</td></tr>
+              <tr><td>Capacidad efectiva</td><td class="mono">Op. × 500 × (1 + factor cap.)</td><td>Límite real de producción. Máximo: 1,500 pares/trimestre.</td></tr>
               <tr><td>Factor capacitación</td><td class="mono">0.05 por Bs 1,000 invertidos</td><td>Incrementa la productividad. Efecto acumulable entre rondas.</td></tr>
+              <tr><td>pctCostoCalidad</td><td class="mono">8% del costoBase por punto</td><td>Porcentaje que define cuánto sube/baja el CU por cada punto de calidad sobre/bajo 5. Configurable en Parámetros.</td></tr>
+              <tr><td>pctMateriaPrima</td><td class="mono">40% del costoBase</td><td>Fracción del costoBase que corresponde a materia prima. Configurable en Parámetros.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p class="step-badge">G.1 · Estado de Resultados (P&L)</p>
+        <p class="step-badge">G.1 · Estado de Resultados (P&L) — Estructura correcta según NIC 2 / Horngren (2015)</p>
         <div class="anx-table-wrap">
           <table class="anx-table">
-            <thead><tr><th>Línea en pantalla</th><th>Definición</th><th>Fórmula o fuente</th></tr></thead>
+            <thead><tr><th>Línea en pantalla</th><th>Clasificación contable</th><th>Fórmula o fuente</th></tr></thead>
             <tbody>
-              <tr><td>Ventas brutas</td><td>Ingresos potenciales antes de descontar comisiones del canal</td><td class="mono">Ventas reales × Precio de venta</td></tr>
-              <tr><td>(−) Comisiones del canal</td><td>Pago al intermediario de distribución</td><td class="mono">Ventas brutas × % comisión del canal</td></tr>
-              <tr><td>= Ventas netas</td><td>Ingresos que efectivamente recibe la empresa</td><td class="mono">Ventas brutas − Comisiones</td></tr>
-              <tr><td>(−) Costo de ventas</td><td>Costo de producir y distribuir las unidades vendidas</td><td class="mono">Ventas reales × Costo unitario</td></tr>
-              <tr><td>= Utilidad bruta</td><td>Primer margen: diferencia entre ingresos y costos directos</td><td class="mono">Ventas netas − Costo de ventas</td></tr>
-              <tr><td>(−) Publicidad / Promoción / Eventos / Redes / RRPP</td><td>Gastos en marketing decididos por el equipo</td><td class="mono">Datos de la hoja de decisiones</td></tr>
-              <tr><td>(−) Fuerza de ventas</td><td>Costo total de vendedores (sueldo + contratación + despido)</td><td class="mono">Vend.finales×15,000 + contrat.×6,000 + desp.×9,000</td></tr>
-              <tr><td>(−) Gasto administrativo fijo</td><td>Costo fijo de administración y gestión</td><td class="mono">Bs 165,000 / trimestre</td></tr>
-              <tr><td>(−) Gasto fijo de planta</td><td>Costo fijo de operación de la planta productiva</td><td class="mono">Bs 45,000 / trimestre</td></tr>
-              <tr><td>(−) Depreciación</td><td>Reducción del valor contable de activos fijos. NO sale de caja.</td><td class="mono">Bs 2,500 / trimestre</td></tr>
-              <tr><td>(−) Operarios de producción</td><td>Costo de operarios activos (sueldo + contratación + despido)</td><td class="mono">Op.finales×9,600 + contrat.×2,400 + desp.×3,600</td></tr>
-              <tr><td>(−) Almacenamiento inventario</td><td>Costo de mantener el inventario no vendido</td><td class="mono">Inventario final (unid) × Bs 0.10</td></tr>
-              <tr><td>(−) Inversión en innovación</td><td>Gasto de innovación del trimestre (si eligió innovar)</td><td class="mono">Monto elegido en decisiones</td></tr>
-              <tr><td>(−) Interés préstamo</td><td>Costo financiero de los préstamos vigentes</td><td class="mono">Monto préstamo × Tasa trimestral</td></tr>
-              <tr><td>(−) Interés sobregiro</td><td>Costo financiero del sobregiro automático (si aplica)</td><td class="mono">Sobregiro × 6%</td></tr>
-              <tr><td>(−) Comisión apertura préstamo</td><td>Costo único al tomar el préstamo</td><td class="mono">Monto préstamo × 1%</td></tr>
-              <tr><td>(−) IVA a pagar</td><td>Débito fiscal − Crédito fiscal. Sale de caja y reduce utilidad.</td><td class="mono">IVA ventas netas (13%) − IVA costos (13%)</td></tr>
-              <tr><td>(−) Impuesto a las Transacciones (IT)</td><td>3% sobre ventas brutas. Pago trimestral.</td><td class="mono">Ventas brutas × 3%</td></tr>
-              <tr><td>(−) IUE (provisión)</td><td>25% sobre utilidad gravable. Se paga cada 4 trimestres.</td><td class="mono">Utilidad gravable × 25% ÷ 4 (provisión)</td></tr>
-              <tr><td>= UTILIDAD NETA</td><td>Resultado final después de todos los costos e impuestos</td><td class="mono">Utilidad operativa − IVA − IT − IUE</td></tr>
+              <tr><td>Precio facturado al cliente (con IVA)</td><td>Ingreso bruto</td><td class="mono">Ventas brutas + IVA débito</td></tr>
+              <tr><td>(−) IVA débito fiscal (13%)</td><td>Tributo neutro — se recupera con IVA crédito</td><td class="mono">Ventas brutas × 13%</td></tr>
+              <tr><td>= Ventas brutas (sin IVA)</td><td>Ingresos antes de comisiones</td><td class="mono">Precio facturado / 1.13</td></tr>
+              <tr><td>(−) Comisiones canal</td><td>Gasto comercial variable</td><td class="mono">Ventas brutas × % comisión canal</td></tr>
+              <tr><td>= Ventas netas</td><td>Base de rentabilidad</td><td class="mono">Ventas brutas − Comisiones</td></tr>
+              <tr style="background:rgba(158,216,48,0.04)"><td colspan="3" style="color:#9ED830;font-size:.75rem;padding:6px 14px;font-family:var(--font-mono)">▼ COSTO DE VENTAS (product costs — NIC 2)</td></tr>
+              <tr><td>&nbsp;&nbsp;Costo materia prima neto</td><td>Costo del producto</td><td class="mono">Unid.vendidas × costoBase × pctMP × factorProveedor</td></tr>
+              <tr><td>&nbsp;&nbsp;Costo calidad / control</td><td>Costo del producto</td><td class="mono">Unid.vendidas × costoBase × pctCalidad × (calidad−5)</td></tr>
+              <tr><td>&nbsp;&nbsp;MOD — Operarios producción</td><td>Mano de obra directa (NIC 2)</td><td class="mono">Op.finales×9,600 + contrat.×3,000 + desp.×5,000</td></tr>
+              <tr><td>&nbsp;&nbsp;Overhead — Gasto fijo planta</td><td>Overhead manufacturero (NIC 2)</td><td class="mono">Bs 45,000 / trimestre</td></tr>
+              <tr><td>&nbsp;&nbsp;Depreciación planta</td><td>Overhead manufacturero — NO sale de caja</td><td class="mono">Bs 2,500 / trimestre</td></tr>
+              <tr><td>= Utilidad bruta</td><td>Primer margen — calidad de la producción</td><td class="mono">Ventas netas − Total costo de ventas</td></tr>
+              <tr style="background:rgba(158,216,48,0.04)"><td colspan="3" style="color:#9ED830;font-size:.75rem;padding:6px 14px;font-family:var(--font-mono)">▼ GASTOS DEL PERÍODO (period costs)</td></tr>
+              <tr><td>(−) Publicidad / Promoción / Eventos / Redes / RRPP</td><td>Gasto comercial</td><td class="mono">Datos de la hoja de decisiones</td></tr>
+              <tr><td>(−) Fuerza de ventas</td><td>Gasto comercial</td><td class="mono">Vend.finales×15,000 + contrat.×6,000 + desp.×9,000</td></tr>
+              <tr><td>(−) Gastos administrativos fijos</td><td>Gasto administrativo</td><td class="mono">Bs 55,000 / trimestre</td></tr>
+              <tr><td>(−) Almacenamiento inventario</td><td>Gasto operativo logístico</td><td class="mono">Inventario final (unid) × Bs 0.05</td></tr>
+              <tr><td>(−) Innovación y desarrollo</td><td>Gasto I+D</td><td class="mono">Monto elegido en decisiones</td></tr>
+              <tr><td>= EBITDA</td><td>Resultado antes de depreciación, intereses e impuestos</td><td class="mono">Utilidad bruta − Todos los gastos del período</td></tr>
+              <tr><td>(−) Depreciación (si no está en CdV)</td><td>Ajuste contable</td><td class="mono">Ya incluida en Costo de Ventas</td></tr>
+              <tr><td>= EBIT / Utilidad Operativa</td><td>Resultado operativo puro</td><td class="mono">EBITDA − Depreciación</td></tr>
+              <tr style="background:rgba(239,159,39,0.05)"><td colspan="3" style="color:#EF9F27;font-size:.75rem;padding:6px 14px;font-family:var(--font-mono)">▼ GASTOS FINANCIEROS E IMPUESTOS — Sistema Tributario Bolivia (Ley 843)</td></tr>
+              <tr><td>(−) Intereses préstamo</td><td>Gasto financiero</td><td class="mono">Monto préstamo × tasa trimestral (3.5% operativo / 2.5% inversión)</td></tr>
+              <tr><td>(−) Comisión apertura préstamo</td><td>Gasto financiero único</td><td class="mono">Monto préstamo × 1.5%</td></tr>
+              <tr><td>= Utilidad antes de impuestos</td><td>Base imponible</td><td class="mono">EBIT − Gastos financieros</td></tr>
+              <tr style="background:rgba(239,159,39,0.05)"><td><strong>IT — Impuesto a las Transacciones (3%)</strong></td><td>Impuesto directo sobre ventas brutas — Ley 843 Art. 72-74</td><td class="mono">Ventas brutas × 3% — pago trimestral obligatorio</td></tr>
+              <tr style="background:rgba(239,159,39,0.05)"><td><strong>IVA — Impuesto al Valor Agregado (13%)</strong></td><td>Tributo neutro para la empresa — Ley 843 Art. 1-20</td><td class="mono">IVA débito (ventas) − IVA crédito (compras). Solo el neto sale de caja. Saldo a favor se arrastra como activo.</td></tr>
+              <tr style="background:rgba(239,159,39,0.05)"><td><strong>IUE — Impuesto sobre Utilidades (25%)</strong></td><td>Impuesto anual sobre utilidad gravable — Ley 843 Art. 36-50</td><td class="mono">Utilidad gravable × 25%. Se provisiona cada trimestre y se paga al 4to trimestre (anual). Compensa con IT pagado.</td></tr>
+              <tr><td>= Utilidad neta</td><td>Resultado final disponible para reinversión</td><td class="mono">Utilidad antes imptos − IT − IUE</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="note-box"><span class="note-icon">📌</span>
+          <strong>IVA es neutro:</strong> la empresa no pierde ni gana con el IVA. Cobra 13% al cliente (IVA débito) y recupera el 13% que pagó en insumos (IVA crédito). Solo paga el diferencial si vendió más de lo que compró. El saldo a favor se acumula como activo corriente.<br><br>
+          <strong>IT vs IUE:</strong> el IT (3%) se paga sobre ventas brutas sin importar si hay utilidad. El IUE (25%) solo aplica sobre utilidad positiva. El IT pagado compensa el IUE al final del año, evitando doble tributación.
         </div>
 
         <p class="step-badge">G.2 · Balance General</p>
