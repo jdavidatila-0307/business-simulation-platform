@@ -1348,14 +1348,37 @@ async function route(req, res, body) {
         continue;
       }
 
+      // ── Sanitizar decisiones extremas ──────────────────────────────────
+      // Evita que una decisión extrema (ej: 6868 operarios) falle todo el recálculo.
+      // Los límites son pedagógicamente imposibles de alcanzar en condiciones normales.
+      const _capMax = sim.parametros?.capacidadMaxProduccion || 1500;
+      function sanitizarDecision(d) {
+        if (!d) return d;
+        const s = { ...d };
+        if ((s.contratarOperarios || 0) > 100)  { console.warn(`[recalc] sanitize equipo=${d.equipoNombre}: contratarOperarios ${s.contratarOperarios}→100`); s.contratarOperarios = 100; }
+        if ((s.despedirOperarios  || 0) > 100)  { s.despedirOperarios  = 100; }
+        if ((s.produccion         || 0) > _capMax) { s.produccion = _capMax; }
+        if ((s.precioVenta || 0) > 0 && (s.precioVenta || 0) < 10) { s.precioVenta = 10; }
+        if (Array.isArray(s.productos)) {
+          s.productos = s.productos.map(p => ({
+            ...p,
+            contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
+            despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
+            produccion:         Math.min(p.produccion         || 0, _capMax),
+          }));
+        }
+        return s;
+      }
+
       // Construir decisiones re-propagadas: tomar las decisiones originales
       // y reemplazar solo los campos financieros de continuidad con el estado real
       const decisionesOriginales = ronda.decisiones || {};
       const decisiones = [];
 
       for (const eq of equipos) {
-        const decOrig = decisionesOriginales[eq.id];
-        if (!decOrig) continue;
+        const decOrigRaw = decisionesOriginales[eq.id];
+        if (!decOrigRaw) continue;
+        const decOrig = sanitizarDecision(decOrigRaw);
 
         const estado = estadoEmpresa[eq.id] || {};
 
@@ -1386,10 +1409,12 @@ async function route(req, res, body) {
         if (Array.isArray(decRepropagada.productos)) {
           decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
             // Buscar el resultado previo específico de este producto
-            // Usar nuevoResObjAnterior (resultados recalculados de R(n-1)) para mayor precisión
+            // SOLO usar nuevoResObjAnterior (resultados recalculados de R(n-1)).
+            // NO usar resObj como fallback: resObj es la ronda ACTUAL, no la anterior.
+            // Para R1: nuevoResObjAnterior está vacío → invInicialProd = 0 (correcto).
             const prodId      = p.productoId || ('prod_' + (idx + 1));
             const keyPrevProd = eq.id + '__' + prodId;
-            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || resObj[keyPrevProd] || null;
+            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || null;
             // inventario específico por producto (no el total consolidado)
             const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
 
