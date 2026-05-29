@@ -729,6 +729,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // cobrosContado ya refleja el neto recibido: (ventasNetas + ivaDebito) × pctContado
 
   // S7: totalPagos con pagos REALES individuales (sin pagoProduccion)
+  // pagoAmortizacion: reembolso del principal al banco (reduce caja Y reduce deuda)
+  const pagoAmortizacion = d.amortizacion || 0;
   const totalPagos = roundBs(
     pagoMP           +  // S4: MP bruto al proveedor
     pagoComisiones   +  // S3: comisión al canal
@@ -740,6 +742,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoAlmacen      +
     pagoIntereses    +
     pagoApertura     +
+    pagoAmortizacion +  // reembolso principal préstamo (equity-neutral: -caja = -deuda)
     pagoIVAPeriodoAnterior +  // IVA trimestre anterior
     pagoIT + pagoIUE +
     pagoOperarios    +
@@ -780,11 +783,39 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
   const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
-  const capitalContable = roundBs(params.capitalContable || d.capitalInicial || params.capitalInicial || (d.activosFijosIniciales + d.cajaInicial) || (params.activosFijosIniciales + params.cajaInicial));
+  // capitalContable = capital PERMANENTE inicial del equipo
+  // R1: usa d.cajaInicial + d.AF (capital real del equipo, soporta capitalInicial por equipo)
+  // R2+: usa params (capital original permanente, no cambia entre rondas)
+  const _isR1 = (d.rondaNumero ?? 1) <= 1;
+  const capitalContable = roundBs(
+    params.capitalContable ||
+    params.capitalInicial  ||
+    (_isR1
+      ? ((d.activosFijosIniciales || 0) + (d.cajaInicial || 0))   // R1: capital real del equipo
+      : ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)))  // R2+: permanente
+  );
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
-  const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
   const totalPasivos    = roundBs(deudaFinal + ivaAPagar);
+
+  // ── ALTERNATIVA 2: Patrimonio DERIVADO — A = P + Pat por construcción ────────
+  // patrimonio = totalActivos − totalPasivos → balance SIEMPRE cuadra (cero descuadre)
+  // capitalContable + resultadoAcumulado se usa para verificar coherencia ER vs Balance
+  const patrimonio      = roundBs(totalActivos - totalPasivos);
+
+  // ── INVARIANTE CONTABLE — Verificación algebraica (asset integrity check) ────
+  // Compara patrimonio derivado vs patrimonio calculado desde ER.
+  // Divergencia esperada: ≤ 5 Bs por redondeo acumulado en operaciones normales.
+  // Divergencia > 500 Bs indica un bug algebraico real en el motor — lanza excepción.
+  const _patrimonioER    = roundBs(capitalContable + resultadoAcumulado);
+  const _divergencia     = Math.abs(patrimonio - _patrimonioER);
+  if (_divergencia > 500) {
+    throw new Error(
+      `[ERROR_CONTABLE] Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
+      `patrimonioBalance=${patrimonio} ≠ capitalContable(${capitalContable})+resAcum(${resultadoAcumulado})=${_patrimonioER} | ` +
+      `Activos=${totalActivos} Pasivos=${totalPasivos} | Δ=${_divergencia.toFixed(2)} Bs`
+    );
+  }
 
   // Brand Equity acumulativo — Etapa 2.1
   const brandEquityFinal = calcularBrandEquity(
@@ -832,6 +863,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoOperarios, pagoMP,
     pagoInnovacion, pagoAlmacen, pagoIntereses, pagoApertura,
     totalPagos, sobregiro, cajaFinal,
+    pagoAmortizacion,  // reembolso principal — para trazabilidad flujo de caja
 
     // Balance
     cxcFinal, invFinalValorizado, afNetos,
@@ -953,8 +985,9 @@ function ejecutarSimulador(decisiones, cfg) {
       const afNetos     = Math.max(0, (d.activosFijosIniciales||80000) - dep);
       const totalActivos= cajaFinal + afNetos;
       const utilidadNeta= -(totalGastos + intSobregiro);
-      const patrimonio  = (d.cajaInicial||0) + (d.activosFijosIniciales||80000)
-                         + (d.resultadoAcumuladoAnterior||0) + utilidadNeta - (d.deudaInicial||0);
+      // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
+      // NO usar Math.max(0,...): si es negativo es quiebra técnica, dato legítimo
+      const patrimonio  = totalActivos - deudaFinal;
       return {
         // Identificadores
         equipo:          d.equipo,
@@ -991,7 +1024,7 @@ function ejecutarSimulador(decisiones, cfg) {
         deudaFinal,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
-        patrimonio:       Math.max(0, patrimonio),
+        patrimonio:       patrimonio,  // derivado: totalActivos - deudaFinal
         // Flujo de Efectivo
         cobrosContado:    cobrosAnterior,
         ingresoPrestamo:  sobregiro,
