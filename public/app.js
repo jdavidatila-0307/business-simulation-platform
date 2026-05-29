@@ -1722,6 +1722,9 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
         + finRowSub('= Ventas netas', r.ventasNetasReal||r.ventasNetas||0, true)
         + finRow('(−) Costo de ventas', -(r.costoVentas||0), false,'neg')
+        + finRow('    MOD — Operarios producción', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')
+        + finRow('    Overhead — Gasto fijo planta', -(r.gastoFijoPlanta||0), false,'neg')
+        + finRow('    Depreciación planta', -(r.depreciacion||0), false,'neg')
         + finRowSub('= Utilidad bruta', r.utilidadBruta||0, true)
         + sec('(-) Gastos Comerciales')
         + finRow('Publicidad',              -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),         false,'neg')
@@ -1731,10 +1734,8 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('Relaciones públicas',     -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')
         + finRow('Fuerza de ventas',        -(r.costoVendedores||0),    false,'neg')
         + sec('(-) Gastos Administrativos')
-        + finRow('Sueldos administrativos (operarios)', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')
-        + finRow('Gastos administrativos fijos',        -(r.gastoAdminFijo||0), false,'neg')
-        + sec('(-) Gastos Operativos de Planta')
-        + finRow('Gasto fijo de planta',    -(r.gastoFijoPlanta||0),    false,'neg')
+        + finRow('Gastos administrativos fijos', -(r.gastoAdminFijo||0), false,'neg')
+        + sec('(-) Gastos Operativos')
         + finRow('Almacenamiento',          -(r.costoAlmacenamiento||0),false,'neg')
         + ((r.gastoInnovacion||0)>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)),false,'neg') : '')
         + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
@@ -4578,6 +4579,9 @@ window.mostrarFinanciero = (n) => {
             + secER('Costo de Ventas')
             + finRow('Costo materia prima neto', -totCVmp, false, 'neg')
             + finRow('Costo calidad / control', -totCVcalid, false, 'neg')
+            + finRow('    MOD — Operarios producción', -gOper, false, 'neg')
+            + finRow('    Overhead — Gasto fijo planta', -gPlanta, false, 'neg')
+            + finRow('    Depreciación planta', -(r.depreciacion||0), false, 'neg')
             + finRowSub('= Total costo de ventas', -r.costoVentas, true)
             + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
             + '<div style="height:4px"></div>'
@@ -4592,11 +4596,9 @@ window.mostrarFinanciero = (n) => {
             + (tieneInvMkt ? finRow('Investigación de mercado', -gInvMkt, false, 'neg') : '')
             // ── GASTOS ADMINISTRATIVOS ──────────────────────────
             + secER('(-) Gastos Administrativos')
-            + finRow('Sueldos operarios de producción', -gOper, false, 'neg')
             + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
-            // ── GASTOS PLANTA ───────────────────────────────────
-            + secER('(-) Gastos Operativos de Planta')
-            + finRow('Gasto fijo de planta', -gPlanta, false, 'neg')
+            // ── GASTOS OPERATIVOS ───────────────────────────────
+            + secER('(-) Gastos Operativos')
             + finRow('Almacenamiento de inventario', -gAlmac, false, 'neg')
             + (tieneInnov ? finRow('Innovación y desarrollo', -gInnov, false, 'neg') : '');
         })()}
