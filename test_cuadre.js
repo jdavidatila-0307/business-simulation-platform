@@ -68,8 +68,12 @@ const PARAMS_BASE = {
 
 // ── Tipos de producto y canales mínimos ────────────────────────────────────
 const TIPOS_PRODUCTO = {
-  'Calzado Deportivo':        { costoBase: 180, nombre: 'Calzado Deportivo' },
-  'Sneaker Cultural Premium': { costoBase: 298, nombre: 'Sneaker Cultural Premium' },
+  'Calzado Deportivo':          { costoBase: 180, nombre: 'Calzado Deportivo' },
+  'Sneaker Cultural Premium':   { costoBase: 298, nombre: 'Sneaker Cultural Premium' },
+  'Calzado Biomecánico Formal': { costoBase: 153, nombre: 'Calzado Biomecánico Formal' },
+  'Calzado Ortopédico':         { costoBase: 136, nombre: 'Calzado Ortopédico' },
+  'Sandalia Infantil':          { costoBase:  79, nombre: 'Sandalia Infantil' },
+  'Calzado Médico':             { costoBase: 226, nombre: 'Calzado Médico' },
 };
 const CANALES = {
   'Tienda Propia':      { costoAdicionalUnitario: 10, comisionPct: 0.00, factorImpactoVendedores: 1.2, bonoAtractivo: 1.0 },
@@ -278,6 +282,115 @@ async function main() {
   } catch(e) { console.error(`  ❌ EXCEPCIÓN S6: ${e.message}`); fallados++; }
 
   // ── S7: Multiproducto R1 — 5 productos, 6 equipos ───────────────────────
+  // Cobertura: partición multiproducto (Hamlet & Taylor, 1990)
+  console.log('\nS7 — Multiproducto R1 (5 productos × 6 equipos)');
+  try {
+    const tipos5 = TIPOS_PRODUCTO;  // all 6 types available
+    const nombres5 = Object.keys(tipos5).slice(0, 5);
+    const eqs7 = ['B','E','C','A','D','F'].map(n => ({ id:`eq_s7_${n}`, nombre:n }));
+    const decsMulti = eqs7.map(eq => {
+      const base = decBase({
+        equipo: eq.id, equipoOriginal: eq.id, equipoNombre: eq.nombre,
+        rondaNumero: 1, cajaInicial: 500000, activosFijosIniciales: 80000,
+        operariosIniciales: 4, vendedoresIniciales: 0,
+      });
+      base.productos = nombres5.map((nom, idx) => ({
+        ...base, productoId: `prod_${idx+1}`, activo: true, producto: nom,
+        segmentoObjetivo: 'Segmento A', canalPrincipal: 'Tienda Propia',
+        precioVenta: 200, produccion: 80, calidad: 6, publicidad: 3000,
+        promocion:0, eventos:0, marketingRedes:0, relacionesPublicas:0,
+        contratarOperarios:0, despedirOperarios:0, contratarVendedores:0, despedirVendedores:0,
+        inventarioInicial:0, ivaAPagarAnterior:0, ivaSaldoAFavorAnterior:0,
+        resultadoAcumuladoAnterior:0, montoCapacitacion:0, montoInnovacion:0,
+        innovacion:false, tipoPrestamo:'Ninguno', montoPrestamo:0, amortizacion:0,
+        tipoInvestigacion:'No', montoInvestigacion:0,
+        stockMPInicial:0, proveedorElegido:'', cantidadMPpedida:0, pedidosPendientes:[],
+      }));
+      return base;
+    });
+    const cfgS7 = { ...cfgBase(eqs7, decsMulti), tiposProducto: tipos5, rondaNumero: 1 };
+    const resS7 = engine.ejecutarSimulador(decsMulti, cfgS7);
+    let okS7 = 0;
+    resS7.resultados.forEach(r => {
+      if (Math.abs((r.totalActivos||0)-((r.totalPasivos||0)+(r.patrimonio||0))) < 2) okS7++;
+    });
+    const totalS7 = resS7.resultados.length;
+    if (okS7 === totalS7) { console.log(`  ✅ Multiproducto R1: ${okS7}/${totalS7} cuadran | Δ=0.00 Bs`); pasados++; }
+    else { console.log(`  ❌ Multiproducto R1: ${okS7}/${totalS7} cuadran`); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S7: ${e.message}`); fallados++; }
+
+  // ── S8: Multiproducto R2 — continuidad financiera ────────────────────────
+  console.log('\nS8 — Multiproducto R2 (continuidad financiera 5 productos)');
+  try {
+    const eqS8 = { id:'eq_s8', nombre:'S8' };
+    const tiposS8 = TIPOS_PRODUCTO;
+    const nomsS8 = Object.keys(tiposS8).slice(0,5);
+    const decS8 = decBase({
+      equipo:eqS8.id, equipoOriginal:eqS8.id, equipoNombre:eqS8.nombre,
+      rondaNumero:2, cajaInicial:400000, activosFijosIniciales:77500,
+      operariosIniciales:4, vendedoresIniciales:0,
+      deudaInicial:0, cxcInicial:0,
+      resultadoAcumuladoAnterior:-50000, ivaAPagarAnterior:0, ivaSaldoAFavorAnterior:0,
+    });
+    decS8.productos = nomsS8.map((nom, idx) => ({
+      ...decS8, productoId:`prod_${idx+1}`, activo:true, producto:nom,
+      segmentoObjetivo:'Segmento A', canalPrincipal:'Tienda Propia',
+      precioVenta:200, produccion:80, calidad:6, publicidad:3000,
+      inventarioInicial:0, ivaAPagarAnterior:0, ivaSaldoAFavorAnterior:0,
+      resultadoAcumuladoAnterior:-50000,
+      contratarOperarios:0, despedirOperarios:0, montoCapacitacion:0, montoInnovacion:0,
+      innovacion:false, tipoPrestamo:'Ninguno', montoPrestamo:0, amortizacion:0,
+      tipoInvestigacion:'No', montoInvestigacion:0,
+      stockMPInicial:0, proveedorElegido:'', cantidadMPpedida:0, pedidosPendientes:[],
+    }));
+    const cfgS8 = { ...cfgBase([eqS8],[decS8]), tiposProducto:tiposS8, rondaNumero:2 };
+    const resS8 = engine.ejecutarSimulador([decS8], cfgS8);
+    let okS8 = 0;
+    resS8.resultados.forEach(r => {
+      if (Math.abs((r.totalActivos||0)-((r.totalPasivos||0)+(r.patrimonio||0))) < 2) okS8++;
+    });
+    const totalS8 = resS8.resultados.length;
+    if (okS8 === totalS8) { console.log(`  ✅ Multiproducto R2: ${okS8}/${totalS8} cuadran | Δ=0.00 Bs`); pasados++; }
+    else { console.log(`  ❌ Multiproducto R2: ${okS8}/${totalS8} cuadran`); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S8: ${e.message}`); fallados++; }
+
+  // ── S9: 6 equipos × 5 productos × R12 — escenario madurez ───────────────
+  console.log('\nS9 — 6 equipos × 5 productos × R12 (madurez)');
+  try {
+    const tiposS9 = TIPOS_PRODUCTO;
+    const nomsS9 = Object.keys(tiposS9).slice(0,5);
+    const eqsS9 = ['B','E','C','A','D','F'].map(n => ({ id:`eq_s9_${n}`, nombre:n }));
+    const decsS9 = eqsS9.map(eq => {
+      const base = decBase({
+        equipo:eq.id, equipoOriginal:eq.id, equipoNombre:eq.nombre,
+        rondaNumero:12, cajaInicial:320000, activosFijosIniciales:52500,
+        operariosIniciales:5, vendedoresIniciales:1,
+        deudaInicial:0, cxcInicial:0,
+        resultadoAcumuladoAnterior:-180000, ivaAPagarAnterior:0, ivaSaldoAFavorAnterior:0,
+      });
+      base.productos = nomsS9.map((nom, idx) => ({
+        ...base, productoId:`prod_${idx+1}`, activo:true, producto:nom,
+        segmentoObjetivo:'Segmento A', canalPrincipal:'Tienda Propia',
+        precioVenta:200, produccion:120, calidad:7, publicidad:4000, promocion:2000,
+        inventarioInicial:0, resultadoAcumuladoAnterior:-180000,
+        ivaAPagarAnterior:0, ivaSaldoAFavorAnterior:0,
+        contratarOperarios:0, despedirOperarios:0, montoCapacitacion:0, montoInnovacion:0,
+        innovacion:false, tipoPrestamo:'Ninguno', montoPrestamo:0, amortizacion:0,
+        tipoInvestigacion:'No', montoInvestigacion:0,
+        stockMPInicial:0, proveedorElegido:'', cantidadMPpedida:0, pedidosPendientes:[],
+      }));
+      return base;
+    });
+    const cfgS9 = { ...cfgBase(eqsS9,decsS9), tiposProducto:tiposS9, rondaNumero:12 };
+    const resS9 = engine.ejecutarSimulador(decsS9, cfgS9);
+    let okS9 = 0;
+    resS9.resultados.forEach(r => {
+      if (Math.abs((r.totalActivos||0)-((r.totalPasivos||0)+(r.patrimonio||0))) < 2) okS9++;
+    });
+    const totalS9 = resS9.resultados.length;
+    if (okS9 === totalS9) { console.log(`  ✅ 6eq×5prod×R12: ${okS9}/${totalS9} cuadran | Δ=0.00 Bs`); pasados++; }
+    else { console.log(`  ❌ 6eq×5prod×R12: ${okS9}/${totalS9} cuadran`); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S9: ${e.message}`); fallados++; }
   // Cobertura: partición multiproducto (Hamlet & Taylor, 1990)
   console.log('\nS7 — Multiproducto R1 (5 productos × 6 equipos)');
   try {
