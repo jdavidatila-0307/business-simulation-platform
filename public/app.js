@@ -3119,6 +3119,12 @@ async function guardarDecision() {
 }
 
 async function enviarDecision() {
+  // Validar rangos críticos antes de enviar
+  const _dec = state.decisiones || {};
+  const contratar = Number(_dec.contratarOperarios ?? 0);
+  const despedir  = Number(_dec.despedirOperarios  ?? 0);
+  if (contratar > 50) return toast('❌ "Contratar operarios" no puede exceder 50 por ronda. Valor ingresado: ' + contratar, 'error');
+  if (despedir  > 50) return toast('❌ "Despedir operarios" no puede exceder 50 por ronda. Valor ingresado: ' + despedir,  'error');
   if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
   try {
     const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));

@@ -533,7 +533,7 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     despedirVendedores: 0,
 
     // Etapa 3.2: Operarios
-    operariosIniciales:  p.operariosIniciales || 4,
+    operariosIniciales:  p.operariosIniciales ?? 4,
     contratarOperarios:  0,
     despedirOperarios:   0,
     montoCapacitacion:   0,
@@ -603,7 +603,7 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     tipoInvestigacion: 'No',
 
     // Estado inicial financiero
-    vendedoresIniciales: p.vendedoresIniciales || 2,
+    vendedoresIniciales: p.vendedoresIniciales ?? 2,
     cajaInicial,                                      // por equipo si eq.capitalInicial, sino global
     capitalInicial,                                   // para que el motor calcule capitalContable correcto
     activosFijosIniciales: af,
@@ -676,7 +676,8 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             // FASE 4: propagar saldo IUE compensable para la siguiente ronda
             decNueva.saldoIUEcompensable  = Math.max(0, resPrev.saldoIUEfinal ?? 0);
             // IVA pago diferido: el ivaAPagar de esta ronda se paga en la siguiente
-            decNueva.ivaAPagarAnterior    = Math.max(0, resPrev.ivaAPagar    ?? 0);
+            decNueva.ivaAPagarAnterior      = Math.max(0, resPrev.ivaAPagar     ?? 0);
+            decNueva.ivaSaldoAFavorAnterior = Math.max(0, resPrev.ivaSaldoAFavor ?? 0);  // crédito fiscal acumulado
           }
 
           rondaBase.decisiones[eq.id] = decNueva;

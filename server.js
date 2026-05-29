@@ -1687,6 +1687,9 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const { parametros } = body;
     if (!parametros) return send(res, 400, { error: 'Datos requeridos' });
+    if (parametros.cajaInicial !== undefined && Number(parametros.cajaInicial) <= 0) {
+      return send(res, 400, { error: '[R2] cajaInicial debe ser mayor a 0. Con caja = 0, los equipos arrancan con sobregiro desde R1.' });
+    }
     const newParams = { ...sim.parametros, ...parametros };
     await storage.updateSimulacion(sim.id, { parametros: newParams });
     return send(res, 200, { ok: true });

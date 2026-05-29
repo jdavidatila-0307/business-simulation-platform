@@ -668,8 +668,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     + Math.round(comisionApertura          * 13/100);
     // costoAlmacenamiento: costo interno sin factura — coherente con S6 y S10
     // NO genera IVA crédito (igual que calidad y operarios)
-  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
-  const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
+  const ivaSaldoAFavorAnt = d.ivaSaldoAFavorAnterior ?? 0;  // crédito fiscal acumulado de ronda anterior
+  const ivaDebitoNeto     = Math.max(0, roundBs(ivaDebito - ivaSaldoAFavorAnt));  // offset con saldo anterior
+  const ivaAPagar  = Math.max(0, roundBs(ivaDebitoNeto - ivaCredito));
+  // Crédito fiscal que excede el débito: se activa como activo corriente y se arrastra (Ley 843)
+  const ivaSaldoAFavor = Math.max(0, roundBs(ivaCredito + ivaSaldoAFavorAnt - ivaDebito));
 
   // IT (3% sobre totalFacturado = precio con IVA) — base correcta Ley 843: ingresos brutos
   const tasaIT      = params.tasaIT ?? 0.03;
@@ -775,7 +778,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   El pago al Estado ocurre en el trimestre siguiente (pagoIVAPeriodoAnterior)
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
-  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos);
+  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
   const capitalContable = roundBs(params.capitalContable || d.capitalInicial || params.capitalInicial || (d.activosFijosIniciales + d.cajaInicial) || (params.activosFijosIniciales + params.cajaInicial));
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
@@ -836,6 +839,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
     // Etapa 3.3: obligaciones fiscales IVA
     ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
+    ivaSaldoAFavor,  // crédito fiscal acumulado (activo corriente cuando ivaCredito > ivaDebito, Ley 843)
 
     // Etapa 3.4: IT e IUE + compensación IUE→IT (Fase 4)
     impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
@@ -1005,7 +1009,7 @@ function ejecutarSimulador(decisiones, cfg) {
         operariosIniciales:  d.operariosIniciales || oper,
         operariosFinales:    oper,
         // Otros
-        capitalContable:  params.capitalContable || params.capitalInicial || 680000,  // usa param configurado por el profesor
+        capitalContable:  params.capitalContable || params.capitalInicial || ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)),  // derivado: nunca hardcodeado
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,
