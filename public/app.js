@@ -1106,7 +1106,7 @@ async function loadAdminDashboard() {
                   const nombre          = r.equipoNombre || r.nombre || r.equipo || '—';
                   const nProds          = r.productos?.length || 1;
                   return `<tr>
-                  <td><strong>${nombre}</strong>${nProds>1?` <span style="font-size:.7rem;color:var(--text3)">(${nProds} prod.)</span>`:''}</td>
+                  <td><strong>${nombre}</strong>${nProds>1?` <span style="font-size:.7rem;color:var(--text3)">(${nProds} prod.)</span>`:''}${r.esBot?` <span style="font-size:.68rem;color:var(--accent3);background:rgba(158,216,48,0.1);padding:1px 5px;border-radius:4px">🤖 Bot IA</span>`:''}</td>
                   <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.segmento||'—').join(', '):segmento}</td>
                   <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.producto||'—').join('<br>'):producto}</td>
                   <td class="num">${fmt.num(demandaAsignada)}</td>
@@ -1122,7 +1122,13 @@ async function loadAdminDashboard() {
                       ? `<button class="btn btn-ghost btn-sm" onclick="forzarConfirmacion('${r.equipo}')">Forzar</button>`
                       : '—'}
                   </td>
-                </tr>`; }).join('')}
+                </tr>
+                ${r.esBot && r._botRazonamiento ? `
+                <tr style="background:rgba(158,216,48,0.03)">
+                  <td colspan="8" style="padding:4px 14px 8px 28px;font-size:.73rem;color:var(--text3);font-style:italic">
+                    💭 <strong style="color:var(--accent3)">${r._botEstrategia||'IA'}</strong>: ${r._botRazonamiento}
+                  </td>
+                </tr>` : ''}`; }).join('')}
             </tbody>
           </table>
         </div>`;
