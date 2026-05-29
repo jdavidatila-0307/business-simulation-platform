@@ -1376,7 +1376,8 @@ async function route(req, res, body) {
           pedidosPendientes:          estado.pedidosPendientesResta ?? [],
           resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
           saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
-          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar       ?? 0),  // IVA diferido
+          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),  // IVA diferido
+          ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),  // crédito fiscal acumulado
         };
 
         // Multiproducto: propagar campos financieros a cada producto[]
@@ -1495,6 +1496,7 @@ async function route(req, res, body) {
             pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
             saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),  // FASE 4
             ivaAPagar:            Math.max(0, p0.ivaAPagar       ?? 0),  // IVA diferido
+            ivaSaldoAFavor:       Math.max(0, p0.ivaSaldoAFavor  ?? 0),  // crédito fiscal acumulado
           };
           totalEmpresas++;
         }

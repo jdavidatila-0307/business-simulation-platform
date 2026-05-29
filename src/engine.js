@@ -671,6 +671,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaSaldoAFavorAnt = d.ivaSaldoAFavorAnterior ?? 0;  // crédito fiscal acumulado de ronda anterior
   const ivaDebitoNeto     = Math.max(0, roundBs(ivaDebito - ivaSaldoAFavorAnt));  // offset con saldo anterior
   const ivaAPagar  = Math.max(0, roundBs(ivaDebitoNeto - ivaCredito));
+  const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
   // Crédito fiscal que excede el débito: se activa como activo corriente y se arrastra (Ley 843)
   const ivaSaldoAFavor = Math.max(0, roundBs(ivaCredito + ivaSaldoAFavorAnt - ivaDebito));
 
