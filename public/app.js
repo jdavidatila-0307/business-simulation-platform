@@ -3780,9 +3780,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr>
             <td class="hoja-label">🏭 Operarios actuales</td>
-            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
+            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 1}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td>
-            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 1) * (p.productividadBase ?? 440))} unid/trim</td>
           </tr>
           ${hojaProductoActivo === 0 ? `
           <tr>
@@ -3874,8 +3874,8 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td>${inp('montoPrestamo',decision.montoPrestamo,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
           <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
-              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number','min="1" max="8" step="1"')}</td>
-              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||2} trim. · Inv: ${p.plazoPrestamoInversion||4} trim.</td><td></td></tr>
+              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number',`min="1" max="${Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)}" step="1"`)}</td>
+              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim.</td><td></td></tr>
           <tr><td class="hoja-label">📉 Amortización (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
@@ -3974,7 +3974,7 @@ if (isEditable) {
           despedirOperarios:   { min:0,  max:50  },
           contratarVendedores: { min:0,  max:10  },
           despedirVendedores:  { min:0,  max:10  },
-          plazoPrestamo:       { min:1,  max:8   },
+          plazoPrestamo:       { min:1,  max: Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40) },
           precioVenta:         { min:0,  max:9999 },
           produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
           montoCapacitacion:   { min:0,  max:50000 },
