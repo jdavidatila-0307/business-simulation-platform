@@ -3722,8 +3722,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
           <tr><td class="hoja-label">🏭 Producción (unidades)</td>
-              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
-              <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||20000)} unid</td>
+              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
+              <td class="hoja-ref">
+                Máx planta: ${fmt.num(p.capacidadMaxProduccion||1500)} u
+                <br><span style="color:var(--accent3);font-size:.75rem">⚠ Cap. efectiva = operarios × ${fmt.num(p.productividadBase||500)} u/op = <strong>${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 1) * (p.productividadBase||500))}</strong> u</span>
+                <br><span style="color:var(--text3);font-size:.73rem">Si produces más de la cap. efectiva, el motor reducirá la producción automáticamente.</span>
+              </td>
               <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
       </table>
@@ -3876,7 +3880,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
           <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
               <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number',`min="1" max="${Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)}" step="1"`)}</td>
-              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim.</td><td></td></tr>
+              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim. <span style="color:var(--accent3);font-size:.75rem">⚠ cambia según tipo</span></td><td></td></tr>
           <tr><td class="hoja-label">📉 Amortización (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
@@ -3969,13 +3973,22 @@ if (isEditable) {
 
         // ── Validación de rangos (Meyer, Design by Contract) ──────────────
         // Los límites HTML max/min son evadibles — se aplica clamp en JS también
+
+        // Plazo máximo dinámico según tipo de préstamo
+        const tipoPrestamoActual = cont.querySelector('[data-hoja-field="tipoPrestamo"]')?.value || 'Ninguno';
+        const plazoMaxDinamico = tipoPrestamoActual === 'Operativo'
+          ? (p?.plazoPrestamoOperativo || 20)
+          : tipoPrestamoActual === 'Inversión'
+            ? (p?.plazoPrestamoInversion || 40)
+            : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
+
         const LIMITES_CAMPO = {
           calidad:             { min:1,  max:10  },
           contratarOperarios:  { min:0,  max:50  },
           despedirOperarios:   { min:0,  max:50  },
           contratarVendedores: { min:0,  max:10  },
           despedirVendedores:  { min:0,  max:10  },
-          plazoPrestamo:       { min:1,  max: Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40) },
+          plazoPrestamo:       { min:1,  max: plazoMaxDinamico },
           precioVenta:         { min:0,  max:9999 },
           produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
           montoCapacitacion:   { min:0,  max:50000 },
@@ -3985,6 +3998,56 @@ if (isEditable) {
           marketingRedes:      { min:0,  max:100000 },
           relacionesPublicas:  { min:0,  max:100000 },
         };
+
+        // Actualizar max del input de plazo cuando cambia el tipo de préstamo
+        if (field === 'tipoPrestamo') {
+          const plazoInput = cont.querySelector('[data-hoja-field="plazoPrestamo"]');
+          if (plazoInput) {
+            const nuevoMax = v_raw === 'Operativo'
+              ? (p?.plazoPrestamoOperativo || 20)
+              : v_raw === 'Inversión'
+                ? (p?.plazoPrestamoInversion || 40)
+                : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
+            plazoInput.max = nuevoMax;
+            // Mostrar aviso con el límite correcto
+            const refCell = plazoInput.closest('tr')?.querySelector('.hoja-ref');
+            if (refCell) {
+              const esOp = v_raw === 'Operativo';
+              const esInv = v_raw === 'Inversión';
+              refCell.innerHTML = esOp
+                ? `<span style="color:var(--accent3)">⚠ Máx. ${p?.plazoPrestamoOperativo||20} trim. (operativo)</span>`
+                : esInv
+                  ? `<span style="color:var(--accent3)">⚠ Máx. ${p?.plazoPrestamoInversion||40} trim. (inversión)</span>`
+                  : `Op: ${p?.plazoPrestamoOperativo||20} trim. · Inv: ${p?.plazoPrestamoInversion||40} trim.`;
+            }
+          }
+        }
+
+        // Aviso de capacidad de producción cuando ingresa producción
+        if (field === 'produccion') {
+          const opIni = productoActivo?.operariosIniciales ?? p?.operariosIniciales ?? 1;
+          const capEf = opIni * (p?.productividadBase ?? 500);
+          const prodInput = el;
+          const refCell = prodInput.closest('tr')?.querySelector('.hoja-ref');
+          if (refCell && v_raw > 0) {
+            if (v_raw > capEf) {
+              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Supera cap. efectiva (${opIni} op. × ${p?.productividadBase||500} = ${capEf} u). El motor ajustará automáticamente.</span>`;
+            } else {
+              const pct = Math.round(v_raw / capEf * 100);
+              refCell.innerHTML = `<span style="color:var(--accent5)">✓ ${pct}% de la cap. efectiva (${capEf} u)</span>`;
+            }
+          }
+        }
+
+        // Aviso cuando contrata operarios
+        if (field === 'contratarOperarios' && v_raw > 0) {
+          const refCell = el.closest('tr')?.querySelector('.hoja-ref');
+          if (refCell) {
+            const opActuales = productoActivo?.operariosIniciales ?? p?.operariosIniciales ?? 1;
+            const nuevaCap   = (opActuales + v_raw) * (p?.productividadBase ?? 500);
+            refCell.innerHTML = `<span style="color:var(--accent5)">→ Nueva cap. efectiva: ${nuevaCap} u/trim</span>`;
+          }
+        }
         const field = el.dataset.hojaField;
         let v = v_raw;
         if (el.type === 'number' && LIMITES_CAMPO[field]) {

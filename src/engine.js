@@ -904,8 +904,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pedidosPendientesResta: d.pedidosPendientesResta ?? [],
 
     // Etapa 3.2: operarios
-    operariosFinales:  d.operariosFinales  ?? d.operariosIniciales  ?? 4,
-    capacidadEfectiva: d.capacidadEfectiva ?? (params.productividadBase ?? 440) * (d.operariosIniciales ?? 4),
+    operariosFinales:  d.operariosFinales ?? d.operariosIniciales ?? (params.operariosIniciales ?? 1),
+    capacidadEfectiva: d.capacidadEfectiva ?? (params.productividadBase ?? 500) * (d.operariosFinales ?? d.operariosIniciales ?? (params.operariosIniciales ?? 1)),
     costoOperarios:    d.costoOperarios    ?? 0,
 
     // Para propagación
