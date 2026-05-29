@@ -107,20 +107,14 @@ function cargarPlantilla(nombre = PLANTILLA_DEFAULT) {
 
 /**
  * Asegura que la carpeta /industrias/ existe.
- * La plantilla por defecto es Calzados_COM540_1_2026_V1 (incluida en el repo).
- * Llama a esta función UNA sola vez, durante el arranque del servidor.
+ * No genera ningún archivo — las plantillas vienen del repositorio.
  */
 function inicializarPlantillaDefault() {
   if (!fs.existsSync(DIR_INDUSTRIAS)) {
     fs.mkdirSync(DIR_INDUSTRIAS, { recursive: true });
-    console.log(`[plantillas] Carpeta industrias/ creada en: ${DIR_INDUSTRIAS}`);
   }
   const disponibles = listarPlantillas();
-  if (disponibles.length === 0) {
-    console.warn('[plantillas] ⚠ No hay plantillas en industrias/ — crea al menos una.');
-  } else {
-    console.log(`[plantillas] Plantillas disponibles: ${disponibles.join(', ')}`);
-  }
+  console.log(`[plantillas] Disponibles: ${disponibles.length ? disponibles.join(', ') : '(ninguna)'}`);
 }
 
 module.exports = { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault, PLANTILLA_DEFAULT };
