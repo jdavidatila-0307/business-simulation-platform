@@ -3721,14 +3721,6 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
               <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
-          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
-              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
-              <td class="hoja-ref">
-                Máx planta: ${fmt.num(p.capacidadMaxProduccion||1500)} u
-                <br><span style="color:var(--accent3);font-size:.75rem">⚠ Cap. efectiva = operarios × ${fmt.num(p.productividadBase||500)} u/op = <strong>${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 1) * (p.productividadBase||500))}</strong> u</span>
-                <br><span style="color:var(--text3);font-size:.73rem">Si produces más de la cap. efectiva, el motor reducirá la producción automáticamente.</span>
-              </td>
-              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
       </table>
     </div>
@@ -3814,6 +3806,20 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             Valor actual: ➕ ${decision.contratarOperarios??0} operarios · ➖ ${decision.despedirOperarios??0} · Capacitación Bs ${fmt.num(decision.montoCapacitacion??0)}
           </td></tr>
           `}
+          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
+              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
+              <td class="hoja-ref">
+                Máx planta: ${fmt.num(p.capacidadMaxProduccion||1500)} u
+                ${(() => {
+                  const opIni      = decision.operariosIniciales ?? p.operariosIniciales ?? 0;
+                  const opContratar = decision.contratarOperarios || 0;
+                  const opFinales   = Math.max(0, opIni + opContratar - (decision.despedirOperarios||0));
+                  const capEf       = opFinales * (p.productividadBase||500);
+                  if (opFinales === 0) return `<br><span style="color:var(--accent4);font-size:.75rem">⚠ Sin operarios. Contrata operarios primero.</span>`;
+                  return `<br><span style="color:var(--accent3);font-size:.75rem">Cap. efectiva: ${opFinales} op × ${fmt.num(p.productividadBase||500)} = <strong>${fmt.num(capEf)}</strong> u</span>`;
+                })()}
+              </td>
+              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
       </table>
     </div>
@@ -4031,16 +4037,20 @@ if (isEditable) {
 
         // Aviso de capacidad de producción cuando ingresa producción
         if (field === 'produccion') {
-          const opIni = productoActivo?.operariosIniciales ?? p?.operariosIniciales ?? 1;
-          const capEf = opIni * (p?.productividadBase ?? 500);
-          const prodInput = el;
-          const refCell = prodInput.closest('tr')?.querySelector('.hoja-ref');
-          if (refCell && v_raw > 0) {
-            if (v_raw > capEf) {
-              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Supera cap. efectiva (${opIni} op. × ${p?.productividadBase||500} = ${capEf} u). El motor ajustará automáticamente.</span>`;
+          const opIni       = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
+          const opContratar = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value || 0);
+          const opDespedir  = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value || 0);
+          const opFinales   = Math.max(0, opIni + opContratar - opDespedir);
+          const capEf       = opFinales * (p?.productividadBase ?? 500);
+          const refCell     = el.closest('tr')?.querySelector('.hoja-ref');
+          if (refCell) {
+            if (opFinales === 0) {
+              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Sin operarios — debes contratar al menos 1 antes de producir. Cap. efectiva = 0 u.</span>`;
+            } else if (v_raw > capEf) {
+              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Supera cap. efectiva (${opFinales} op. × ${p?.productividadBase||500} = ${capEf} u). El motor ajustará automáticamente.</span>`;
             } else {
               const pct = Math.round(v_raw / capEf * 100);
-              refCell.innerHTML = `<span style="color:var(--accent5)">✓ ${pct}% de la cap. efectiva (${capEf} u)</span>`;
+              refCell.innerHTML = `<span style="color:var(--accent5)">✓ ${pct}% de la cap. efectiva (${capEf} u con ${opFinales} operarios)</span>`;
             }
           }
         }
