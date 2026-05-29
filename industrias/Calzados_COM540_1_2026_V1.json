@@ -297,29 +297,32 @@
     {
       "id": "prov_1",
       "nombre": "Cueros Bolivia S.A.",
-      "costoMP": 18.0,
+      "factorCosto": 1.1,
       "calidad": 8,
       "leadTime": 1,
       "loteMin": 50,
-      "loteMax": 2000
+      "loteMax": 2000,
+      "descripcion": "Cuero nacional de alta calidad. 10% más caro que el estándar pero mejora la percepción del producto. Entrega inmediata."
     },
     {
       "id": "prov_2",
       "nombre": "Importado Asia (vía Oruro)",
-      "costoMP": 10.0,
+      "factorCosto": 0.75,
       "calidad": 5,
       "leadTime": 2,
       "loteMin": 100,
-      "loteMax": 3000
+      "loteMax": 3000,
+      "descripcion": "Materiales sintéticos importados. 25% más barato pero calidad inferior. Lead time 2 trimestres — debes pedir con anticipación."
     },
     {
       "id": "prov_3",
       "nombre": "Insumos Locales (Cochabamba)",
-      "costoMP": 14.0,
+      "factorCosto": 0.9,
       "calidad": 6,
       "leadTime": 1,
       "loteMin": 30,
-      "loteMax": 1500
+      "loteMax": 1500,
+      "descripcion": "Materiales regionales. 10% más barato que el estándar, calidad aceptable. Entrega inmediata."
     }
   ]
 }

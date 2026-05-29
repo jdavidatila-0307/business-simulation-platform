@@ -2458,6 +2458,41 @@ async function loadAdminParametros() {
         </div>
       </div>
 
+      <div class="param-card">
+        <div class="param-card-title">🏭 Proveedores de Materia Prima</div>
+        <p style="font-size:.78rem;color:var(--text3);margin:0 0 12px">
+          Factor = multiplicador sobre el costo estándar de MP (costoBase × pctMateriaPrima).
+          Factor 1.10 = 10% más caro · Factor 0.75 = 25% más barato.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proveedor</th>
+              <th>Factor costo</th>
+              <th>Calidad (1-10)</th>
+              <th>Lead time (trim.)</th>
+            </tr></thead>
+            <tbody>
+              ${(ref.proveedores || []).map((pv,i) => `
+                <tr>
+                  <td><strong>${pv.nombre}</strong></td>
+                  <td><input class="param-input" type="number" step="0.01" min="0.1" max="3"
+                    data-prov-idx="${i}" data-prov-field="factorCosto"
+                    value="${pv.factorCosto ?? 1.0}" style="width:90px"/>
+                    <span style="font-size:.7rem;color:var(--text3)"> (1.0 = estándar)</span>
+                  </td>
+                  <td><input class="param-input" type="number" step="1" min="1" max="10"
+                    data-prov-idx="${i}" data-prov-field="calidad"
+                    value="${pv.calidad ?? 5}" style="width:70px"/></td>
+                  <td><input class="param-input" type="number" step="1" min="1" max="4"
+                    data-prov-idx="${i}" data-prov-field="leadTime"
+                    value="${pv.leadTime ?? 1}" style="width:70px"/></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
@@ -2518,10 +2553,23 @@ async function saveParametros() {
     canales[el.dataset.canal][el.dataset.canalField] = +el.value;
   });
 
+  // Guardar proveedores (factorCosto, calidad, leadTime)
+  const proveedoresActual = state.ref?.proveedores || [];
+  const proveedoresNuevos = [...proveedoresActual];
+  document.querySelectorAll('[data-prov-idx]').forEach(el => {
+    const idx   = +el.dataset.provIdx;
+    const field = el.dataset.provField;
+    if (!proveedoresNuevos[idx]) return;
+    proveedoresNuevos[idx] = { ...proveedoresNuevos[idx], [field]: +el.value };
+  });
+
   try {
     await api('PUT','/admin/parametros',    { parametros });
     await api('PUT','/admin/tiposproducto', { tiposProducto });
     await api('PUT','/admin/canales',       { canales });
+    if (proveedoresNuevos.length) {
+      await api('PUT','/admin/proveedores', { proveedores: proveedoresNuevos });
+    }
     toast('✓ Parámetros guardados','success');
     state.ref = await api('GET','/admin/config');
   } catch(e) { toast(e.message,'error'); }
