@@ -521,7 +521,19 @@ async function initAdmin() {
   showScreen('screen-admin');
   setupNav('screen-admin');
   document.getElementById('btnAdminLogout').addEventListener('click', doLogout);
-  // Mostrar gestión de simulaciones como pantalla de inicio
+
+  // Restaurar sim activa desde la sesión del servidor
+  try {
+    const me = await api('GET', '/auth/me');
+    if (me?.simulacionId) {
+      state.currentSimId    = me.simulacionId;
+      state.currentSimNombre = me.simNombre || me.simulacionId;
+      state.ref = await api('GET', '/admin/config');
+      const badge = document.getElementById('simBadge');
+      if (badge && state.currentSimNombre) badge.textContent = `📊 ${state.currentSimNombre}`;
+    }
+  } catch {}
+
   await loadAdminSimulaciones();
 }
 
