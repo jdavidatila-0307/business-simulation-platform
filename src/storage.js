@@ -240,6 +240,17 @@ async function deleteSimulacion(id, ownerId = null) {
   }
 }
 
+// Elimina todas las decisiones de un equipo en una simulación (al borrar el equipo).
+// Cubre tanto el ID exacto como los IDs expandidos por producto (eq_xxx__prod_1).
+async function deleteEquipoDecisiones(simulacionId, equipoId) {
+  await pool.query(
+    `DELETE FROM sim_decisiones
+      WHERE simulacion_id = $1
+        AND (equipo_id = $2 OR equipo_id LIKE $3)`,
+    [simulacionId, equipoId, equipoId + '__%']
+  );
+}
+
 // ============================================================
 //  EQUIPOS (dentro de una simulación)
 // ============================================================
@@ -773,7 +784,7 @@ async function countDecisiones(simulacionId, rondaNumero) {
 module.exports = {
   findUserById, findUserByEmailOrId, findEquipoByNombre, countDecisiones,
   createUser, listUsers, deleteUser,
-  createSimulacion, getSimulacion, listSimulaciones, updateSimulacion, deleteSimulacion,
+  createSimulacion, getSimulacion, listSimulaciones, updateSimulacion, deleteSimulacion, deleteEquipoDecisiones,
   getEquipos, addEquipo, findUserInSimulacion,
   getRonda, updateRonda, ensureRonda, defaultDecision, getRondasAll,
   saveDecision,
