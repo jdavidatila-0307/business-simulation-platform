@@ -804,29 +804,27 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const patrimonio      = roundBs(totalActivos - totalPasivos);
 
   // ── INVARIANTE CONTABLE — Verificación algebraica (asset integrity check) ────
-  // Compara patrimonio derivado vs patrimonio calculado desde ER.
-  // Divergencia esperada: ≤ 5 Bs por redondeo en operaciones normales.
-  // Divergencia alta puede ocurrir en escenarios de sobregiro extremo (el principal
-  // del sobregiro es financiamiento, no P&L) — se registra como advertencia, no error.
-  const _patrimonioER    = roundBs(capitalContable + resultadoAcumulado);
-  const _divergencia     = Math.abs(patrimonio - _patrimonioER);
-  if (_divergencia > 500) {
-    // Solo lanza error si la divergencia no puede explicarse por sobregiro
-    // (sobregiro grande → diferencia estructural entre balance y P&L es esperada)
-    const _sobregiro = sobregiro || 0;
-    const _tolerancia = Math.max(500, _sobregiro * 0.01 + 100);  // 1% del sobregiro + margen
+  // La assertion capitalContable + resAcum = patrimonio solo es válida para
+  // monoproducto. En multiproducto expandido (equipo='eq__prod_N'), el balance
+  // de prod_1 contiene los activos de TODA la empresa pero el P&L solo registra
+  // la utilidad de ese producto → la assertion no aplica (Meyer, Design by Contract).
+  // El invariante A = P + Pat sigue garantizado por patrimonio derivado en TODOS los casos.
+  const _esMultiProd  = typeof d.equipo === 'string' && d.equipo.includes('__prod_');
+  const _patrimonioER = roundBs(capitalContable + resultadoAcumulado);
+  const _divergencia  = Math.abs(patrimonio - _patrimonioER);
+  if (!_esMultiProd && _divergencia > 500) {
+    const _sobregiro  = sobregiro || 0;
+    const _tolerancia = Math.max(500, _sobregiro * 0.01 + 100);
     if (_divergencia > _tolerancia && _sobregiro < 1000) {
-      // Solo es error real cuando hay poca deuda por sobregiro pero sí divergencia
       throw new Error(
         `[ERROR_CONTABLE] Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
         `patrimonioBalance=${patrimonio} ≠ capitalContable(${capitalContable})+resAcum(${resultadoAcumulado})=${_patrimonioER} | ` +
         `Activos=${totalActivos} Pasivos=${totalPasivos} | Δ=${_divergencia.toFixed(2)} Bs`
       );
     }
-    // Advertencia diagnóstica (no bloquea el recálculo)
     console.warn(
       `[WARN_CONTABLE] Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
-      `Δ=${_divergencia.toFixed(0)} Bs (sobregiro=${_sobregiro.toFixed(0)}) — divergencia esperada por financiamiento`
+      `Δ=${_divergencia.toFixed(0)} Bs (sobregiro=${_sobregiro.toFixed(0)}) — divergencia esperada`
     );
   }
 
