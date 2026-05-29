@@ -2286,8 +2286,11 @@ async function loadAdminParametros() {
 
       <div class="param-card">
         <div class="param-card-title">💼 Apertura Financiera por Equipo</div>
-        ${pf('Capital inicial (Bs)','capitalInicial','= Caja inicial + Activos fijos')}
-        ${pf('Capital contable inicial (Bs)','capitalContable','Patrimonio inicial. Si no se define, el motor usa Capital inicial. Si hay deuda inicial: capitalInicial − deudaInicial')}
+        <div class="param-row">
+          <span class="param-hint" style="color:var(--accent3);font-size:.8rem">
+            ℹ Capital contable = Caja inicial + Activos fijos − Deuda inicial (calculado automáticamente)
+          </span>
+        </div>
         ${pf('Caja inicial (Bs)','cajaInicial','Efectivo en cuenta al arrancar')}
         ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales','Maquinaria y equipos')}
         ${pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')}
