@@ -1732,6 +1732,7 @@ async function route(req, res, body) {
       segmentos: sim.segmentos,
       afinidadMatrix: sim.afinidad_matrix,
       competenciaExterna: sim.competencia_externa,
+      proveedores: sim.proveedores || [],
       mercadoSegmentos: calcularMercadoSegmentos(sim.parametros, sim.segmentos),
       codigoAcceso: sim.codigo_acceso,
       simId: sim.id,

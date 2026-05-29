@@ -2288,9 +2288,10 @@ async function loadAdminMercado() {
 async function loadAdminParametros() {
   if (!requireSimSelected('adminParametrosContent')) return;
   const data = await api('GET', '/admin/config');
-  const p  = data.parametros;
-  const tp = data.tiposProducto;
-  const can = data.canales;
+  const p   = data.parametros  || {};
+  const tp  = data.tiposProducto || {};
+  const can = data.canales      || {};
+  const ref = data;
 
   const pf = (label, key, hint='', step='any') => `
     <div class="param-row">
