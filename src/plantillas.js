@@ -14,7 +14,7 @@ const path = require('path');
 const DIR_INDUSTRIAS = path.resolve(__dirname, '..', 'industrias');  // industrias/ en la raíz del proyecto
 
 // Plantilla por defecto cuando no se especifica industria
-const PLANTILLA_DEFAULT = 'jaboncillos_v1';
+const PLANTILLA_DEFAULT = 'Calzados_COM540_1_2026_V1';
 
 /**
  * Lista los nombres de plantillas disponibles en /industrias/.
@@ -106,42 +106,21 @@ function cargarPlantilla(nombre = PLANTILLA_DEFAULT) {
 }
 
 /**
- * Exporta la plantilla por defecto (jaboncillos) leyendo constants.js.
- * Genera el archivo /industrias/jaboncillos_v1.json si no existe,
- * para que la carpeta tenga al menos una plantilla disponible.
- *
+ * Asegura que la carpeta /industrias/ existe.
+ * La plantilla por defecto es Calzados_COM540_1_2026_V1 (incluida en el repo).
  * Llama a esta función UNA sola vez, durante el arranque del servidor.
  */
 function inicializarPlantillaDefault() {
   if (!fs.existsSync(DIR_INDUSTRIAS)) {
     fs.mkdirSync(DIR_INDUSTRIAS, { recursive: true });
+    console.log(`[plantillas] Carpeta industrias/ creada en: ${DIR_INDUSTRIAS}`);
   }
-
-  const defaultPath = path.join(DIR_INDUSTRIAS, `${PLANTILLA_DEFAULT}.json`);
-  if (fs.existsSync(defaultPath)) return; // ya existe
-
-  const {
-    PARAMS, TIPOS_PRODUCTO, CANALES, SEGMENTOS, AFINIDAD_MATRIX, COMPETENCIA_EXTERNA,
-  } = require('./constants');
-
-  const plantillaDefault = {
-    meta: {
-      id:      PLANTILLA_DEFAULT,
-      nombre:  'Industria de Jaboncillos (Jabones de tocador)',
-      version: '1.0',
-      moneda:  'Bs',
-      autor:   'SimNego — UAGRM Ing. Comercial',
-    },
-    params:             PARAMS,
-    tiposProducto:      TIPOS_PRODUCTO,
-    canales:            CANALES,
-    segmentos:          SEGMENTOS,
-    afinidadMatrix:     AFINIDAD_MATRIX,
-    competenciaExterna: COMPETENCIA_EXTERNA,
-  };
-
-  fs.writeFileSync(defaultPath, JSON.stringify(plantillaDefault, null, 2), 'utf8');
-  console.log(`[plantillas] Plantilla por defecto generada en: ${defaultPath}`);
+  const disponibles = listarPlantillas();
+  if (disponibles.length === 0) {
+    console.warn('[plantillas] ⚠ No hay plantillas en industrias/ — crea al menos una.');
+  } else {
+    console.log(`[plantillas] Plantillas disponibles: ${disponibles.join(', ')}`);
+  }
 }
 
 module.exports = { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault, PLANTILLA_DEFAULT };
