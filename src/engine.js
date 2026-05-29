@@ -776,7 +776,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
   const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos);
-  const capitalContable = roundBs(params.capitalContable || params.capitalInicial || (params.activosFijosIniciales + params.cajaInicial));
+  const capitalContable = roundBs(params.capitalContable || d.capitalInicial || params.capitalInicial || (d.activosFijosIniciales + d.cajaInicial) || (params.activosFijosIniciales + params.cajaInicial));
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
