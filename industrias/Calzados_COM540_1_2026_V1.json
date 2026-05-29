@@ -103,6 +103,11 @@
       "costoBase": 79,
       "margenBase": 0.42,
       "descripcion": "Sandalia ergonómica para niños"
+    },
+    "Calzado Médico Especializado": {
+      "costoBase": 226.57,
+      "margenBase": 0.55,
+      "descripcion": "Calzado de alta precisión biomecánica para uso clínico. Diseñado para fascitis, deformidades podológicas y uso hospitalario prolongado. Nicho de alto valor agregado."
     }
   },
   "canales": {
@@ -239,6 +244,14 @@
       -1,
       -1,
       0
+    ],
+    "Calzado Médico Especializado": [
+      -2,
+      2,
+      4,
+      -1,
+      -2,
+      3
     ]
   },
   "competenciaExterna": [
