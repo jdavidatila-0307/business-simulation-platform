@@ -864,7 +864,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastosOp, utilidadNeta,
 
     // KPIs calculados
-    ebit:         roundBs(utilidadNeta_operat),  // EBIT = resultado antes de impuestos
+    ebit:         roundBs(utilidadBruta - gastosOp),      // TRUE EBIT: antes de gastos financieros e impuestos
     roiMarketing: pagoMktTotal > 0 ? roundBs(ventasNetas / pagoMktTotal) : 0,
 
     // Flujo de Efectivo
