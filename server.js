@@ -1636,8 +1636,8 @@ async function route(req, res, body) {
         porEmpresa[eqId].compensacionIT      = porEmpresa[eqId].compensacionIT;
         porEmpresa[eqId].ITefectivoCaja      = porEmpresa[eqId].ITefectivoCaja;
         porEmpresa[eqId].saldoIUEfinal       = porEmpresa[eqId].saldoIUEfinal;
-        porEmpresa[eqId].totalFacturado      = porEmpresa[eqId].totalFacturado
-          || Math.round(((porEmpresa[eqId].impuestoIT||0)/0.03));
+        // totalFacturado = ventasBrutas + ivaDebito (siempre consistente tras sumar)
+        porEmpresa[eqId].totalFacturado      = (porEmpresa[eqId].ventasBrutas||0) + (porEmpresa[eqId].ivaDebito||0);
         porEmpresa[eqId].productos.push(r);
       }
     });

@@ -1699,7 +1699,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       }
       // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
-      html += finRow('Precio facturado al cliente (con IVA)', r.totalFacturado||((r.ventasBrutas||0)+(r.ivaDebito||0)), false,'neutral')
+      html += finRow('Precio facturado al cliente (con IVA)', (r.ventasBrutas||0)+(r.ivaDebito||0), false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
         + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
@@ -4416,7 +4416,8 @@ window.mostrarFinanciero = (n) => {
           // Consolidados de ventas
           const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
           const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
-          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||0);
+          const totTotalFact = (prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0))
+                             + (prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0));
           const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
           const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
           // Costo de ventas detalle
