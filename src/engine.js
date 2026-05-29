@@ -508,8 +508,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const costoMPnetoTot  = costoMPtotal - ivaCredMPtotal;            // neto total exacto
   const cuVarMP    = costoMPnetoTot / produccionMP;                  // neto por par — sin roundBs para preservar precisión
   const _pctCalVar   = params?.pctCostoCalidad ?? 0.08;
-  const _costoBaseCV = (tiposProducto[d.producto] || tiposProducto[d.tipoProducto])?.costoBase ?? 0;
-  const cuVarCalid   = _costoBaseCV * _pctCalVar * ((d.calidad || 5) - 5);  // calidad por par
+  // costoUnitario ya incluye el ajuste de calidad — extraer solo el componente variable MP
+  // cuVarCalid = componente de calidad dentro del CU ya calculado
+  const _costoBaseCV = costoUnitario > 0 ? costoUnitario : 0;
+  const cuVarCalid   = 0;  // ya está incluido en costoUnitario — no duplicar
   const cuVar      = cuVarMP + cuVarCalid;           // CU variable — sin roundBs, preserva precisión
 
   // invFinalValorizado usa cuVar (CU variable real) — consistente con costoVentas
@@ -715,9 +717,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
-  const _pctCalPago  = params?.pctCostoCalidad ?? 0.08;
-  const _costoBasePago = (tiposProducto[d.producto]?.costoBase || 0);
-  const pagoCalidad    = roundBs(_costoBasePago * _pctCalPago * Math.max(0, (d.calidad||5) - 5) * (d.produccion || 0)); // S10: calidad
+  // pagoCalidad: componente de calidad sobre 5 × unidades producidas
+  // Se calcula desde costoCalidadUnit que viene del resultado (ya tiene tiposProducto)
+  const _pctCalPago    = params?.pctCostoCalidad ?? 0.08;
+  const pagoCalidad    = roundBs((d.costoCalidadUnit || 0) * (d.produccion || 0)); // S10: calidad
   const pagoComisiones = comisiones;             // S3: comisión sale de caja
   const pagoMP         = pagoMPbruto;            // S4: MP bruto sale de caja
 
