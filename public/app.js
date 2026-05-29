@@ -3877,9 +3877,13 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td>${ta('finanzas','¿Necesitas financiamiento? ¿Por qué?')}</td></tr>
           <tr><td class="hoja-label">💵 Monto (Bs)</td>
               <td>${inp('montoPrestamo',decision.montoPrestamo,'number','min="0" step="1000"')}</td>
-              <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
+              <td class="hoja-ref">Escribe el monto en Bs que necesitas. Comisión apertura ${fmt.pct(p.comisionAperturaPrestamo||0.01)} se descuenta automáticamente.</td><td></td></tr>
           <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
-              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number',`min="1" max="${Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)}" step="1"`)}</td>
+              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number',`min="1" max="${
+                decision.tipoPrestamo === 'Operativo' ? (p.plazoPrestamoOperativo||20) :
+                decision.tipoPrestamo === 'Inversión' ? (p.plazoPrestamoInversion||40) :
+                Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)
+              }" step="1"`)}</td>
               <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim. <span style="color:var(--accent3);font-size:.75rem">⚠ cambia según tipo</span></td><td></td></tr>
           <tr><td class="hoja-label">📉 Amortización (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
@@ -3961,7 +3965,7 @@ if (isEditable) {
   cont.querySelectorAll('[data-hoja-field]').forEach(el => {
 
     el.addEventListener(
-      el.type === 'checkbox' ? 'change' : 'input',
+      (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input',
       () => {
 
         const field = el.dataset.hojaField;   // ← DECLARAR PRIMERO
