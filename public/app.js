@@ -2634,8 +2634,26 @@ async function loadAdminAfinidad() {
 }
 
 function renderAfinidadEditor() {
-  const productos = Object.keys(afinidadLocal);
+  // ── Inicializar matriz si está vacía ──────────────────────────────────────
+  // Si la sim es nueva, afinidadLocal puede ser {} — inicializar con todos los productos
   const segNombres = segmentosForAfinidad.map(s => s.nombre);
+  let productos = Object.keys(afinidadLocal);
+
+  // Si no hay productos en la matriz, intentar obtenerlos del state
+  if (!productos.length) {
+    const tiposProducto = state.ref?.tipos_producto || state.ref?.tiposProducto || {};
+    productos = Object.keys(tiposProducto);
+    // Inicializar cada producto con array de ceros
+    productos.forEach(p => { afinidadLocal[p] = Array(segNombres.length).fill(0); });
+  }
+
+  // Asegurar que cada producto tiene el array correcto de longitud
+  productos.forEach(p => {
+    if (!Array.isArray(afinidadLocal[p]) || afinidadLocal[p].length < segNombres.length) {
+      const prev = Array.isArray(afinidadLocal[p]) ? afinidadLocal[p] : [];
+      afinidadLocal[p] = segNombres.map((_, i) => prev[i] ?? 0);
+    }
+  });
 
   const colorCell = v => {
     if (v >= 3)  return 'background:rgba(6,255,165,.15);color:var(--accent5)';
@@ -2644,7 +2662,13 @@ function renderAfinidadEditor() {
     return 'background:rgba(255,107,107,.12);color:var(--accent4)';
   };
 
-  const headerCols = segNombres.map(n=>`<th style="padding:8px 6px;font-size:.68rem;text-align:center;white-space:nowrap;max-width:90px;overflow:hidden">${n}</th>`).join('');
+  // Cabeceras con texto vertical y tooltip completo
+  const headerCols = segNombres.map(n => `
+    <th title="${n}" style="padding:6px 4px;font-size:.62rem;text-align:center;min-width:80px;max-width:110px">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;
+                  line-height:1.3;max-height:130px;overflow:hidden;cursor:help;
+                  font-weight:600;letter-spacing:.01em">${n}</div>
+    </th>`).join('');
 
   const rows = productos.map(prod => {
     const vals = afinidadLocal[prod] || [];
@@ -2657,19 +2681,32 @@ function renderAfinidadEditor() {
           style="width:52px;text-align:center;padding:4px;border-radius:4px;border:1px solid var(--border2);${colorCell(v)};font-family:var(--font-mono);font-size:.82rem;outline:none"/>
       </td>`;
     }).join('');
-    return `<tr><td style="padding:8px 12px;font-weight:600;white-space:nowrap">${prod}</td>${cells}</tr>`;
+    return `<tr>
+      <td style="padding:8px 12px;font-weight:600;white-space:nowrap;font-size:.8rem">${prod}</td>
+      ${cells}
+    </tr>`;
   }).join('');
 
+  const sinProductos = !productos.length;
+
   document.getElementById('adminAfinidadContent').innerHTML = `
-    <div class="table-wrap">
-      <table style="border-collapse:collapse;width:100%">
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;width:100%;min-width:${80 + segNombres.length * 90}px">
         <thead>
-          <tr>
-            <th style="padding:8px 12px;text-align:left;background:var(--bg3)">Producto \\ Segmento</th>
+          <tr style="background:var(--bg3)">
+            <th style="padding:8px 12px;text-align:left;white-space:nowrap;font-size:.8rem;min-width:180px">
+              Producto \\ Segmento
+            </th>
             ${headerCols}
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>
+          ${sinProductos
+            ? `<tr><td colspan="${segNombres.length+1}" style="padding:20px;text-align:center;color:var(--text3)">
+                Sin productos configurados. Verifica los tipos de producto en Parámetros.
+               </td></tr>`
+            : rows}
+        </tbody>
       </table>
     </div>
     <div style="margin-top:12px;font-size:.78rem;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
@@ -2677,6 +2714,7 @@ function renderAfinidadEditor() {
       <span style="color:var(--accent2)">■ +1 Aceptable</span>
       <span style="color:var(--text3)">■ 0 Neutro</span>
       <span style="color:var(--accent4)">■ -2 Mal ajuste</span>
+      <span style="color:var(--text3);font-style:italic">Hover sobre cabecera para ver nombre completo del segmento</span>
     </div>
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveAfinidad">💾 Guardar Matriz</button>
