@@ -2015,7 +2015,8 @@ function buildAdminResultsHTML(rd) {
     + row('Caja y equivalentes',          r => r.cajaFinal||0)
     + row('Cuentas por cobrar (CxC)',     r => r.cxcFinal||0)
     + row('Inventarios (valorizado)',     r => r.invFinalValorizado||0)
-    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0))
+    + ((eqs.some(r=>(r.ivaSaldoAFavor||0)>0)) ? row('IVA Crédito Fiscal acumulado', r => r.ivaSaldoAFavor||0) : '')
+    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaSaldoAFavor||0))
     + sec('A · Activo No Corriente')
     + row('Activos fijos brutos',         r => (r.afNetos||0)+(r.depreciacion||0))
     + row('Depreciación acumulada',       r => r.depreciacion||0, true)
@@ -2031,7 +2032,7 @@ function buildAdminResultsHTML(rd) {
     + tot('TOTAL PATRIMONIO',             r => r.patrimonio||0)
     + (() => {
         const checks = eqs.map(r => {
-          const pp = (r.deudaFinal||0)+(r.patrimonio||0);
+          const pp = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.patrimonio||0);
           const ta = r.totalActivos||0;
           const ok = Math.abs(pp-ta) < 2;
           return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(pp)+(ok?'':' ⚠')+'</td>';
