@@ -2293,13 +2293,16 @@ async function loadAdminParametros() {
   const can = data.canales      || {};
   const ref = data;
 
-  // Si la sim no tiene parámetros, cargar defaults desde V1
-  if (!Object.keys(p).length) {
+  // Si la sim no tiene parámetros ni proveedores, cargar defaults desde V1
+  let proveedoresDefault = data.proveedores || [];
+  if (!Object.keys(p).length || !proveedoresDefault.length) {
     try {
       const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
-      if (v1?.params) p = v1.params;
+      if (v1?.params && !Object.keys(p).length) p = v1.params;
+      if (v1?.proveedores?.length && !proveedoresDefault.length) proveedoresDefault = v1.proveedores;
     } catch {}
   }
+  ref.proveedores = proveedoresDefault;
 
   const pf = (label, key, hint='', step='any') => `
     <div class="param-row">
