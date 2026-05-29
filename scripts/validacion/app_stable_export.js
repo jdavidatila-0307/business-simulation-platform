@@ -1,0 +1,4055 @@
+'use strict';
+// ─────────────────────────────────────────────────────────────
+//  SIMULADOR MARKETING — FRONTEND UNIFICADO
+//  Maneja: Login · Admin · Equipo
+// ─────────────────────────────────────────────────────────────
+
+const fmt = {
+  bs:  v => `Bs ${(+v||0).toLocaleString('es-BO',{maximumFractionDigits:0})}`,
+  num: v => (+v||0).toLocaleString('es-BO',{maximumFractionDigits:0}),
+  pct: v => `${((+v||0)*100).toFixed(2)}%`,
+  d:   (v,n=2) => (+v||0).toFixed(n),
+  dt:  s => s ? new Date(s).toLocaleString('es-BO',{dateStyle:'short',timeStyle:'short'}) : '—',
+};
+
+let charts = {};
+let state = { me: null, ref: null, decisiones: null, resultados: null };
+
+// modificaciones en public/app.js (listener WebSocket + UI de bots + selector de industria)
+// =============================================================================
+// INSTRUCCIONES DE APLICACIÓN:
+//
+//   1. BLOQUE A: Añadir el módulo WS_CLIENT justo DESPUÉS de la declaración
+//      de `let state = { ... }` (alrededor de la línea 16).
+//
+//   2. BLOQUE B: En la función `doLogin()`, añadir `wsClient.conectar()`
+//      DESPUÉS de que el login es exitoso y antes de retornar.
+//      Busca: `toast(\`Bienvenido...`
+//
+//   3. BLOQUE C: Añadir el selector de industria al formulario de nueva
+//      simulación. Busca el div con id="newSimCopyFrom" y añade el campo
+//      después.
+//
+//   4. BLOQUE D: En `crearSimulacion()`, añadir la lectura del campo industria
+//      al construir el body del POST.
+//
+//   5. BLOQUE E: Añadir la sección de Bots al final de `loadAdminEquipos()`.
+//      El bloque se añade después del innerHTML del equiposTableWrap.
+//
+//   6. BLOQUE F: Añadir las funciones de gestión de bots (window.*Bot*).
+//      Añadir después de `window.cambiarPassword`.
+// =============================================================================
+
+
+// ══ BLOQUE A — módulo WebSocket del cliente (añadir tras `let state = ...`) ═══
+
+// ── WebSocket client ─────────────────────────────────────────────────────────
+// Gestiona la conexión en tiempo real con el servidor.
+// Se conecta automáticamente al seleccionar una simulación.
+const wsClient = (() => {
+  let socket = null;
+  let simIdActivo = null;
+  let intentosReconexion = 0;
+  const MAX_INTENTOS = 8;
+  const DELAY_BASE_MS = 1500;
+
+  function conectar(simId) {
+    // Si ya hay conexión para esta sim, no reconectar
+    if (socket && socket.readyState === WebSocket.OPEN && simIdActivo === simId) return;
+    // Cerrar conexión anterior si existe
+    if (socket) { socket.close(); socket = null; }
+
+    simIdActivo  = simId || state.currentSimId;
+    if (!simIdActivo) return;  // sin sim activa, no conectar
+
+    const rol      = state.me?.rol || 'equipo';
+    const equipoId = state.me?.id  || '';
+    const proto    = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url      = `${proto}//${location.host}/ws?simId=${simIdActivo}&rol=${rol}&equipoId=${equipoId}`;
+
+    try {
+      socket = new WebSocket(url);
+    } catch (e) {
+      console.warn('[ws] No se pudo crear WebSocket:', e.message);
+      return;
+    }
+
+    socket.onopen = () => {
+      intentosReconexion = 0;
+      console.log(`[ws] ✓ Conectado a sim "${simIdActivo}"`);
+    };
+
+    socket.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      manejarEventoWS(msg.evento, msg.datos);
+    };
+
+    socket.onclose = (evt) => {
+      console.log(`[ws] Conexión cerrada (código ${evt.code})`);
+      socket = null;
+      // Reconexión exponencial (solo si fue un cierre inesperado)
+      if (evt.code !== 1000 && intentosReconexion < MAX_INTENTOS) {
+        const delay = DELAY_BASE_MS * Math.pow(1.5, intentosReconexion);
+        intentosReconexion++;
+        console.log(`[ws] Reconectando en ${Math.round(delay / 1000)}s... (intento ${intentosReconexion})`);
+        setTimeout(() => conectar(simIdActivo), delay);
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.warn('[ws] Error de conexión WebSocket');
+    };
+  }
+
+  function desconectar() {
+    if (socket) { socket.close(1000, 'logout'); socket = null; }
+    simIdActivo = null;
+    intentosReconexion = 0;
+  }
+
+  return { conectar, desconectar };
+})();
+
+/**
+ * Maneja los eventos recibidos por WebSocket.
+ * Añade nuevos eventos aquí sin tocar el resto de la aplicación.
+ *
+ * @param {string} evento  Nombre del evento (ej. 'ronda_calculada')
+ * @param {Object} datos   Payload del evento
+ */
+function manejarEventoWS(evento, datos = {}) {
+  switch (evento) {
+
+    case 'conectado':
+      // Confirmación de conexión — silencioso
+      break;
+
+    case 'pong':
+      // Respuesta de heartbeat — silencioso
+      break;
+
+    case 'ronda_calculada': {
+      // ── Notificación principal: el profesor ejecutó la ronda ──────────────
+      const { ronda, lider, equiposSimulados, mensaje } = datos;
+
+      // Toast persistente (5 segundos) con más visibilidad
+      toastWS(
+        `⚡ Ronda ${ronda} calculada — ${equiposSimulados} equipos` +
+        (lider ? ` · Líder: ${lider.equipo}` : ''),
+        'success',
+        5000
+      );
+
+      // Si el usuario es un equipo, actualizar su dashboard automáticamente
+      if (state.me?.rol === 'equipo') {
+        // Pequeño delay para que el servidor termine de escribir en la BD
+        setTimeout(() => {
+          loadHojaDecision?.().catch(() => {});
+          loadResultados?.().catch(() => {});
+        }, 1200);
+      }
+
+      // Si el usuario es admin/profesor, refrescar el dashboard
+      if (state.me?.rol === 'superadmin' || state.me?.rol === 'profesor') {
+        setTimeout(() => loadAdminDashboard?.().catch(() => {}), 1200);
+      }
+      break;
+    }
+
+    case 'ronda_abierta': {
+      const { ronda } = datos;
+      toastWS(`🟢 Ronda ${ronda} abierta — ya puedes ingresar tus decisiones`, 'info', 5000);
+      if (state.me?.rol === 'equipo') {
+        setTimeout(() => loadHojaDecision?.().catch(() => {}), 800);
+      }
+      break;
+    }
+
+    case 'presim_disponible': {
+      toastWS('📊 Pre-simulación disponible — revisa las proyecciones antes de confirmar', 'info', 6000);
+      break;
+    }
+
+    default:
+      console.log('[ws] Evento no manejado:', evento, datos);
+  }
+}
+
+/**
+ * Toast especial para eventos WebSocket: más grande, dura más y tiene botón de cierre.
+ * A diferencia del toast() estándar, no usa el elemento #toast porque queremos
+ * que coexistan con los toasts normales.
+ */
+function toastWS(msg, tipo = 'success', duracion = 5000) {
+  // Reutilizar el sistema de toast existente si está disponible
+  if (typeof toast === 'function') {
+    toast(msg, tipo);
+    return;
+  }
+  // Fallback: crear un div temporal
+  const el = document.createElement('div');
+  el.style.cssText =
+    'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+    'background:#1e293b;color:#f8fafc;padding:12px 20px;border-radius:8px;' +
+    'font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);max-width:420px;text-align:center';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), duracion);
+}
+
+
+// ── Utilidades globales de contraseña ──────────────────────
+window.toggleInputPw = (inputId, btn) => {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const isHidden = inp.type === 'password';
+  inp.type = isHidden ? 'text' : 'password';
+  btn.textContent = isHidden ? '🔒' : '👁';
+  btn.title = isHidden ? 'Ocultar' : 'Mostrar/ocultar';
+};
+
+// ── Toast ──────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast show ${type}`;
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+// ── API ────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers:{'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Error de red');
+  return data;
+}
+
+// ── Screens ────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.style.display = 'none';
+    s.classList.add('hidden');
+  });
+  const s = document.getElementById(id);
+  s.style.display = 'flex';
+  s.classList.remove('hidden');
+}
+
+// ── Nav (views inside a screen) ────────────────────────────
+function setupNav(screenId) {
+  const screen = document.getElementById(screenId);
+  screen.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      screen.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      screen.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(btn.dataset.view)?.classList.add('active');
+      const titles = {
+        'admin-simulaciones':'Simulaciones', 'admin-dashboard':'Dashboard', 'admin-equipos':'Equipos',
+        'admin-rondas':'Control de Rondas', 'admin-resultados':'Resultados',
+        'admin-mercado':'Mercado', 'admin-parametros':'Parámetros',
+        'admin-segmentos':'Segmentos',
+        'eq-hoja':'Hoja de Decisión', 'eq-financiero':'Estados Financieros',
+        'eq-resultados':'KPIs', 'eq-creditos':'Mis Créditos', 'eq-reportes':'Investigación y Ranking',
+        'admin-creditos':'Reporte de Créditos', 'admin-afinidad':'Matriz de Afinidad', 'admin-competencia':'Competencia Externa',
+      };
+      const tt = document.getElementById(screenId === 'screen-admin' ? 'adminTopTitle' : 'equipoTopTitle');
+      if (tt) tt.textContent = titles[btn.dataset.view] || '';
+      if (btn.dataset.view === 'admin-simulaciones') loadAdminSimulaciones();
+      if (btn.dataset.view === 'eq-hoja') loadHojaDecision();
+      if (btn.dataset.view === 'eq-financiero') loadEquipoFinanciero();
+      if (btn.dataset.view === 'eq-resultados') loadEquipoResultados();
+      if (btn.dataset.view === 'eq-creditos') loadEquipoCreditos();
+      if (btn.dataset.view === 'eq-reportes') loadEquipoReportes();
+      if (btn.dataset.view === 'eq-dashboard') loadEquipoDashboard();
+      if (btn.dataset.view === 'admin-afinidad') loadAdminAfinidad();
+      if (btn.dataset.view === 'admin-competencia') loadAdminCompetencia();
+      if (btn.dataset.view === 'admin-creditos') loadAdminCreditos();
+      if (btn.dataset.view === 'admin-dashboard') loadAdminDashboard();
+      if (btn.dataset.view === 'admin-equipos') loadAdminEquipos();
+      if (btn.dataset.view === 'admin-rondas') loadAdminRondas();
+      if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
+      if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
+      if (btn.dataset.view === 'admin-parametros') loadAdminParametros();
+      if (btn.dataset.view === 'admin-segmentos') loadAdminSegmentos();
+      if (btn.dataset.view === 'admin-profesores') loadAdminProfesores();
+      if (btn.dataset.view === 'eq-manual') { buildManual(); }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LOGIN
+// ═══════════════════════════════════════════════════════════
+function initLogin() {
+  document.getElementById('loginId').addEventListener('keydown', e => e.key==='Enter' && doLogin());
+  document.getElementById('loginPass').addEventListener('keydown', e => e.key==='Enter' && doLogin());
+  document.getElementById('btnLogin').addEventListener('click', doLogin);
+  const btnManual = document.getElementById('btnVerManualLogin');
+  if (btnManual) btnManual.addEventListener('click', buildManual);
+  initRegistroUI();
+}
+
+async function doLogin() {
+  const id   = document.getElementById('loginId').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl  = document.getElementById('loginError');
+  const hintEl = document.getElementById('loginHint');
+  errEl.textContent = '';
+  if (hintEl) hintEl.style.display = 'none';
+  const btn = document.getElementById('btnLogin');
+  btn.textContent = 'Ingresando...'; btn.disabled = true;
+  try {
+    const data = await api('POST','/auth/login',{id,password:pass});
+    state.me = data;
+    wsClient.conectar(data.simulacionId || state.currentSimId);  // ← NUEVA LÍNEA
+    if (data.rol === 'admin' || data.rol === 'superadmin' || data.rol === 'profesor') await initAdmin();
+    else await initEquipo();
+  } catch(e) {
+    errEl.textContent = e.message;
+    // BUG #5 CORREGIDO: hint contextual si el identificador no parece email
+    if (hintEl && !id.includes('@') && e.message.toLowerCase().includes('contraseña')) {
+      hintEl.textContent = '💡 ¿Eres profesor? Intenta ingresar con tu correo electrónico.';
+      hintEl.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = 'Ingresar →'; btn.disabled = false;
+  }
+}
+
+// ── Registro ───────────────────────────────────────────────
+let numMiembros = 0;
+
+function buildMiembroRow(idx) {
+  return `
+    <div class="miembro-row" id="miembro_${idx}">
+      <div class="miembro-header">
+        <span class="miembro-num">Integrante ${idx + 1}</span>
+        ${idx > 0 ? `<button class="btn btn-ghost btn-sm btn-remove-miembro" data-idx="${idx}">✕ Quitar</button>` : ''}
+      </div>
+      <div class="miembro-grid">
+        <div class="form-group">
+          <label class="form-label">Apellido Paterno <span class="req">*</span></label>
+          <input class="form-input" data-miembro="${idx}" data-campo="apellidoPaterno" placeholder="Ej: García"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Apellido Materno <span class="req">*</span></label>
+          <input class="form-input" data-miembro="${idx}" data-campo="apellidoMaterno" placeholder="Ej: López"/>
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label class="form-label">Nombres <span class="req">*</span></label>
+          <input class="form-input" data-miembro="${idx}" data-campo="nombres" placeholder="Ej: Juan Carlos"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input class="form-input" data-miembro="${idx}" data-campo="telefono" placeholder="Ej: 70012345" type="tel"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nro. de Registro <span class="req">*</span></label>
+          <input class="form-input" data-miembro="${idx}" data-campo="nroRegistro" placeholder="Ej: 20210345"/>
+        </div>
+      </div>
+    </div>`;
+}
+
+function addMiembroRow() {
+  if (numMiembros >= 5) { toast('Máximo 5 integrantes por equipo', 'info'); return; }
+  const container = document.getElementById('miembrosContainer');
+  const div = document.createElement('div');
+  div.innerHTML = buildMiembroRow(numMiembros);
+  container.appendChild(div.firstElementChild);
+  numMiembros++;
+  // bind remove buttons
+  container.querySelectorAll('.btn-remove-miembro').forEach(btn => {
+    btn.onclick = () => {
+      document.getElementById(`miembro_${btn.dataset.idx}`)?.remove();
+    };
+  });
+}
+
+function getMiembrosData() {
+  const container = document.getElementById('miembrosContainer');
+  const rows = container.querySelectorAll('.miembro-row');
+  return Array.from(rows).map(row => {
+    const get = campo => row.querySelector(`[data-campo="${campo}"]`)?.value?.trim() || '';
+    return {
+      apellidoPaterno: get('apellidoPaterno'),
+      apellidoMaterno: get('apellidoMaterno'),
+      nombres:         get('nombres'),
+      telefono:        get('telefono'),
+      nroRegistro:     get('nroRegistro'),
+    };
+  });
+}
+
+// Pantalla de confirmación de credenciales post-registro
+function showCredencialesConfirmacion(nombre, loginNombre, passwordTexto, onContinue) {
+  const card = document.getElementById('cardRegistro');
+  card.innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:48px;margin-bottom:8px">✅</div>
+      <h2 style="font-size:1.1rem;font-weight:700;color:var(--accent5)">¡Equipo registrado!</h2>
+      <p style="font-size:.84rem;color:var(--text2);margin-top:6px">${nombre}</p>
+    </div>
+
+    <div style="background:rgba(255,209,102,.08);border:2px solid rgba(255,209,102,.4);border-radius:var(--r-lg);padding:20px;margin-bottom:16px">
+      <p style="font-family:var(--font-mono);font-size:.68rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">⚠ GUARDA ESTOS DATOS — LOS NECESITAS PARA REINGRESAR</p>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:.74rem;color:var(--text3);display:block;margin-bottom:4px">Para ingresar usa:</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input readonly style="flex:1;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);color:var(--accent3);font-family:var(--font-mono);font-size:.9rem;font-weight:700" value="${loginNombre}" id="credNombre"/>
+          <button class="btn btn-ghost btn-sm" onclick="copiarCred('credNombre','nombre')">📋</button>
+        </div>
+        <p style="font-size:.7rem;color:var(--text3);margin-top:4px">Puedes ingresar con el nombre de tu equipo</p>
+      </div>
+
+      <div>
+        <label style="font-size:.74rem;color:var(--text3);display:block;margin-bottom:4px">Contraseña:</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="pw-input-wrap" style="flex:1">
+            <input readonly id="credPass" type="password" style="width:100%;padding:8px 36px 8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--font-mono);font-size:.9rem" value="${passwordTexto}"/>
+            <button type="button" class="btn-eye-input" onclick="toggleInputPw('credPass',this)">👁</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="copiarCred('credPass','contraseña')">📋</button>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:.78rem;color:var(--text3);text-align:center;margin-bottom:16px">
+      Anota o fotografía estos datos ahora.<br>El profesor también puede verlos en su panel de administración.
+    </p>
+
+    <button class="btn btn-success btn-full" id="btnEntrarSimulador">Entrar al Simulador →</button>
+  `;
+
+  document.getElementById('btnEntrarSimulador').addEventListener('click', () => {
+    onContinue();
+  });
+}
+
+window.copiarCred = (inputId, label) => {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const val = el.value;
+  navigator.clipboard?.writeText(val).then(() => {
+    toast(`✓ ${label} copiado al portapapeles`, 'success');
+  }).catch(() => {
+    // fallback para contextos sin clipboard API
+    el.type = 'text';
+    el.select();
+    document.execCommand('copy');
+    toast(`✓ ${label} copiado`, 'success');
+  });
+};
+function initRegistroUI() {
+  // Mostrar/ocultar cards
+  document.getElementById('btnIrRegistro').addEventListener('click', () => {
+    document.getElementById('cardLogin').style.display = 'none';
+    document.getElementById('cardRegistro').style.display = 'block';
+    if (numMiembros === 0) { addMiembroRow(); } // primer integrante
+  });
+  document.getElementById('btnVolverLogin').addEventListener('click', () => {
+    document.getElementById('cardRegistro').style.display = 'none';
+    document.getElementById('cardLogin').style.display = 'block';
+  });
+  document.getElementById('btnAgregarMiembro').addEventListener('click', addMiembroRow);
+  document.getElementById('btnRegistrar').addEventListener('click', doRegistro);
+  document.getElementById('regPassword').addEventListener('keydown', e => e.key==='Enter' && doRegistro());
+}
+
+// ── Validar código de simulación en tiempo real ─────────────
+let _codigoTimer = null;
+window.validarCodigo = (val) => {
+  const el = document.getElementById('codigoStatus');
+  if (!el) return;
+  clearTimeout(_codigoTimer);
+  if (val.length < 4) { el.textContent = ''; return; }
+  _codigoTimer = setTimeout(async () => {
+    try {
+      const r = await api('POST','/auth/validar-codigo',{codigo:val});
+      el.innerHTML = r.valido
+        ? `<span style="color:var(--accent5)">✓ Simulación encontrada: <strong>${r.nombre}</strong></span>`
+        : `<span style="color:var(--accent4)">✗ Código no válido o simulación archivada</span>`;
+    } catch { el.textContent = ''; }
+  }, 400);
+};
+
+async function doRegistro() {
+  const errEl = document.getElementById('registroError');
+  errEl.textContent = '';
+  const nombreEquipo    = document.getElementById('regNombreEquipo').value.trim();
+  const password        = document.getElementById('regPassword').value;
+  const passwordConf    = document.getElementById('regPasswordConfirm').value;
+  const codigoSimulacion= (document.getElementById('regCodigo')?.value||'').trim().toUpperCase();
+  const miembros        = getMiembrosData();
+
+  if (!nombreEquipo)             return errEl.textContent = 'El nombre del equipo es requerido.';
+  if (!password)                 return errEl.textContent = 'La contraseña es requerida.';
+  if (password.length < 4)       return errEl.textContent = 'La contraseña debe tener al menos 4 caracteres.';
+  if (password !== passwordConf) return errEl.textContent = 'Las contraseñas no coinciden.';
+  if (!codigoSimulacion)         return errEl.textContent = 'El código de simulación es requerido. Solicítalo a tu profesor.';
+
+  const btn = document.getElementById('btnRegistrar');
+  btn.textContent = 'Registrando...'; btn.disabled = true;
+  try {
+    const data = await api('POST', '/auth/registro', { nombreEquipo, miembros, password, codigoSimulacion });
+    state.me = data;
+    showCredencialesConfirmacion(data.nombre, data.nombre, data.passwordPlain || password, () => {
+      initEquipo();
+    });
+  } catch(e) {
+    errEl.textContent = e.message;
+    btn.textContent = '✓ Registrar Equipo'; btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ADMIN
+// ═══════════════════════════════════════════════════════════
+async function initAdmin() {
+  showScreen('screen-admin');
+  setupNav('screen-admin');
+  document.getElementById('btnAdminLogout').addEventListener('click', doLogout);
+  // Mostrar gestión de simulaciones como pantalla de inicio
+  await loadAdminSimulaciones();
+}
+
+// ── Admin Simulaciones ─────────────────────────────────────
+async function loadAdminSimulaciones() {
+
+  let plantillasDisponibles = [];
+  try {
+    const data = await api('GET', '/admin/plantillas');
+    plantillasDisponibles = data.plantillas || [];
+  } catch {}
+  const plantillasOpts = plantillasDisponibles
+    .filter(p => p !== 'jaboncillos_v1')
+    .map(p => { const lbl = p.replace(/_v\d+$/, '').replace(/_/g, ' '); const cap = lbl.charAt(0).toUpperCase() + lbl.slice(1); return `<option value="${p}">${cap}</option>`; })
+    .join('');
+
+  const el = document.getElementById('adminSimulacionesContent');
+  if (!el) return;
+  el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>`;
+  try {
+    const sims = await api('GET','/admin/simulaciones');
+    const activas   = sims.filter(s=>s.estado==='activa');
+    const archivadas = sims.filter(s=>s.estado==='archivada');
+
+    const simCard = (sim) => {
+      const stateColors = {pending:'var(--text3)',open:'var(--accent5)',locked:'var(--accent3)','pre-sim':'var(--accent3)',simulated:'var(--accent2)'};
+      const stateLabels = {pending:'⏸ Pendiente',open:'🟢 Abierta',locked:'🔒 Cerrada','pre-sim':'📊 Pre-sim','simulated':'✅ Simulada'};
+      return `
+        <div class="result-round-card" style="margin-bottom:14px">
+          <div class="result-round-header" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3 style="margin:0">${sim.nombre}</h3>
+              ${sim.descripcion?`<div style="font-size:.76rem;color:var(--text3);margin-top:2px">${sim.descripcion}</div>`:''}
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="badge ${sim.estado==='activa'?'badge-ok':'badge-pending'}">${sim.estado==='activa'?'✅ Activa':'📦 Archivada'}</span>
+              <span style="font-size:.74rem;font-family:var(--font-mono);color:${stateColors[sim.roundState]||'var(--text3)'}">${stateLabels[sim.roundState]||sim.roundState}</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+            <div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Equipos</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:3px">${sim.totalEquipos}</div></div>
+            <div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Ronda actual</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:3px">${sim.currentRound}/${sim.totalRounds}</div></div>
+            <div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Código de acceso</div><div style="font-family:var(--font-mono);font-size:.9rem;font-weight:700;margin-top:3px;color:var(--accent3);letter-spacing:2px">${sim.codigoAcceso||'—'}</div></div>
+            <div style="padding:10px 16px"><div style="font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Creada</div><div style="font-size:.78rem;margin-top:3px">${sim.creadaAt?new Date(sim.creadaAt).toLocaleDateString('es-BO'):'-'}</div></div>
+          </div>
+          <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap">
+            ${sim.estado==='activa'
+              ? `<button class="btn btn-success btn-sm" onclick="seleccionarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')">▶ Acceder a esta simulación</button>
+                 <button class="btn btn-ghost btn-sm" onclick="copiarCodigo('${sim.codigoAcceso||''}')">📋 Copiar código</button>
+                 <button class="btn btn-ghost btn-sm" onclick="archivarSim('${sim.id}')">📦 Archivar</button>
+                 <button class="btn btn-ghost btn-sm" onclick="eliminarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')" style="color:var(--accent4)">✕ Eliminar</button>`
+              : `<button class="btn btn-ghost btn-sm" onclick="activarSim('${sim.id}')">♻ Reactivar</button>
+                 <button class="btn btn-ghost btn-sm" onclick="eliminarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')" style="color:var(--accent4)">✕ Eliminar</button>`}
+          </div>
+        </div>`;
+    };
+
+    el.innerHTML = `
+      <div class="section-header">
+        <h2>🎮 Gestión de Simulaciones</h2>
+        <p>Cada simulación es un juego independiente con sus propios equipos, rondas y resultados.</p>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
+        <button class="btn btn-success" onclick="showCrearSimulacion()">+ Nueva Simulación</button>
+        <button class="btn btn-ghost" onclick="loadAdminSimulaciones()">↺ Actualizar</button>
+      </div>
+
+      <div id="crearSimForm" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;margin-bottom:24px">
+        <h3 style="margin:0 0 16px">Nueva Simulación</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label class="form-label">Nombre <span style="color:var(--accent4)">*</span></label>
+            <input class="form-input" id="newSimNombre" placeholder="Ej: Sección A — Mañana">
+          </div>
+          <div>
+            <label class="form-label">Rondas totales</label>
+            <input class="form-input" id="newSimRondas" type="number" min="1" max="20" value="20">
+          </div>
+          <div style="grid-column:span 2">
+            <label class="form-label">Descripción (opcional)</label>
+            <input class="form-input" id="newSimDesc" placeholder="Ej: COM400A Trimestre I 2026 — Sección matutina">
+          </div>
+          <div style="grid-column:span 2">
+            <label class="form-label">Copiar parámetros de (opcional)</label>
+            <select class="form-input" id="newSimCopyFrom">
+              <option value="">— Usar parámetros por defecto —</option>
+              ${activas.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('')}
+            </select>
+          </div>
+
+            <div>
+              <label class="form-label">Industria / Plantilla</label>
+              <select class="form-input" id="newSimIndustria">
+                <option value="" disabled selected>— Seleccionar industria —</option>
+                <option value="jaboncillos_v1">Jaboncillos</option>
+                ${plantillasOpts}
+              </select>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:4px">
+                Define el tipo de producto, canales y segmentos del mercado.
+                Solo aplica si no copias de otra simulación.
+              </div>
+            </div>
+
+            </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" onclick="crearSimulacion()">✓ Crear Simulación</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('crearSimForm').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+
+      ${activas.length > 0 ? `
+        <h3 style="margin-bottom:12px">Simulaciones activas (${activas.length})</h3>
+        ${activas.map(simCard).join('')}
+      ` : '<p style="color:var(--text3);font-size:.84rem">No hay simulaciones activas. Crea una nueva para comenzar.</p>'}
+
+      ${archivadas.length > 0 ? `
+        <details style="margin-top:24px">
+          <summary style="cursor:pointer;font-weight:600;color:var(--text2);font-size:.9rem;padding:8px 0">
+            📦 Simulaciones archivadas (${archivadas.length})
+          </summary>
+          <div style="margin-top:12px">
+            ${archivadas.map(simCard).join('')}
+          </div>
+        </details>
+      ` : ''}
+    `;
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
+  }
+}
+
+window.showCrearSimulacion = () => {
+  document.getElementById('crearSimForm').style.display = 'block';
+  document.getElementById('newSimNombre').focus();
+};
+
+window.crearSimulacion = async () => {
+  const nombre     = document.getElementById('newSimNombre').value.trim();
+  if (!nombre) return toast('El nombre es requerido', 'error');
+  const desc        = document.getElementById('newSimDesc').value.trim();
+  const totalRounds = parseInt(document.getElementById('newSimRondas').value) || 20;
+  const copyFromSimId = document.getElementById('newSimCopyFrom').value || null;
+  // NUEVO: leer industria seleccionada
+  const industria   = document.getElementById('newSimIndustria')?.value || null;
+
+  try {
+    const r = await api('POST', '/admin/simulaciones', {
+      nombre,
+      descripcion:  desc,
+      totalRounds,
+      copyFromSimId,
+      industria:    copyFromSimId ? null : industria,  // ignorar plantilla si se copia de otra sim
+    });
+    toast(`✓ Simulación creada — Código: ${r.codigoAcceso}${r.industria ? ` · Industria: ${r.industria}` : ''}`, 'success');
+    document.getElementById('crearSimForm').style.display = 'none';
+    await loadAdminSimulaciones();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.seleccionarSim = async (simId, nombre) => {
+  try {
+    await api('POST','/admin/seleccionar-sim',{simId});
+    state.currentSimId = simId;
+    state.currentSimNombre = nombre;
+    // Cargar config de la simulación seleccionada
+    state.ref = await api('GET','/admin/config');
+    toast(`📊 Simulación activa: ${nombre}`, 'success');
+    wsClient.conectar(simId);
+    // Actualizar badge en el header
+    const badge = document.getElementById('simBadge');
+    if (badge) badge.textContent = `📊 ${nombre}`;
+    // Ir al dashboard
+    document.querySelector('[data-view="admin-dashboard"]')?.click();
+  } catch(e) { toast(e.message,'error'); }
+};
+
+window.archivarSim = async (simId) => {
+  if (!confirm('¿Archivar esta simulación? Podrás reactivarla después.')) return;
+  try {
+    await api('POST',`/admin/simulaciones/${simId}/archivar`);
+    toast('Simulación archivada','success');
+    await loadAdminSimulaciones();
+  } catch(e) { toast(e.message,'error'); }
+};
+
+window.activarSim = async (simId) => {
+  try {
+    await api('POST',`/admin/simulaciones/${simId}/activar`);
+    toast('Simulación reactivada','success');
+    await loadAdminSimulaciones();
+  } catch(e) { toast(e.message,'error'); }
+};
+
+window.eliminarSim = async (simId, nombre) => {
+  if (!confirm(`¿ELIMINAR PERMANENTEMENTE la simulación "${nombre}"?\n\nSe eliminarán todos los equipos, rondas y resultados. Esta acción NO se puede deshacer.`)) return;
+  try {
+    await api('DELETE',`/admin/simulaciones/${simId}`);
+    toast('Simulación eliminada','success');
+    await loadAdminSimulaciones();
+  } catch(e) { toast(e.message,'error'); }
+};
+
+window.copiarCodigo = (codigo) => {
+  navigator.clipboard?.writeText(codigo).then(() => toast(`✓ Código ${codigo} copiado`,'success'))
+    .catch(() => toast(`Código: ${codigo}`,'success'));
+};
+
+// ── Admin Dashboard ────────────────────────────────────────
+// Guard: check if a simulation is selected before loading admin views
+function requireSimSelected(elId) {
+  if (!state.currentSimId) {
+    const el = document.getElementById(elId);
+    if (el) el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🎮</div>
+        <p style="margin-bottom:16px">Debes seleccionar una simulación primero.</p>
+        <button class="btn btn-primary" onclick="document.querySelector('[data-view=admin-simulaciones]')?.click()">
+          Ir a Gestión de Simulaciones →
+        </button>
+      </div>`;
+    return false;
+  }
+  return true;
+}
+
+async function loadAdminDashboard() {
+  if (!requireSimSelected('adminDashboardContent')) return;
+  // Actualizar badge de simulación en sidebar
+  const badge = document.getElementById('simBadge');
+  if (badge && state.currentSimNombre) badge.textContent = `📊 ${state.currentSimNombre}`;
+
+  const ronda = await api('GET','/admin/ronda');
+  document.getElementById('adminRoundBadge').textContent = `Ronda ${ronda.currentRound}/${ronda.totalRounds}`;
+
+  const pct = ronda.total > 0 ? Math.round(ronda.enviados/ronda.total*100) : 0;
+  const estadoBadge = ronda.roundState === 'simulated'
+    ? '<span class="badge badge-simulated">Simulada</span>'
+    : ronda.roundState === 'open'
+    ? '<span class="badge badge-open">🟢 Abierta</span>'
+    : ronda.roundState === 'locked'
+    ? '<span class="badge badge-alert">🔒 Cerrada</span>'
+    : ronda.roundState === 'pre-sim'
+    ? '<span class="badge badge-presim">📊 Pre-simulación</span>'
+    : '<span class="badge badge-pending">⏸ Pendiente</span>';
+
+  // Build bottom section depending on state
+  let bottomHTML = '';
+  if (ronda.roundState === 'simulated') {
+    try {
+      const rd = await api('GET', `/admin/resultados/${ronda.currentRound}`);
+      bottomHTML = buildAdminResultsHTML(rd);
+      bottomHTML += buildAdminChartsHTML(rd, ronda.currentRound);
+    } catch {}
+  } else if (ronda.roundState === 'pre-sim') {
+    // Show pre-sim confirmation progress
+    try {
+      const psData = await api('GET', '/api/presim');
+      const pctConf = psData.total > 0 ? Math.round(psData.confirmados/psData.total*100) : 0;
+      bottomHTML = `
+        <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">
+          📊 Confirmaciones de Demanda Estimada — Ronda ${ronda.currentRound}
+        </div>
+        <div class="progress-wrap" style="margin-bottom:16px">
+          <div class="progress-label">
+            <span>Equipos que confirmaron su demanda</span>
+            <strong>${psData.confirmados} de ${psData.total}</strong>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pctConf}%;background:var(--accent3)"></div></div>
+        </div>
+        <div class="table-wrap" style="margin-bottom:16px">
+          <table>
+            <thead><tr>
+              <th>Equipo</th><th>Segmento</th><th>Producto</th>
+              <th style="text-align:right">Demanda asignada</th>
+              <th style="text-align:right">Ventas estimadas</th>
+              <th style="text-align:right">Market share</th>
+              <th style="text-align:center">Estado</th>
+              <th style="text-align:center">Acción</th>
+            </tr></thead>
+            <tbody>
+              ${psData.detalle.map(r => `
+                <tr>
+                  <td><strong>${r.equipoNombre||r.equipo}</strong></td>
+                  <td style="font-size:.78rem">${r.segmento}</td>
+                  <td style="font-size:.78rem">${r.producto}</td>
+                  <td class="num">${fmt.num(r.demandaAsignada)}</td>
+                  <td class="num">${fmt.num(r.ventasEstimadas)}</td>
+                  <td class="num">${fmt.pct(r.shareEstimado)}</td>
+                  <td style="text-align:center">
+                    ${r.confirmado
+                      ? `<span class="badge badge-ok">✓ ${r.forzadoPor==='admin'?'Forzado':'Confirmado'}</span>`
+                      : '<span class="badge badge-pending">⏳ Pendiente</span>'}
+                  </td>
+                  <td style="text-align:center">
+                    ${!r.confirmado
+                      ? `<button class="btn btn-ghost btn-sm" onclick="forzarConfirmacion('${r.equipo}')">Forzar</button>`
+                      : '—'}
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch(e) { bottomHTML = `<p style="color:var(--accent4)">${e.message}</p>`; }
+  } else {
+
+        // Show team submission status
+    const equipos = await api('GET','/admin/equipos');
+    bottomHTML = `
+      <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">Estado de Entregas — Ronda ${ronda.currentRound}</div>
+      <div class="team-status-grid">
+        ${equipos.length === 0
+          ? '<p style="color:var(--text3);font-size:.84rem">Sin equipos registrados. Ve a <strong>Equipos</strong> para crear equipos.</p>'
+          : equipos.filter(eq => !eq.isBot).map(eq => `
+              <div class="team-status-card">
+                <div class="team-status-dot" style="background:${eq.submitted ? 'var(--success)' : 'var(--warning)'}"></div>
+                <div>
+                  <div style="font-weight:600;font-size:.82rem">${eq.nombre}</div>
+                  <div style="font-size:.7rem;color:var(--text3)">${eq.submitted ? '✓ ' + fmt.dt(eq.submittedAt) : '⏳ Pendiente'}</div>
+                </div>
+              </div>`).join('')}
+      </div>`;
+  }
+
+  document.getElementById('adminDashboardContent').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Ronda Actual</div>
+        <div class="stat-value">${ronda.currentRound}<span style="font-size:.9rem;color:var(--text3)">/${ronda.totalRounds}</span></div>
+        <div class="stat-sub">${estadoBadge}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Equipos Registrados</div>
+        <div class="stat-value">${ronda.total}</div>
+        <div class="stat-sub">hasta 30 equipos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Entregas Recibidas</div>
+        <div class="stat-value">${ronda.enviados}<span style="font-size:.9rem;color:var(--text3)">/${ronda.total}</span></div>
+        <div class="stat-sub">${pct}% listos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Progreso Simulador</div>
+        <div class="stat-value">${Math.round((ronda.currentRound-1)/ronda.totalRounds*100)}%</div>
+        <div class="stat-sub">${ronda.currentRound-1} de ${ronda.totalRounds} rondas</div>
+      </div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Entregas esta ronda</span>
+        <strong>${ronda.enviados} de ${ronda.total} equipos</strong>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" style="width:${pct}%"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
+      ${ronda.roundState === 'pending'
+        ? `<button class="btn btn-success" id="btnActivarDash">▶ Activar Hoja de Decisiones — Ronda ${ronda.currentRound}</button>`
+        : ronda.roundState === 'open'
+        ? `<button class="btn btn-warning" id="btnPreSimDash">📊 Pre-simular (notificar demanda)</button>
+           <button class="btn btn-ghost"   id="btnCerrarDash">🔒 Cerrar envíos</button>`
+        : ronda.roundState === 'locked'
+        ? `<button class="btn btn-warning" id="btnPreSimDash">📊 Pre-simular (notificar demanda)</button>
+           <button class="btn btn-primary" id="btnSimularDash">⚡ Ejecutar Simulación (sin pre-sim)</button>`
+        : ronda.roundState === 'pre-sim'
+        ? `<button class="btn btn-primary" id="btnSimularDash">⚡ Ejecutar Simulación Final — Ronda ${ronda.currentRound}</button>
+           <button class="btn btn-ghost"   id="btnForzarTodosDash">⏩ Forzar confirmaciones pendientes</button>`
+        : ronda.currentRound < ronda.totalRounds
+        ? `<button class="btn btn-success" id="btnSiguienteDash">→ Abrir Ronda ${ronda.currentRound + 1}</button>`
+        : `<span class="badge badge-simulated" style="padding:8px 16px">🏆 Simulación completada — 20 rondas</span>`}
+      <button class="btn btn-ghost" id="btnRefreshDash">↺ Actualizar</button>
+    </div>
+
+    ${bottomHTML}
+  `;
+
+  document.getElementById('btnActivarDash')?.addEventListener('click', doActivarRonda);
+  document.getElementById('btnPreSimDash')?.addEventListener('click', doPreSimular);
+  document.getElementById('btnSimularDash')?.addEventListener('click', () => doSimular(ronda.currentRound));
+  document.getElementById('btnCerrarDash')?.addEventListener('click',  doCerrarRonda);
+  document.getElementById('btnForzarTodosDash')?.addEventListener('click', doForzarTodos);
+  document.getElementById('btnSiguienteDash')?.addEventListener('click', doSiguienteRonda);
+  document.getElementById('btnRefreshDash')?.addEventListener('click', loadAdminDashboard);
+
+  if (ronda.roundState === 'simulated') renderAdminCharts();
+}
+
+function buildAdminResultsHTML(rd) {
+  if (!rd.resultados?.length) return '';
+
+  // ── Paleta de colores por empresa ─────────────────────────
+  const PALETTE = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6',
+                   '#EC4899','#06FFA5','#84CC16','#F97316'];
+  const tc = i => PALETTE[i % PALETTE.length];
+
+  // ── Formato boliviano ─────────────────────────────────────
+  // Positivo: Bs. 1.234.567   Negativo: (Bs. 1.234.567)   Cero: Bs. 0
+  const bsBO = v => {
+    if (v === null || v === undefined || isNaN(v)) return '<span style="color:var(--text3)">—</span>';
+    const n = Math.round(Math.abs(v));
+    const s = n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if (v < 0)  return '<span style="color:#EF4444">(Bs. ' + s + ')</span>';
+    if (v === 0) return '<span style="color:var(--text3)">Bs. 0</span>';
+    return '<span style="color:#10B981">Bs. ' + s + '</span>';
+  };
+  const numBO = v => {
+    if (!v && v !== 0) return '—';
+    return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  const pctBO = v => v != null ? (v*100).toFixed(1)+'%' : '—';
+
+  // Equipos ordenados por utilidad neta desc (para Dashboard ranking)
+  const equipos = [...rd.resultados].sort((a,b) => (b.utilidadNeta||0)-(a.utilidadNeta||0));
+  // Mantener orden original para columnas de tabla
+  const eqs = rd.resultados;
+  const N   = eqs.length;
+
+  // ── Helpers de filas de tabla ─────────────────────────────
+  const thStyle = (i) =>
+    'padding:8px 12px;text-align:right;font-size:.72rem;white-space:nowrap;'
+    +'border-bottom:2px solid var(--border2);background:var(--bg2);';
+  const thFirst =
+    'padding:8px 14px;text-align:left;font-size:.72rem;position:sticky;left:0;'
+    +'background:var(--bg2);z-index:2;min-width:220px;border-bottom:2px solid var(--border2);';
+
+  const hdr = () => {
+    const cols = eqs.map((r,i) =>
+      '<th style="'+thStyle(i)+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(i)+';margin-right:5px;vertical-align:middle"></span>'
+      + r.equipoNombre + '</th>'
+    ).join('');
+    return '<tr><th style="'+thFirst+'">Partida</th>'+cols+'</tr>';
+  };
+
+  // Tipo 1: sección
+  const sec = (label) =>
+    '<tr style="background:rgba(255,255,255,.04)">'
+    +'<td style="padding:5px 14px;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1;font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px" colspan="'+(N+1)+'">'+label+'</td>'
+    +'</tr>';
+
+  // Tipo 2: partida normal
+  const row = (label, fn, indent=false) => {
+    const vals = eqs.map(r => '<td style="padding:5px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)">'+bsBO(fn(r))+'</td>').join('');
+    const lStyle = 'padding:5px 14px;font-size:.78rem;color:var(--text2);border-bottom:1px solid rgba(255,255,255,.04);position:sticky;left:0;background:var(--bg);z-index:1;'+(indent?'padding-left:26px;':'');
+    return '<tr><td style="'+lStyle+'">'+(indent?'<span style="color:var(--text3);margin-right:4px">(−)</span>':'')+label+'</td>'+vals+'</tr>';
+  };
+
+  // Tipo 3: subtotal / total
+  const tot = (label, fn, highlight=false) => {
+    const bg = highlight ? 'rgba(6,255,165,.07)' : 'rgba(255,255,255,.04)';
+    const border = highlight ? '2px solid rgba(6,255,165,.3)' : '1px solid var(--border2)';
+    const vals = eqs.map(r => {
+      const v = fn(r);
+      return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;border-top:'+border+';background:'+bg+'">'+bsBO(v)+'</td>';
+    }).join('');
+    return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;border-top:'+border+';background:'+bg+';position:sticky;left:0;z-index:1">'+label+'</td>'+vals+'</tr>';
+  };
+
+  // ── PESTAÑA 1: DASHBOARD ──────────────────────────────────
+  const semaforo = r => {
+    const u = r.utilidadNeta||0;
+    if (u > 0)         return '🟢';
+    if (u > -50000)    return '🟡';
+    return '🔴';
+  };
+
+  const dashRows = equipos.map((r,rank) => {
+    const origIdx = eqs.findIndex(e => e.equipoNombre === r.equipoNombre);
+    const hl = rank === 0 ? 'background:rgba(6,255,165,.07);font-weight:700;' : '';
+    return '<tr style="'+hl+'border-bottom:1px solid var(--border)">'
+      + '<td style="padding:7px 12px;text-align:center;font-weight:700;color:'+tc(origIdx)+'">'+( rank+1)+'</td>'
+      + '<td style="padding:7px 12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(origIdx)+';margin-right:6px;vertical-align:middle"></span>'+r.equipoNombre+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+numBO(r.ventasReales)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+bsBO(r.ebit||0)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)"><strong>'+bsBO(r.utilidadNeta||0)+'</strong></td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+bsBO(r.cajaFinal||0)+'</td>'
+      + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+(r.roiMarketing!=null?Math.round(r.roiMarketing*100)/100+'x':'—')+'</td>'
+      + '<td style="padding:7px 12px;text-align:center;font-size:1rem">'+semaforo(r)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  const dashHTML = '<div class="table-wrap">'
+    + '<table><thead><tr>'
+    + '<th style="padding:7px 12px;text-align:center">#</th>'
+    + '<th style="padding:7px 12px">Empresa</th>'
+    + '<th style="padding:7px 12px;text-align:right">Ventas<br>unid.</th>'
+    + '<th style="padding:7px 12px;text-align:right">EBIT</th>'
+    + '<th style="padding:7px 12px;text-align:right">Utilidad<br>Neta</th>'
+    + '<th style="padding:7px 12px;text-align:right">Caja<br>Final</th>'
+    + '<th style="padding:7px 12px;text-align:right">ROI<br>Mkt</th>'
+    + '<th style="padding:7px 12px;text-align:center">Estado</th>'
+    + '</tr></thead><tbody>'+dashRows+'</tbody></table>'
+    + '</div>'
+    + '<div class="charts-row" style="margin-top:14px">'
+    + '<div class="chart-card" style="flex:2"><h4>EBIT vs Utilidad Neta por Empresa</h4><div class="chart-wrap" style="height:220px"><canvas id="chartAdminDash_'+( rd.ronda||0)+'"></canvas></div></div>'
+    + '<div class="chart-card"><h4>Market Share (%)</h4><div class="chart-wrap" style="height:220px"><canvas id="chartAdminShare_'+( rd.ronda||0)+'"></canvas></div></div>'
+    + '</div>';
+
+  // ── PESTAÑA 2: ESTADO DE RESULTADOS ──────────────────────
+  const plHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('Ingresos')
+    + row('(+) Ingresos por ventas',      r => r.ventasBrutas||0)
+    + row('Costo de ventas',              r => r.costoVentas||0, true)
+    + tot('Utilidad bruta',               r => r.utilidadBruta||0)
+    + row('Gasto de marketing',           r => r.pagoMktTotal||0, true)
+    + row('Gasto administrativo',         r => (r.gastoAdminFijo||0)+(r.gastoFijoPlanta||0)+(r.costoVendedores||0)+(r.costoOperarios||0)+(r.costoAlmacenamiento||0)+(r.gastoInnovacion||0), true)
+    + row('Depreciación',                 r => r.depreciacion||0, true)
+    + tot('EBIT',                         r => r.ebit||0, true)
+    + row('Gasto financiero',             r => (r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0), true)
+    + row('Impuestos (IVA+IT+IUE)',       r => (r.ivaAPagar||0)+(r.impuestoIT||0)+(r.impuestoIUE||0), true)
+    + tot('UTILIDAD NETA',                r => r.utilidadNeta||0, true)
+    + '</table></div>';
+
+  // ── PESTAÑA 3: BALANCE GENERAL ────────────────────────────
+  const bgHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('A · Activo Corriente')
+    + row('Caja y equivalentes',          r => r.cajaFinal||0)
+    + row('Cuentas por cobrar (CxC)',     r => r.cxcFinal||0)
+    + row('Inventarios (valorizado)',     r => r.invFinalValorizado||0)
+    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0))
+    + sec('A · Activo No Corriente')
+    + row('Activos fijos brutos',         r => (r.afNetos||0)+(r.depreciacion||0))
+    + row('Depreciación acumulada',       r => r.depreciacion||0, true)
+    + tot('Activos fijos netos',          r => r.afNetos||0)
+    + tot('TOTAL ACTIVO',                 r => r.totalActivos||0, true)
+    + sec('B · Pasivo')
+    + row('Deuda total (préstamos)',      r => r.deudaFinal||0)
+    + tot('TOTAL PASIVO',                 r => r.deudaFinal||0, true)
+    + sec('C · Patrimonio')
+    + row('Capital contable',             r => r.capitalContable||0)
+    + row('Resultado acumulado',          r => r.resultadoAcumulado||0)
+    + tot('TOTAL PATRIMONIO',             r => r.patrimonio||0)
+    + (() => {
+        const checks = eqs.map(r => {
+          const pp = (r.deudaFinal||0)+(r.patrimonio||0);
+          const ta = r.totalActivos||0;
+          const ok = Math.abs(pp-ta) < 2;
+          return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(pp)+(ok?'':' ⚠')+'</td>';
+        }).join('');
+        return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">TOTAL PASIVO + PATRIMONIO</td>'+checks+'</tr>';
+      })()
+    + '</table></div>';
+
+  // ── PESTAÑA 4: FLUJO DE EFECTIVO ──────────────────────────
+  const feHTML = '<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    + hdr()
+    + sec('A · Actividades Operativas')
+    + row('Utilidad neta',                r => r.utilidadNeta||0)
+    + row('(+) Depreciación',             r => r.depreciacion||0)
+    + row('(+/−) Variación CxC',          r => -(r.cxcFinal||0)+(r.cxcInicial||0))
+    + row('(+/−) Variación inventarios',  r => -(r.invFinalValorizado||0)+(r.inventarioInicial||0)*(r.costoUnitario||0))
+    + tot('Flujo operacional neto',       r => {
+        const dep  = r.depreciacion||0;
+        const dCxC = -(r.cxcFinal||0)+(r.cxcInicial||0);
+        const dInv = -(r.invFinalValorizado||0)+(r.inventarioInicial||0)*(r.costoUnitario||0);
+        return (r.utilidadNeta||0)+dep+dCxC+dInv;
+      }, true)
+    + sec('B · Actividades de Inversión')
+    + row('(−) Adquisición activos fijos', r => 0)
+    + tot('Flujo de inversión',            r => 0)
+    + sec('C · Actividades de Financiamiento')
+    + row('(+) Nuevos préstamos',          r => r.ingresoPrestamo||0)
+    + tot('Flujo de financiamiento',       r => r.ingresoPrestamo||0)
+    + sec('D · Posición de Caja')
+    + row('Saldo inicial de caja',         r => r.cajaInicial||0)
+    + (() => {
+        const checks = eqs.map(r => {
+          const cf = r.cajaFinal||0;
+          const ok = cf >= 0;
+          return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(cf)+(cf<0?' ⚠':'')+'</td>';
+        }).join('');
+        return '<tr><td style="padding:6px 14px;font-weight:700;font-size:.79rem;position:sticky;left:0;background:rgba(255,255,255,.04);z-index:1">Saldo final de caja</td>'+checks+'</tr>';
+      })()
+    + '</table></div>';
+
+  // ── Encabezado y tabs ─────────────────────────────────────
+  const encabezado = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">SimNego · UAGRM &nbsp;·&nbsp; Ronda '+(rd.ronda||'N')+'</div>'
+    + '<div style="font-size:.75rem;color:var(--text3);margin-top:2px">Cifras en Bs. bolivianos &nbsp;·&nbsp; Negativos en (paréntesis)</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn btn-ghost btn-sm" onclick="printPanel(\'adminEFContent\',\'Estados Financieros · Ronda '+(rd.ronda||'N')+' · UAGRM\',\'Cifras en Bs. · Negativos en paréntesis\')">🖨️ Imprimir</button>'
+    + '</div>'
+    + '</div>';
+
+  const tabs = '<div id="adminEFTabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary btn-sm" id="btnEFT1" onclick="adminEFTab(1)">📊 Dashboard</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT2" onclick="adminEFTab(2)">📋 Estado de Resultados</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT3" onclick="adminEFTab(3)">🏦 Balance General</button>'
+    + '<button class="btn btn-ghost btn-sm"   id="btnEFT4" onclick="adminEFTab(4)">💧 Flujo de Efectivo</button>'
+    + '</div>';
+
+  return '<div id="adminEFContent">'
+    + encabezado + tabs
+    + '<div id="adminEFPane1">' + dashHTML + '</div>'
+    + '<div id="adminEFPane2" style="display:none">' + plHTML + '</div>'
+    + '<div id="adminEFPane3" style="display:none">' + bgHTML + '</div>'
+    + '<div id="adminEFPane4" style="display:none">' + feHTML + '</div>'
+    + '</div>';
+}
+
+window.adminEFTab = (n) => {
+  [1,2,3,4].forEach(i => {
+    const pane = document.getElementById('adminEFPane'+i);
+    const btn  = document.getElementById('btnEFT'+i);
+    if (pane) pane.style.display = i===n ? '' : 'none';
+    if (btn)  btn.className = i===n ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  });
+};
+
+function buildAdminChartsHTML(rd, n) {
+  return '';  // Gráficos ahora dentro del Dashboard del buildAdminResultsHTML
+}
+
+function renderAdminCharts() {
+  document.querySelectorAll('[id^="chartAdminDash_"]').forEach(canvas => {
+    const n = parseInt(canvas.id.split('_')[1]);
+    if (!n) return;
+    api('GET',`/admin/resultados/${n}`).then(rd => {
+      if (!rd.resultados?.length) return;
+      const labels = rd.resultados.map(r => r.equipoNombre);
+      const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+      const defOpts = { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } } } },
+        scales:{ x:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } },
+                 y:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } } } };
+      new Chart(canvas, { type:'bar', data:{
+        labels,
+        datasets:[
+          { label:'EBIT',          data: rd.resultados.map(r=>r.ebit||0),          backgroundColor: labels.map((_,i)=>palette[i%palette.length]+'CC'), borderRadius:3 },
+          { label:'Utilidad Neta', data: rd.resultados.map(r=>r.utilidadNeta||0),  backgroundColor: labels.map((_,i)=>palette[i%palette.length]+'66'), borderRadius:3, borderWidth:1, borderColor: labels.map((_,i)=>palette[i%palette.length]) },
+        ]
+      }, options:{ ...defOpts } });
+    }).catch(()=>{});
+  });
+  document.querySelectorAll('[id^="chartAdminShare_"]').forEach(canvas => {
+    const n = parseInt(canvas.id.split('_')[1]);
+    if (!n) return;
+    api('GET',`/admin/resultados/${n}`).then(rd => {
+      if (!rd.resultados?.length) return;
+      const labels = rd.resultados.map(r => r.equipoNombre);
+      const palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06FFA5','#84CC16','#F97316'];
+      const defOpts = { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ x:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 } }, grid:{ color:'#2A2F45' } },
+                 y:{ ticks:{ color:'#9BA3C4', font:{ family:'Space Mono', size:9 }, callback: v => v+'%' }, grid:{ color:'#2A2F45' }, max:100 } } };
+      new Chart(canvas, { type:'bar', data:{
+        labels,
+        datasets:[{ data: rd.resultados.map(r=>+(r.shareReal*100).toFixed(2)), backgroundColor: labels.map((_,i)=>palette[i%palette.length]), borderRadius:4 }]
+      }, options:{ ...defOpts } });
+    }).catch(()=>{});
+  });
+}
+
+
+// ── Admin Mercado ──────────────────────────────────────────
+async function loadAdminMercado() {
+  if (!requireSimSelected('mercadoContent')) return;
+  const ref = state.ref || await api('GET','/admin/config');
+  const segs = ref.mercadoSegmentos || [];
+  if (!segs.length) {
+    document.getElementById('adminMercadoContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📊</div><p>Sin datos de mercado.</p></div>';
+    return;
+  }
+  const tend = t => t==='Alto crecimiento'?'badge-high':t==='Creciente'?'badge-grow':'badge-stable';
+  const rows = segs.map(s => `
+    <tr>
+      <td><strong>${s.nombre}</strong></td>
+      <td class="num">${fmt.num(s.demandaBase)}</td>
+      <td class="num">${fmt.pct(s.pctContrabando)}</td>
+      <td class="num val-gold">${fmt.num(s.demandaFormal)}</td>
+      <td class="num">${fmt.pct(s.tasaCrecimiento ?? 0)}</td>
+      <td><span class="badge ${tend(s.tendencia)}">${s.tendencia}</span></td>
+    </tr>`).join('');
+  document.getElementById('adminMercadoContent').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Segmento</th>
+          <th>Demanda base</th>
+          <th>% Contrabando</th>
+          <th>Demanda formal (unid)</th>
+          <th>Tasa crecimiento</th>
+          <th>Tendencia</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// ADMIN — PARÁMETROS
+// ══════════════════════════════════════════════════════════
+async function loadAdminParametros() {
+  if (!requireSimSelected('adminParametrosContent')) return;
+  const data = await api('GET', '/admin/config');
+  const p  = data.parametros;
+  const tp = data.tiposProducto;
+  const can = data.canales;
+
+  const pf = (label, key, hint='', step='any') => `
+    <div class="param-row">
+      <label class="param-label">${label}</label>
+      <input class="param-input" type="number" step="${step}" data-pkey="${key}" value="${p[key]??''}"/>
+      ${hint?`<span class="param-hint">${hint}</span>`:''}
+    </div>`;
+
+  document.getElementById('adminParametrosContent').innerHTML = `
+    <div class="param-grid">
+
+      <div class="param-card">
+        <div class="param-card-title">💼 Capital Inicial por Equipo</div>
+        ${pf('Capital inicial (Bs)','capitalInicial')}
+        ${pf('Caja inicial (Bs)','cajaInicial')}
+        ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales')}
+        ${pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')}
+        ${pf('CxC inicial (Bs)','cxcInicial')}
+        ${pf('Deuda inicial (Bs)','deudaInicial')}
+        ${pf('Capacidad máx producción (unid)','capacidadMaxProduccion')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">🏭 Costos Fijos Operativos</div>
+        ${pf('Gasto administrativo fijo (Bs)','gastoAdminFijo','Por trimestre')}
+        ${pf('Gasto fijo de planta (Bs)','gastoFijoPlanta','Por trimestre')}
+        ${pf('Depreciación trimestral (Bs)','depreciacionTrimestral')}
+        ${pf('Costo almacenamiento / unid (Bs)','costoAlmacenamientoUnidad','Bs/unid final')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">💳 Ventas y Cobranzas</div>
+        ${pf('% Ventas al contado','pctVentasContado','0.70 = 70%')}
+        ${pf('% Ventas a crédito','pctVentasCredito','0.30 = 30%')}
+        ${pf('Plazo cobro (trimestres)','plazoCobro','1 = siguiente trimestre','1')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">🏦 Financiamiento</div>
+        ${pf('Tasa préstamo operativo (trim.)','tasaPrestamoOperativo','0.04 = 4%')}
+        ${pf('Tasa préstamo inversión (trim.)','tasaPrestamoInversion','0.03 = 3%')}
+        ${pf('Tasa sobregiro (trim.)','tasaSobregiro','0.06 = 6%')}
+        ${pf('Comisión apertura préstamo','comisionAperturaPrestamo','0.01 = 1%')}
+        ${pf('Plazo préstamo operativo (trim.)','plazoPrestamoOperativo','','1')}
+        ${pf('Plazo préstamo inversión (trim.)','plazoPrestamoInversion','','1')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">👥 Fuerza de Ventas</div>
+        ${pf('Vendedores iniciales por equipo','vendedoresIniciales','','1')}
+        ${pf('Sueldo trimestral / vendedor (Bs)','sueldoTrimestralVendedor')}
+        ${pf('Costo contratación / vendedor (Bs)','costoContratacionVendedor')}
+        ${pf('Costo despido / vendedor (Bs)','costoDespidoVendedor')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">🔍 Investigación de Mercado</div>
+        ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
+        ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">💡 Innovación</div>
+        ${pf('Factor innovación Producto','factorInnovacionProducto','0.333 = 1/3 del monto/unid')}
+        ${pf('Factor innovación Proceso','factorInnovacionProceso','0.333 = reducción de CU')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">🧾 Sistema Tributario Bolivia — Etapa 3.5</div>
+        ${pf('IVA (tasa)','tasaIVA','0.13 = 13%')}
+        ${pf('IT — Impuesto a las Transacciones (tasa)','tasaIT','0.03 = 3% sobre ventas brutas')}
+        ${pf('IUE — Impuesto s/Utilidades (tasa)','tasaIUE','0.25 = 25% sobre utilidad gravable')}
+        ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
+        ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
+        ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
+      </div>
+
+      <div class="param-card">
+        <div class="param-card-title">🧪 Costo Base por Producto (Bs/unid)</div>
+        ${Object.entries(tp).map(([n,v])=>`
+          <div class="param-row">
+            <label class="param-label">${n}</label>
+            <input class="param-input" type="number" step="0.01" data-tp="${n}" value="${v.costoBase}"/>
+          </div>`).join('')}
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">⚙️ Módulos Activos — Control de Funcionalidades</div>
+        <div style="font-size:.78rem;color:var(--text3);margin-bottom:12px">
+          Activa o desactiva módulos para adaptar la complejidad del simulador a tu curso.
+          Los módulos desactivados no aparecen en la hoja de decisión de los equipos.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+          ${[
+            { id:'modMateriaPrima',  label:'🏭 Materia Prima',          desc:'Compra de MP, proveedores, lead time, restricción de producción',  etapa:'3.1' },
+            { id:'modOperarios',     label:'👷 Operarios',              desc:'Contratación, despido, capacitación y capacidad efectiva',          etapa:'3.2' },
+            { id:'modIVA',           label:'🧾 IVA (13%)',              desc:'Débito, crédito fiscal y pago neto de IVA en el P&L',              etapa:'3.3' },
+            { id:'modImpuestos',     label:'📊 IT + IUE',              desc:'Impuesto a las Transacciones (3%) e IUE (25%) anual',             etapa:'3.4' },
+            { id:'modBrandEquity',   label:'⭐ Brand Equity',           desc:'Acumulación de reputación de marca entre rondas',                  etapa:'2.1' },
+            { id:'modCanibalizacion',label:'🔀 Canibalización',         desc:'Penalización al atractivo cuando la empresa compite en N segmentos',etapa:'2.3' },
+            { id:'modDemandaDin',    label:'📈 Demanda Dinámica',       desc:'Crecimiento/decrecimiento de mercado por tendencia de segmento',   etapa:'2.2' },
+            { id:'modInnovacion',    label:'💡 Innovación',             desc:'Inversión en producto, proceso o canal para mejorar posición',     etapa:'base' },
+            { id:'modInvestigacion', label:'🔍 Investigación Mercado',  desc:'Compra de reportes básicos y premium de inteligencia',            etapa:'base' },
+          ].map(mod => `
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2);cursor:pointer">
+              <input type="checkbox" data-modulo="${mod.id}"
+                ${(p['modulos_'+mod.id] !== 0) ? 'checked' : ''}
+                style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent);flex-shrink:0"/>
+              <div>
+                <div style="font-weight:600;font-size:.85rem;color:var(--text1)">${mod.label}
+                  <span style="font-size:.7rem;color:var(--text3);font-weight:400;margin-left:4px">Etapa ${mod.etapa}</span>
+                </div>
+                <div style="font-size:.75rem;color:var(--text3);margin-top:2px">${mod.desc}</div>
+              </div>
+            </label>`).join('')}
+        </div>
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">📦 Canales — Costos y Comisiones</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Canal</th>
+              <th>Costo adicional/unid (Bs)</th>
+              <th>Comisión sobre ventas</th>
+              <th>Factor impacto vendedores</th>
+              <th>Bono atractivo</th>
+            </tr></thead>
+            <tbody>
+              ${Object.entries(can).map(([n,v])=>`
+                <tr>
+                  <td><strong>${n}</strong></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="costoAdicionalUnitario" value="${v.costoAdicionalUnitario}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="comisionPct" value="${v.comisionPct}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="factorImpactoVendedores" value="${v.factorImpactoVendedores}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.1"  data-canal="${n}" data-canal-field="bonoAtractivo" value="${v.bonoAtractivo}" style="width:90px"/></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <div class="param-actions">
+      <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
+      <span class="param-warning">⚠ Los cambios aplican desde la próxima simulación</span>
+    </div>`;
+
+  document.getElementById('btnSaveParams').addEventListener('click', saveParametros);
+}
+
+async function saveParametros() {
+  const parametros = {};
+  document.querySelectorAll('[data-pkey]').forEach(el => { parametros[el.dataset.pkey] = +el.value; });
+
+  // Guardar estado de módulos como params booleanos (1=activo, 0=inactivo)
+  document.querySelectorAll('[data-modulo]').forEach(el => {
+    parametros['modulos_' + el.dataset.modulo] = el.checked ? 1 : 0;
+  });
+
+  const tiposProducto = {};
+  document.querySelectorAll('[data-tp]').forEach(el => { tiposProducto[el.dataset.tp] = { costoBase: +el.value }; });
+
+  const canales = {};
+  document.querySelectorAll('[data-canal]').forEach(el => {
+    if (!canales[el.dataset.canal]) canales[el.dataset.canal] = {};
+    canales[el.dataset.canal][el.dataset.canalField] = +el.value;
+  });
+
+  try {
+    await api('PUT','/admin/parametros',    { parametros });
+    await api('PUT','/admin/tiposproducto', { tiposProducto });
+    await api('PUT','/admin/canales',       { canales });
+    toast('✓ Parámetros guardados','success');
+    state.ref = await api('GET','/admin/config');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+
+// ══════════════════════════════════════════════════════════
+// ADMIN — SEGMENTOS
+// ══════════════════════════════════════════════════════════
+let segmentosLocal = [];
+
+async function loadAdminSegmentos() {
+  if (!requireSimSelected('segmentosContent')) return;
+  segmentosLocal = await api('GET', '/admin/segmentos');
+  renderSegmentosEditor();
+}
+
+function renderSegmentosEditor() {
+  const tendOpts = ['Estable','Creciente','Alto crecimiento','Decreciente'];
+  const tabs = segmentosLocal.map((s,i) => `<button class="seg-tab ${i===0?'active':''}" data-seg="${i}">${s.nombre}</button>`).join('');
+
+  const panels = segmentosLocal.map((s,i) => `
+    <div class="seg-panel ${i===0?'active':''}" id="segPanel_${i}">
+      <div class="seg-rename-row">
+        <label class="param-label" style="color:var(--accent3);font-weight:700">✏️ Nombre del segmento</label>
+        <input class="param-input seg-nombre-input" style="font-weight:700;font-size:.95rem;max-width:340px"
+          data-seg-idx="${i}" data-seg-field="nombre" value="${s.nombre}"/>
+      </div>
+      <div class="seg-fields-grid">
+        <div class="param-card">
+          <div class="param-card-title">📊 Mercado</div>
+          <div class="param-row"><label class="param-label">Demanda base (unidades)</label>
+            <input class="param-input" type="number" step="1000" data-seg-idx="${i}" data-seg-field="demandaBase" value="${s.demandaBase}"/></div>
+          <div class="param-row"><label class="param-label">% Contrabando (0–1)</label>
+            <input class="param-input" type="number" step="0.01" min="0" max="1" data-seg-idx="${i}" data-seg-field="pctContrabando" value="${s.pctContrabando}"/>
+            <span class="param-hint">Demanda formal = Demanda base × (1 − %)</span></div>
+          <div class="param-row"><label class="param-label">Índice externo (competidores)</label>
+            <input class="param-input" type="number" step="0.1" data-seg-idx="${i}" data-seg-field="indiceExterno" value="${s.indiceExterno}"/>
+            <span class="param-hint">Atractivo agregado de competidores externos</span></div>
+          <div class="param-row"><label class="param-label">Tendencia</label>
+            <select class="param-input" data-seg-idx="${i}" data-seg-field="tendencia">
+              ${tendOpts.map(t=>`<option ${t===s.tendencia?'selected':''}>${t}</option>`).join('')}
+            </select></div>
+          <div class="param-row"><label class="param-label">Descripción</label>
+            <input class="param-input" type="text" data-seg-idx="${i}" data-seg-field="descripcion" value="${s.descripcion||''}"/></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:var(--r);font-family:var(--font-mono);font-size:.78rem;color:var(--accent2)">
+        Demanda formal = <strong id="demFormal_${i}">${Math.round(s.demandaBase*(1-s.pctContrabando)).toLocaleString('es-BO')}</strong> unidades
+      </div>
+    </div>`).join('');
+
+  document.getElementById('adminSegmentosContent').innerHTML = `
+    <div class="seg-tabs-bar">${tabs}</div>
+    <div class="seg-panels">${panels}</div>
+    <div class="param-actions">
+      <button class="btn btn-primary" id="btnSaveSegs">💾 Guardar Segmentos</button>
+      <button class="btn btn-ghost"   id="btnResetSegs">↺ Recargar</button>
+    </div>`;
+
+  document.querySelectorAll('.seg-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.seg-tab').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.seg-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`segPanel_${btn.dataset.seg}`)?.classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('[data-seg-idx][data-seg-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      const idx = +el.dataset.segIdx;
+      const field = el.dataset.segField;
+      const val = el.tagName==='SELECT' ? el.value : (el.type==='number' ? +el.value : el.value);
+      segmentosLocal[idx][field] = val;
+      if (field==='nombre') document.querySelectorAll('.seg-tab')[idx].textContent = val||`Seg ${idx+1}`;
+      if (field==='demandaBase' || field==='pctContrabando') {
+        const seg = segmentosLocal[idx];
+        const df = Math.round(seg.demandaBase*(1-seg.pctContrabando));
+        const el2 = document.getElementById(`demFormal_${idx}`);
+        if (el2) el2.textContent = df.toLocaleString('es-BO');
+      }
+    });
+  });
+
+  document.getElementById('btnSaveSegs').addEventListener('click', saveSegmentos);
+  document.getElementById('btnResetSegs').addEventListener('click', loadAdminSegmentos);
+}
+
+async function saveSegmentos() {
+  try {
+    for (const s of segmentosLocal) {
+      if (!s.nombre?.trim()) return toast('Todos los segmentos deben tener nombre','error');
+    }
+    await api('PUT','/admin/segmentos',{ segmentos: segmentosLocal });
+    toast('✓ Segmentos guardados','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════
+// ADMIN — MATRIZ AFINIDAD
+// ══════════════════════════════════════════════════════════
+let afinidadLocal = null;
+let segmentosForAfinidad = [];
+
+async function loadAdminAfinidad() {
+  if (!requireSimSelected('afinidadContent')) return;
+  const [afData, segData] = await Promise.all([
+    api('GET','/admin/afinidad'),
+    api('GET','/admin/segmentos'),
+  ]);
+  afinidadLocal = afData;
+  segmentosForAfinidad = segData;
+  renderAfinidadEditor();
+}
+
+function renderAfinidadEditor() {
+  const productos = Object.keys(afinidadLocal);
+  const segNombres = segmentosForAfinidad.map(s => s.nombre);
+
+  const colorCell = v => {
+    if (v >= 3)  return 'background:rgba(6,255,165,.15);color:var(--accent5)';
+    if (v >= 1)  return 'background:rgba(78,205,196,.1);color:var(--accent2)';
+    if (v === 0) return 'background:var(--bg3);color:var(--text3)';
+    return 'background:rgba(255,107,107,.12);color:var(--accent4)';
+  };
+
+  const headerCols = segNombres.map(n=>`<th style="padding:8px 6px;font-size:.68rem;text-align:center;white-space:nowrap;max-width:90px;overflow:hidden">${n}</th>`).join('');
+
+  const rows = productos.map(prod => {
+    const vals = afinidadLocal[prod] || [];
+    const cells = segNombres.map((_, j) => {
+      const v = vals[j] ?? 0;
+      return `<td style="padding:4px;text-align:center">
+        <input type="number" min="-3" max="3" step="1"
+          data-af-prod="${prod}" data-af-seg="${j}"
+          value="${v}"
+          style="width:52px;text-align:center;padding:4px;border-radius:4px;border:1px solid var(--border2);${colorCell(v)};font-family:var(--font-mono);font-size:.82rem;outline:none"/>
+      </td>`;
+    }).join('');
+    return `<tr><td style="padding:8px 12px;font-weight:600;white-space:nowrap">${prod}</td>${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('adminAfinidadContent').innerHTML = `
+    <div class="table-wrap">
+      <table style="border-collapse:collapse;width:100%">
+        <thead>
+          <tr>
+            <th style="padding:8px 12px;text-align:left;background:var(--bg3)">Producto \\ Segmento</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:.78rem;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
+      <span style="color:var(--accent5)">■ +3 Ajuste perfecto</span>
+      <span style="color:var(--accent2)">■ +1 Aceptable</span>
+      <span style="color:var(--text3)">■ 0 Neutro</span>
+      <span style="color:var(--accent4)">■ -2 Mal ajuste</span>
+    </div>
+    <div class="param-actions">
+      <button class="btn btn-primary" id="btnSaveAfinidad">💾 Guardar Matriz</button>
+      <button class="btn btn-ghost"   id="btnResetAfinidad">↺ Recargar</button>
+    </div>`;
+
+  // Bind: update color on change
+  document.querySelectorAll('[data-af-prod]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const prod = inp.dataset.afProd;
+      const j    = +inp.dataset.afSeg;
+      const v    = +inp.value;
+      if (afinidadLocal[prod]) afinidadLocal[prod][j] = v;
+      inp.style.cssText = `width:52px;text-align:center;padding:4px;border-radius:4px;border:1px solid var(--border2);${colorCell(v)};font-family:var(--font-mono);font-size:.82rem;outline:none`;
+    });
+  });
+
+  document.getElementById('btnSaveAfinidad').addEventListener('click', async () => {
+    try {
+      await api('PUT','/admin/afinidad',{ afinidadMatrix: afinidadLocal });
+      toast('✓ Matriz guardada','success');
+    } catch(e) { toast(e.message,'error'); }
+  });
+  document.getElementById('btnResetAfinidad').addEventListener('click', loadAdminAfinidad);
+}
+
+// ══════════════════════════════════════════════════════════
+// ADMIN — COMPETENCIA EXTERNA
+// ══════════════════════════════════════════════════════════
+let competenciaLocal = [];
+
+async function loadAdminCompetencia() {
+  if (!requireSimSelected('competenciaContent')) return;
+  competenciaLocal = await api('GET','/admin/competencia');
+  // Leer segmentos reales de la industria activa
+  try {
+    const cfg = state.ref || await api('GET','/admin/config');
+    state.ref = cfg;
+    state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(s => s.nombre);
+  } catch { state.segNombresIndustria = []; }
+  renderCompetenciaEditor();
+}
+
+function renderCompetenciaEditor() {
+  // Usar segmentos reales de la industria; fallback a jaboncillos si no hay
+  const segNombres = (state.segNombresIndustria && state.segNombresIndustria.length)
+    ? state.segNombresIndustria
+    : ['Masivo popular','Masivo aspiracional','Funcional familiar','Cosmético','Dermatológico','Natural','Institucional'];
+
+  const rows = competenciaLocal.map((c,i) => `
+    <tr>
+      <td>
+        <select class="param-input" data-comp="${i}" data-comp-field="segmento" style="min-width:160px">
+          ${segNombres.map(s=>`<option ${s===c.segmento?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td><input class="param-input" type="text"   data-comp="${i}" data-comp-field="nombre"           value="${c.nombre}"           style="min-width:160px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="precio"           value="${c.precio}"           step="0.1" style="width:80px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="calidad"          value="${c.calidad}"          step="0.5" min="1" max="10" style="width:70px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="marketing"        value="${c.marketing}"        step="500"  style="width:90px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="participacionRef" value="${c.participacionRef}" step="0.01" min="0" max="1" style="width:80px"/></td>
+      <td><button class="btn btn-danger btn-sm" onclick="eliminarCompetidor(${i})">✕</button></td>
+    </tr>`).join('');
+
+  document.getElementById('adminCompetenciaContent').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Segmento dominante</th><th>Nombre del competidor</th>
+          <th>Precio (Bs)</th><th>Calidad (1-10)</th>
+          <th>Marketing (Bs)</th><th>Participación ref.</th><th></th>
+        </tr></thead>
+        <tbody id="compRows">${rows}</tbody>
+      </table>
+    </div>
+    <div class="param-actions">
+      <button class="btn btn-ghost" id="btnAddComp">+ Agregar competidor</button>
+      <button class="btn btn-primary" id="btnSaveComp">💾 Guardar</button>
+    </div>
+    <p class="param-hint" style="margin-top:8px">
+      Estos actores externos influyen en el índice externo de cada segmento y aparecen en reportes de investigación de mercado.
+    </p>`;
+
+  document.querySelectorAll('[data-comp][data-comp-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      const i = +el.dataset.comp;
+      const f = el.dataset.compField;
+      competenciaLocal[i][f] = el.type==='number' ? +el.value : el.value;
+    });
+  });
+
+  document.getElementById('btnAddComp').addEventListener('click', () => {
+    const segDefault = (state.segNombresIndustria && state.segNombresIndustria[0]) || 'Masivo popular';
+    competenciaLocal.push({ segmento: segDefault, nombre:'Nuevo competidor', precio: 150, calidad:5, marketing:0, participacionRef:0.10 });
+    renderCompetenciaEditor();
+  });
+
+  document.getElementById('btnSaveComp').addEventListener('click', async () => {
+    try {
+      await api('PUT','/admin/competencia',{ competencia: competenciaLocal });
+      toast('✓ Competencia guardada','success');
+    } catch(e) { toast(e.message,'error'); }
+  });
+}
+
+window.eliminarCompetidor = (i) => {
+  competenciaLocal.splice(i,1);
+  renderCompetenciaEditor();
+};
+
+
+// ═══════════════════════════════════════════════════════════
+//  EQUIPO
+// ═══════════════════════════════════════════════════════════
+// ── Imprimir panel activo del equipo ─────────────────────────
+function printPanelActivo() {
+  const nombre = (state.me && state.me.nombre) || '';
+  const ronda  = hojaRondaActual || 1;
+  const sub    = 'Trimestre ' + ronda + ' / 20';
+
+  // Detectar la VIEW activa por clase CSS 'active'
+  const activeView = document.querySelector('#screen-equipo .view.active');
+  if (!activeView) { toast('Navega a un panel primero', 'info'); return; }
+
+  const viewId = activeView.id;
+
+  if (viewId === 'eq-financiero') {
+    printFinancieroCompleto(nombre, ronda);
+    return;
+  }
+  if (viewId === 'eq-resultados') {
+    printPanel('equipoResultadosContent', 'KPIs y Resultados — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-creditos') {
+    printPanel('eq-creditos-content', 'Créditos y Financiamiento — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-reportes') {
+    printPanel('reportesContent', 'Investigación de Mercado — ' + nombre, sub);
+    return;
+  }
+  if (viewId === 'eq-hoja') {
+    printHoja();
+    return;
+  }
+  toast('Este panel no tiene versión imprimible', 'info');
+}
+
+// ── Imprimir Estados Financieros completos (P&L + BG + FC) ────
+function printFinancieroCompleto(nombre, ronda) {
+  const plEl = document.getElementById('finPL');
+  const bgEl = document.getElementById('finBG');
+  const fcEl = document.getElementById('finFC');
+
+  // Mostrar todos temporalmente para capturar el HTML
+  const prevPL = plEl ? plEl.style.display : '';
+  const prevBG = bgEl ? bgEl.style.display : '';
+  const prevFC = fcEl ? fcEl.style.display : '';
+  if (bgEl) bgEl.style.display = '';
+  if (fcEl) fcEl.style.display = '';
+
+  const html = (plEl ? plEl.innerHTML : '')
+             + (bgEl ? bgEl.innerHTML : '')
+             + (fcEl ? fcEl.innerHTML : '');
+
+  // Restaurar estado de display
+  if (bgEl) bgEl.style.display = prevBG;
+  if (fcEl) fcEl.style.display = prevFC;
+
+  const css = '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:16px}'
+    + 'h1{font-size:14px;margin-bottom:4px;color:#2a2f45}'
+    + '.sub{font-size:9px;color:#666;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #2a2f45}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px}'
+    + 'th{background:#2a2f45;color:#fff;padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase}'
+    + 'td{padding:4px 8px;border:1px solid #ddd;vertical-align:top}'
+    + 'tr:nth-child(even) td{background:#f8f9ff}'
+    + '.result-round-card{border:1px solid #ddd;border-radius:5px;margin-bottom:12px;overflow:hidden;break-inside:avoid}'
+    + '.result-round-header{background:#2a2f45;color:#fff;padding:6px 12px;font-size:9.5px;font-weight:700;text-transform:uppercase}'
+    + '.fin-row{display:flex;justify-content:space-between;padding:3px 12px;border-bottom:1px solid #f0f0f0;font-size:10px}'
+    + '.fin-row.sub{background:#f0f4ff;font-weight:700}'
+    + '.pos,.up{color:#27ae60}.neg,.down{color:#e74c3c}'
+    + '.num{text-align:right}'
+    + 'button,.no-print{display:none!important}'
+    + '@media print{@page{margin:1cm;size:A4}body{padding:8px}}';
+
+  const win = window.open('', '_blank', 'width=1100,height=900');
+  const parts = [
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>',
+    '<title>Estados Financieros — ' + nombre + ' — Ronda ' + ronda + '</title>',
+    '<style>' + css + '</style></head><body>',
+    '<h1>Estados Financieros — ' + nombre + '</h1>',
+    '<div class="sub">Trimestre ' + ronda + ' / 20 | SimNego COM540 UAGRM</div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Estado de Resultados</h2>',
+    (plEl ? plEl.innerHTML : ''),
+    '<div style="margin-top:14px"></div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Balance General</h2>',
+    (bgEl ? bgEl.innerHTML : ''),
+    '<div style="margin-top:14px"></div>',
+    '<h2 style="font-size:11px;margin:8px 0 4px;color:#2a2f45;text-transform:uppercase">Flujo de Efectivo</h2>',
+    (fcEl ? fcEl.innerHTML : ''),
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
+  win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 600);
+}
+
+async function initEquipo() {
+  showScreen('screen-equipo');
+  setupNav('screen-equipo');
+  document.getElementById('equipoNombreSidebar').textContent = state.me.nombre;
+  document.getElementById('btnEquipoLogout').addEventListener('click', doLogout);
+  document.getElementById('btnPrintHoja').addEventListener('click', printHoja);
+  // P1 FIX: conectar botones del encabezado a sus funciones
+  document.getElementById('btnGuardar')?.addEventListener('click', guardarDecision);
+  document.getElementById('btnEnviar')?.addEventListener('click', enviarDecision);
+
+  // Show/hide print button only on hoja view
+  document.querySelectorAll('#screen-equipo .nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('btnPrintHoja').style.display = btn.dataset.view === 'eq-hoja' ? '' : 'none';
+    });
+  });
+
+  // ── BUG CORREGIDO: /api/decisiones lanzaba 400 si la sesión perdió
+  //    simulacionId (ej: relogin después de expiración de cookie).
+  //    Ahora muestra mensaje claro en lugar de romper toda la inicialización.
+  try {
+    const decData = await api('GET', '/api/decisiones');
+    state.ref = decData.referencia || null;
+    state.decisiones = decData.decision;
+    await loadHojaDecision();
+  } catch(e) {
+    const wrap = document.getElementById('decisionFormWrap');
+    if (wrap) {
+      wrap.innerHTML = `
+        <div class="empty-state" style="padding:40px 20px;text-align:center">
+          <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+          <h3 style="margin-bottom:8px">Sesión sin simulación activa</h3>
+          <p style="color:var(--text3);font-size:.88rem;margin-bottom:20px">
+            Tu sesión expiró o fue iniciada sin un código de simulación.<br>
+            Cierra sesión y vuelve a ingresar con tu nombre de equipo y contraseña,<br>
+            o solicita al profesor que reactive tu acceso.
+          </p>
+          <button class="btn btn-primary" onclick="doLogout()">Cerrar sesión →</button>
+        </div>`;
+    }
+  }
+}
+
+// ── Decision Form ──────────────────────────────────────────
+async function loadDecisionForm() {
+  const data = await api('GET','/api/decisiones');
+  state.decisiones = data.decision;
+  const n = data.ronda;
+  const isSimulated = data.roundState === 'simulated';
+  const isPending   = data.roundState === 'pending';
+  const isLocked    = data.roundState === 'locked';
+  const submitted   = data.decision.submitted;
+  const isEditable  = !isSimulated && !isPending && !isLocked && !submitted;
+
+  document.getElementById('decRondaNum').textContent = n;
+  document.getElementById('equipoRoundBadge').textContent = `Ronda ${n}/20`;
+  document.getElementById('equipoStateBadge').textContent =
+    isSimulated ? '🔒 Simulada'
+    : isPending  ? '⏸ Pendiente'
+    : isLocked   ? '🔒 Cerrada'
+    : submitted  ? '✓ Enviada'
+    : '🟢 Abierta';
+
+  const msg = isSimulated
+    ? '🔒 Esta ronda ya fue simulada. Los resultados están en "Mis Resultados".'
+    : isPending
+    ? '⏸ El profesor aún no ha habilitado las decisiones para este trimestre. Espera su indicación.'
+    : isLocked
+    ? '🔒 El profesor cerró el envío de decisiones. Ya no puedes modificar.'
+    : submitted
+    ? '✅ Decisiones enviadas. Esperando que el profesor ejecute la simulación.'
+    : '🟢 Ingresa tus decisiones y presiona Enviar cuando estés listo.';
+
+  const bannerClass = isSimulated ? 'simulated'
+    : isPending  ? 'pending'
+    : isLocked   ? 'simulated'
+    : submitted  ? 'submitted'
+    : 'open';
+  document.getElementById('decEstadoMsg').innerHTML = msg;
+
+  const d = state.decisiones;
+  const ref = state.ref;
+  const disabled = isEditable ? '' : 'disabled';
+
+  const segOpts = '<option value="">-- Seleccionar segmento --</option>' +
+  ref.segmentos.map(s => `<option ${s.nombre === d.segmentoObjetivo ? 'selected' : ''}>${s.nombre}</option>`).join('');
+  
+  const canalOpts = ref.canales.map(c => `<option ${c.nombre===d.canal?'selected':''}>${c.nombre}</option>`).join('');
+
+  const inp = (field, val, extra='') => `<input class="form-input editable" data-field="${field}" ${disabled} ${extra} value="${val ?? ''}"/>`;
+  const sel = (field, opts) => `<select class="form-select editable" data-field="${field}" ${disabled}>${opts}</select>`;
+  const chk = (field, val, label, cost) => `
+    <label class="check-label">
+      <input type="checkbox" data-field="${field}" ${val?'checked':''} ${disabled}/>
+      ${label}<span class="check-cost">${cost}</span>
+    </label>`;
+
+  document.getElementById('decisionFormWrap').innerHTML = `
+    <div class="status-banner ${bannerClass}">${msg}</div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">1 · Producto y Segmento</span></div>
+      <div class="decision-card-body">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">🎯 Segmento objetivo</label>${sel('segmentoObjetivo',segOpts)}</div>
+          <div class="form-group"><label class="form-label">🧪 Tipo de producto</label>${sel('tipoProducto',prodOpts)}</div>
+          <div class="form-group"><label class="form-label">⭐ Calidad (1–10)</label>${inp('calidad',d.calidad,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+4% costo/punto sobre 5</span></div>
+          <div class="form-group"><label class="form-label">💡 Diferenciación (1–10)</label>${inp('diferenciacion',d.diferenciacion,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+3% costo/punto sobre 5</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">2 · Precios y Canal</span></div>
+      <div class="decision-card-body">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">💰 Precio consumidor (Bs)</label>${inp('precioConsumidor',d.precioConsumidor,'type="number" min="1" step="0.5"')}</div>
+          <div class="form-group"><label class="form-label">🏪 Precio canal (Bs)</label>${inp('precioCanal',d.precioCanal,'type="number" min="1" step="0.5"')}<span class="form-hint">Debe ser menor al precio consumidor</span></div>
+          <div class="form-group"><label class="form-label">📦 Canal de distribución</label>${sel('canal',canalOpts)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">3 · Marketing y Fuerza de Ventas</span></div>
+      <div class="decision-card-body">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">📢 Marketing (Bs)</label>${inp('marketing',d.marketing,'type="number" min="0" step="500"')}<span class="form-hint">Rendimientos decrecientes (ln)</span></div>
+          <div class="form-group"><label class="form-label">👥 Vendedores actuales</label><input class="form-input" value="${d.vendedoresIniciales}" readonly/></div>
+          <div class="form-group"><label class="form-label">➕ Contratar</label>${inp('contratarVendedores',d.contratarVendedores,'type="number" min="0" step="1"')}<span class="form-hint">Bs 500/vendedor</span></div>
+          <div class="form-group"><label class="form-label">➖ Despedir</label>${inp('despedirVendedores',d.despedirVendedores,'type="number" min="0" step="1"')}<span class="form-hint">Bs 700/vendedor</span></div>
+          <div class="form-group"><label class="form-label">💵 Comisión (%)</label>${inp('comision',d.comision,'type="number" min="0" max="0.5" step="0.005"')}<span class="form-hint">Ej: 0.03 = 3%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">4 · Producción</span></div>
+      <div class="decision-card-body">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">🏭 Producción (unidades)</label>${inp('produccion',d.produccion,'type="number" min="0" step="500"')}<span class="form-hint">1,500 unid/operario · Descuento escala hasta 18%</span></div>
+          <div class="form-group"><label class="form-label">📦 Inventario inicial (unid)</label><input class="form-input" value="${fmt.num(d.inventarioInicial)}" readonly/><span class="form-hint">Propagado automáticamente</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">5 · Finanzas</span></div>
+      <div class="decision-card-body">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">💵 Caja inicial</label><input class="form-input" value="${fmt.bs(d.cajaInicial)}" readonly/></div>
+          <div class="form-group"><label class="form-label">📈 Préstamo nuevo (Bs)</label>${inp('prestamoNuevo',d.prestamoNuevo,'type="number" min="0" step="1000"')}</div>
+          <div class="form-group"><label class="form-label">📉 Amortización (Bs)</label>${inp('amortizacion',d.amortizacion,'type="number" min="0" step="1000"')}</div>
+          <div class="form-group"><label class="form-label">% Ventas a crédito</label>${inp('pctVentasCredito',d.pctVentasCredito,'type="number" min="0" max="1" step="0.05"')}</div>
+          <div class="form-group"><label class="form-label">% Compras a crédito</label>${inp('pctComprasCredito',d.pctComprasCredito,'type="number" min="0" max="1" step="0.05"')}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-card-header"><span class="section-tag">6 · Investigación de Mercado</span></div>
+      <div class="decision-card-body">
+        <div class="check-grid">
+          ${chk('compraSegmentacion',d.compraSegmentacion,'📊 Segmentación','Bs 1,000')}
+          ${chk('compraPrecios',d.compraPrecios,'💲 Precios','Bs 1,200')}
+          ${chk('compraCompetencia',d.compraCompetencia,'🔍 Competencia','Bs 1,500')}
+          ${chk('compraCanales',d.compraCanales,'📦 Canales','Bs 800')}
+        </div>
+        <p class="form-hint" style="margin-top:10px">Los reportes comprados se mostrarán en la pestaña "Reportes" después de la simulación.</p>
+      </div>
+    </div>
+  `;
+
+  // Bind inputs
+  document.querySelectorAll('#decisionFormWrap [data-field]').forEach(el => {
+    const ev = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      let val = el.type === 'checkbox' ? el.checked
+              : el.type === 'number'   ? +el.value
+              : el.tagName === 'SELECT' ? el.value.replace(/\s*\(Bs[\d.]+\)\s*$/, '')
+              : el.value;
+      if (el.tagName === 'SELECT' && el.dataset.field === 'tipoProducto') {
+        val = el.value.replace(/\s*\(Bs[\d.\s]+\)\s*$/, '').trim();
+        // FIX: escribir también el campo canónico "producto" que usa el motor
+        state.decisiones['producto'] = val;
+        if (state.decisiones.productos?.[0]) {
+          state.decisiones.productos[0].producto = val;
+        }
+      }
+      state.decisiones[el.dataset.field] = val;
+    });
+  });
+
+  // Toggle buttons visibility
+  document.getElementById('btnGuardar').style.display = isEditable ? '' : 'none';
+  document.getElementById('btnEnviar').style.display  = isEditable ? '' : 'none';
+}
+
+function sincronizarHojaConEstado() {
+  // P4 FIX: sincroniza el DOM de la hoja con state.decisiones antes de
+  // guardar o enviar, capturando cambios no procesados por el change handler.
+  document.querySelectorAll('[data-hoja-field]').forEach(el => {
+    if (!state.decisiones) return;
+    const field = el.dataset.hojaField;
+    const v = el.type === 'checkbox' ? el.checked
+            : el.type === 'number'   ? +el.value
+            : el.tagName === 'SELECT'
+              ? el.value.replace(/\s*\(Bs[\d.\s]+\)\s*$/, '').trim()
+            : el.value;
+    const prodFields = ['producto','segmentoObjetivo','canalPrincipal',
+      'canalSecundario','calidad','precioVenta','produccion','publicidad',
+      'promocion','eventos','marketingRedes','relacionesPublicas',
+      'innovacion','tipoInnovacion','montoInnovacion'];
+    if (state.decisiones.productos?.[0] && prodFields.includes(field)) {
+      state.decisiones.productos[0][field] = v;
+    }
+    if (field === 'producto' || field === 'tipoProducto') {
+      state.decisiones['producto'] = v;
+      if (state.decisiones.productos?.[0]) {
+        state.decisiones.productos[0].producto = v;
+      }
+    }
+    state.decisiones[field] = v;
+  });
+}
+
+async function guardarDecision() {
+  try {
+    await api('POST','/api/decisiones/guardar',{ decision: state.decisiones });
+    toast('💾 Decisiones guardadas','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function enviarDecision() {
+  if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
+  try {
+    const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));
+    await api('POST','/api/decisiones/enviar',{ decision: _d1 });
+    toast('✅ Decisiones enviadas correctamente','success');
+    await loadDecisionForm();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Hoja de Decisión ──────────────────────────────────────
+// Estado local de la hoja (se comparte con el formulario principal)
+// ══════════════════════════════════════════════════════════
+// HOJA DE DECISIÓN — 20 rondas
+// Estado local: no se usa hojaRondaActiva dentro de plantillas
+// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// HOJA DE DECISIÓN — diseño simple y directo, sin caché
+// Carga siempre fresco desde el servidor al abrir la vista
+// ══════════════════════════════════════════════════════════
+
+let hojaRondaActual = 1;   // ronda que está mostrando el selector
+
+let hojaProductoActivo = 0;
+
+function normalizarDecisionMultiproducto(decision) {
+  decision = decision || {};
+
+  // FIX: el formulario legado usa data-field="tipoProducto"; mapear a "producto"
+  // para garantizar que el motor siempre recibe el campo correcto.
+  if (!decision.producto && decision.tipoProducto) {
+    decision.producto = decision.tipoProducto;
+  }
+
+  if (!Array.isArray(decision.productos) || decision.productos.length === 0) {
+    decision.productos = [{
+      productoId: 'prod_1',
+      activo: true,
+      producto: decision.producto || decision.tipoProducto || '',
+      segmentoObjetivo: decision.segmentoObjetivo || '',
+      canalPrincipal: decision.canalPrincipal || '',
+      canalSecundario: decision.canalSecundario || 'Ninguno',
+      calidad: decision.calidad ?? 5,
+      precioVenta: decision.precioVenta ?? 3.6,
+      produccion: decision.produccion ?? 18000,
+      publicidad: decision.publicidad ?? 3000,
+      promocion: decision.promocion ?? 2000,
+      eventos: decision.eventos ?? 1000,
+      marketingRedes: decision.marketingRedes ?? 1000,
+      relacionesPublicas: decision.relacionesPublicas ?? 1000,
+      innovacion: decision.innovacion ?? false,
+      tipoInnovacion: decision.tipoInnovacion || '',
+      montoInnovacion: decision.montoInnovacion ?? 0
+    }];
+  }
+
+  // Compatibilidad temporal: el primer producto sigue alimentando los campos antiguos
+  const p = decision.productos[0] || {};
+  decision.producto = p.producto;
+  decision.segmentoObjetivo = p.segmentoObjetivo;
+  decision.canalPrincipal = p.canalPrincipal;
+  decision.canalSecundario = p.canalSecundario;
+  decision.calidad = p.calidad;
+  decision.precioVenta = p.precioVenta;
+  decision.produccion = p.produccion;
+  decision.publicidad = p.publicidad;
+  decision.promocion = p.promocion;
+  decision.eventos = p.eventos;
+  decision.marketingRedes = p.marketingRedes;
+  decision.relacionesPublicas = p.relacionesPublicas;
+  decision.innovacion = p.innovacion;
+  decision.tipoInnovacion = p.tipoInnovacion;
+  decision.montoInnovacion = p.montoInnovacion;
+
+  return decision;
+}
+
+function crearProductoDefault(idx) {
+  return {
+    productoId: 'prod_' + (idx + 1),
+    activo: true,
+    producto: '',
+    segmentoObjetivo: '',
+    canalPrincipal: '',
+    canalSecundario: 'Ninguno',
+    calidad: 5,
+    precioVenta: 0,
+    produccion: 0,
+    publicidad: 0,
+    promocion: 0,
+    eventos: 0,
+    marketingRedes: 0,
+    relacionesPublicas: 0,
+    innovacion: false,
+    tipoInnovacion: 'Producto',
+    montoInnovacion: 0,
+    vendedoresIniciales: 2,
+    contratarVendedores: 0,
+    despedirVendedores: 0,
+    // Etapa 3.2: Operarios
+    contratarOperarios:  0,
+    despedirOperarios:   0,
+    montoCapacitacion:   0,
+    // Etapa 3.1: Materia Prima
+    proveedorElegido:    '',
+    cantidadMPpedida:    0,
+    // Campos legado (para no romper motor con decisiones monoproducto viejas)
+    tipoPrestamo: 'Ninguno',
+    montoPrestamo: 0,
+    amortizacion: 0,
+  };
+}
+
+async function loadHojaDecision() {
+  const cont = document.getElementById('hojaContent');
+  const sel  = document.getElementById('hojaRondaSelector');
+  if (!cont) { console.error('hojaContent no encontrado'); return; }
+
+  cont.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Cargando hoja de decisión…</div>';
+
+  let decData, resData;
+  try {
+    [decData, resData] = await Promise.all([
+      api('GET', '/api/decisiones'),
+      api('GET', '/api/resultados'),
+    ]);
+  } catch(e) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p style="color:var(--accent4)">Error de conexión: ${e.message}</p></div>`;
+    return;
+  }
+
+  hojaRondaActual = decData.ronda;
+
+  // Construir navegación de rondas
+  const simuladas = new Set((resData.historial || []).map(h => h.ronda));
+  let navHTML = '';
+  for (let i = 1; i <= 20; i++) {
+    const isCurrent = i === decData.ronda;
+    const isSim     = simuladas.has(i);
+    const isFuture  = i > decData.ronda;
+    const cls = isCurrent ? 'active' : isSim ? 'done' : '';
+    navHTML += `<button class="hoja-round-btn ${cls}" ${isFuture?'disabled':''} onclick="hojaIrRonda(${i})">T${i}</button>`;
+  }
+  if (sel) sel.innerHTML = navHTML;
+
+  // Renderizar ronda actual
+  await hojaRenderRonda(decData.ronda, decData.decision, decData.roundState, null);
+}
+
+// Navegar a otra ronda desde el selector
+window.hojaIrRonda = async (n) => {
+  hojaRondaActual = n;
+  document.querySelectorAll('.hoja-round-btn').forEach((b, i) => b.classList.toggle('active', i+1===n));
+
+  const cont = document.getElementById('hojaContent');
+  if (!cont) return;
+  cont.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Cargando…</div>';
+
+  try {
+    // Ronda actual: cargar decisión editable
+    const decData = await api('GET', '/api/decisiones');
+    if (n === decData.ronda) {
+      await hojaRenderRonda(n, decData.decision, decData.roundState, null);
+      return;
+    }
+    // Ronda pasada: cargar resultado + decisión del historial
+    const resData = await api('GET', '/api/resultados');
+    const item = resData.historial?.find(h => h.ronda === n);
+    if (item) {
+      await hojaRenderRonda(n, item.decision || {}, 'simulated', item.resultado);
+    } else {
+      cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sin datos para la ronda ${n}</p></div>`;
+    }
+  } catch(e) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p style="color:var(--accent4)">${e.message}</p></div>`;
+  }
+};
+
+// Renderiza la hoja para una ronda específica
+async function hojaRenderRonda(n, decision, roundState, resultado) {
+  const cont = document.getElementById('hojaContent');
+  if (!cont) return;
+  decision = decision || {};
+  decision = normalizarDecisionMultiproducto(decision);
+  state.decisiones = decision;
+
+  if (roundState === 'pending') {
+    cont.innerHTML = `
+      <div class="round-pending-banner">
+        <div style="font-size:2.5rem;margin-bottom:14px">⏸</div>
+        <h3 style="font-size:1rem;font-weight:700;color:var(--accent3);margin-bottom:8px">Ronda ${n} — Aún no habilitada</h3>
+        <p style="color:var(--text2);font-size:.88rem;line-height:1.7;max-width:400px;margin:0 auto">
+          El profesor no ha activado la hoja de decisiones para este trimestre.<br>
+          <strong>Regresa cuando el profesor indique que está disponible.</strong>
+        </p>
+        <button class="btn btn-ghost" style="margin-top:20px" onclick="loadHojaDecision()">↺ Verificar estado</button>
+      </div>`;
+    return;
+  }
+
+  // ── ESTADO PRE-SIM: el profesor calculó la demanda, el equipo debe confirmar ──
+  if (roundState === 'pre-sim') {
+    try {
+      const psData = await api('GET', '/api/presim');
+      // presim puede ser un objeto (1 producto) o array (múltiples productos)
+      const psRaw = psData.presim;
+      const psList = Array.isArray(psRaw) ? psRaw : [psRaw];
+      const yaConfirmado = psList.every(p => p.confirmado);
+
+      // Construir filas de tabla para cada producto
+      const filas = psList.map((ps, idx) => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 14px;font-weight:700;color:var(--accent3)">
+            Producto ${idx+1}
+          </td>
+          <td style="padding:10px 14px;font-size:.82rem">${ps.producto||'—'}</td>
+          <td style="padding:10px 14px;font-size:.82rem">${ps.segmento||'—'}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono)">${fmt.num(ps.demandaFormal)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">${fmt.pct(ps.shareEstimado)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent5);font-weight:700">${fmt.num(ps.demandaAsignada)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono)">${fmt.num(ps.produccion)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:var(--accent5);font-weight:700">${fmt.num(ps.ventasEstimadas)}</td>
+          <td style="padding:10px 14px;text-align:right;font-family:var(--font-mono);color:${(ps.inventarioFinalEst||0)>0?'var(--accent4)':'var(--text)'}">${fmt.num(ps.inventarioFinalEst)}</td>
+        </tr>
+      `).join('');
+
+      const totalVentas     = psList.reduce((s,p) => s + (p.ventasEstimadas||0), 0);
+      const totalDemanda    = psList.reduce((s,p) => s + (p.demandaAsignada||0), 0);
+      const totalProduccion = psList.reduce((s,p) => s + (p.produccion||0), 0);
+
+      cont.innerHTML = `
+        <div style="max-width:860px;margin:0 auto;padding:20px">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:2rem;margin-bottom:8px">📊</div>
+            <h3 style="font-size:1.05rem;font-weight:700;color:var(--accent3)">Ronda ${n} — Demanda Estimada por Producto</h3>
+            <p style="color:var(--text2);font-size:.84rem;margin-top:4px">
+              El profesor ejecutó el cálculo de demanda para tus ${psList.length} producto(s). Revisa y confirma.
+            </p>
+          </div>
+
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
+            <div style="background:var(--bg3);padding:8px 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">
+              Resultados del cálculo de mercado
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+                <thead>
+                  <tr style="background:rgba(255,255,255,.04)">
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">#</th>
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producto</th>
+                    <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Segmento</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Demanda formal</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Market share</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Demanda asignada</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producción</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Ventas estimadas</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Inv. final est.</th>
+                  </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+                <tfoot>
+                  <tr style="background:rgba(6,255,165,.06);border-top:2px solid var(--border2)">
+                    <td colspan="5" style="padding:8px 14px;font-weight:700;font-size:.82rem">TOTAL EMPRESA</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;color:var(--accent5)">${fmt.num(totalDemanda)}</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700">${fmt.num(totalProduccion)}</td>
+                    <td style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;color:var(--accent5)">${fmt.num(totalVentas)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div style="background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:.81rem;color:var(--text2)">
+            <strong style="color:var(--accent3)">ℹ️ ¿Qué significa esto?</strong> —
+            Valores que el simulador usará en la simulación final. Reflejan tu atractivo competitivo frente a todos los equipos.
+            <strong>No puedes modificarlos</strong> — son resultado de tus decisiones enviadas.
+          </div>
+
+          ${yaConfirmado
+            ? '<div style="text-align:center;padding:14px;background:rgba(6,255,165,.08);border:1px solid rgba(6,255,165,.3);border-radius:var(--r)"><span style="font-size:1.4rem">✅</span><p style="color:var(--accent5);font-weight:700;margin-top:4px">Ya confirmaste la recepción de estos datos</p><p style="color:var(--text2);font-size:.82rem;margin-top:4px">Espera a que el profesor ejecute la simulación final.</p></div>'
+            : '<button class="btn btn-success btn-full" style="padding:12px;font-size:.95rem" id="btnConfirmarPresim">✓ Confirmar — Recibí mi demanda estimada</button><p style="text-align:center;font-size:.74rem;color:var(--text3);margin-top:6px">Al confirmar le indicas al profesor que viste estos datos.</p>'
+          }
+        </div>`;
+
+      if (!yaConfirmado) {
+        document.getElementById('btnConfirmarPresim')?.addEventListener('click', async () => {
+          try {
+            await api('POST', '/api/presim/confirmar');
+            toast('✅ Confirmado correctamente', 'success');
+            await hojaRenderRonda(n, decision, roundState, resultado);
+          } catch(e) { toast(e.message, 'error'); }
+        });
+      }
+    } catch(e) {
+      cont.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p style="color:var(--accent4)">${e.message}</p></div>`;
+    }
+    return;
+  }
+
+  const ref = state.ref;
+  if (!ref) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error: datos de referencia no cargados. <button class="btn btn-ghost btn-sm" onclick="location.reload()">Recargar</button></p></div>`;
+    return;
+  }
+
+  const j = decision.justificaciones || {};
+   const productos = decision.productos || [];
+
+      if (hojaProductoActivo >= productos.length) {
+        hojaProductoActivo = 0;
+      }
+
+      const productoActivo = productos[hojaProductoActivo] || productos[0] || crearProductoDefault(0);
+
+    window.hojaSeleccionarProducto = (idx) => {
+      hojaProductoActivo = idx;
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
+    window.hojaAgregarProducto = () => {
+      if (!Array.isArray(state.decisiones.productos)) {
+        state.decisiones.productos = [];
+      }
+
+      if (state.decisiones.productos.length >= 5) {
+        toast('Máximo 5 productos por empresa', 'info');
+        return;
+      }
+
+      state.decisiones.productos.push(
+        crearProductoDefault(state.decisiones.productos.length)
+      );
+
+      hojaProductoActivo = state.decisiones.productos.length - 1;
+
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
+    window.hojaEliminarProducto = (idx) => {
+      if (!Array.isArray(state.decisiones.productos) || state.decisiones.productos.length <= 1) {
+        toast('No se puede eliminar el único producto', 'info');
+        return;
+      }
+      state.decisiones.productos.splice(idx, 1);
+      // Ajustar índice activo si es necesario
+      if (hojaProductoActivo >= state.decisiones.productos.length) {
+        hojaProductoActivo = state.decisiones.productos.length - 1;
+      }
+      hojaRenderRonda(n, state.decisiones, roundState, resultado);
+    };
+
+  const isEditable = roundState === 'open' && !decision.submitted;
+  const isLocked   = roundState === 'locked';
+
+  const inp = (field, val, type='number', extra='') =>
+    isEditable
+      ? `<input class="hoja-input editable" data-hoja-field="${field}" type="${type}" value="${val??''}" ${extra}/>`
+      : `<span class="hoja-value-ro">${val??'—'}</span>`;
+
+  const sel = (field, opts) =>
+    isEditable
+      ? `<select class="hoja-select editable" data-hoja-field="${field}">${opts}</select>`
+      : `<span class="hoja-value-ro">${decision[field]||'—'}</span>`;
+
+  const ta = (jfield, ph) =>
+    isEditable
+      ? `<textarea class="hoja-textarea editable" data-hoja-just="${jfield}" placeholder="${ph}">${j[jfield]||''}</textarea>`
+      : `<span style="color:var(--text3);font-size:.76rem;font-style:italic">${j[jfield]||'—'}</span>`;
+
+  const chk = (field, label) =>
+    isEditable
+      ? `<input type="checkbox" data-hoja-field="${field}" ${decision[field]?'checked':''} style="width:16px;height:16px;accent-color:var(--accent)"/> ${label}`
+      : `<span class="hoja-value-ro">${decision[field]?'✓ Sí':'✗ No'}</span> ${label}`;
+
+    const segOpts = '<option value="">-- Seleccionar segmento --</option>' +
+    ref.segmentos.map(s => `<option ${s.nombre === productoActivo.segmentoObjetivo ? 'selected' : ''}>${s.nombre}</option>`).join('');
+     const prodOpts = '<option value="">-- Seleccionar producto --</option>' +
+    ref.tiposProducto.map(t => `<option ${t.nombre === productoActivo.producto ? 'selected' : ''}>${t.nombre} (Bs ${t.costoBase})</option>`).join('');
+  
+      // canales puede ser array [{nombre,...}] o objeto {nombre:{...}}
+  const _canalNames = Array.isArray(ref.canales)
+    ? ref.canales.map(c => c.nombre)
+    : Object.keys(ref.canales || {});
+  const canalOpts  = ['Ninguno', ..._canalNames].map(c => `<option ${c===productoActivo.canalPrincipal?'selected':''}>${c}</option>`).join('');
+  const canal2Opts = ['Ninguno', ..._canalNames].map(c => `<option ${c===productoActivo.canalSecundario?'selected':''}>${c}</option>`).join('');
+  const tipoPresOpts = ['Ninguno','Operativo','Inversión'].map(t=>`<option ${t===decision.tipoPrestamo?'selected':''}>${t}</option>`).join('');
+  const tipoInnOpts = ['Producto','Proceso','Canal'].map(t=>`<option ${t===productoActivo.tipoInnovacion?'selected':''}>${t}</option>`).join('');
+  const tipoInvOpts  = ['No','Básica','Premium'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
+
+  const p = ref.parametros || {};
+  const estadoBadge = roundState==='simulated' ? '<span class="badge badge-simulated">🔒 Simulada</span>'
+    : isLocked ? '<span class="badge badge-alert">🔒 Cerrada</span>'
+    : decision.submitted ? '<span class="badge badge-sent">✓ Enviada</span>'
+    : '<span class="badge badge-open">🟢 Abierta</span>';
+
+  cont.innerHTML = `
+  <div class="hoja-wrap">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+  ${productos.map((p, idx) => `
+    <button
+      type="button"
+      class="btn ${idx === hojaProductoActivo ? 'btn-success' : 'btn-ghost'} btn-sm"
+      onclick="hojaSeleccionarProducto(${idx})"
+      style="padding-right: ${isEditable && idx > 0 ? '4px' : ''}"
+    >
+      📦 Producto ${idx + 1}
+      ${isEditable && idx > 0 ? `<span
+        onclick="event.stopPropagation(); hojaEliminarProducto(${idx})"
+        style="margin-left:6px;color:#e74c3c;font-weight:bold;font-size:.85rem;cursor:pointer"
+        title="Eliminar Producto ${idx + 1}"
+      >✕</span>` : ''}
+    </button>
+  `).join('')}
+
+  ${isEditable ? `
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm"
+      onclick="hojaAgregarProducto()"
+    >
+      ➕ Agregar Producto
+    </button>
+  ` : ''}
+</div>
+
+    <div class="hoja-team-header">
+      <span class="hoja-team-nombre">📋 ${state.me?.nombre||''}</span>
+      <span class="hoja-team-ronda">Trimestre ${n} / 20</span>
+      <span class="hoja-team-estado">${estadoBadge}</span>
+    </div>
+
+    <!-- S1: PRODUCTO Y SEGMENTO -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">1 · Producto y Segmento Objetivo</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Justificación</th></tr></thead>
+        <tbody>
+          <tr><td class="hoja-label">🎯 Segmento objetivo</td>
+              <td>${sel('segmentoObjetivo',segOpts)}</td>
+              <td class="hoja-ref">7 segmentos disponibles</td>
+              <td>${ta('segmentoProducto','¿Por qué este segmento?')}</td></tr>
+          <tr><td class="hoja-label">🧪 Tipo de producto</td>
+              <td>${sel('producto',prodOpts)}</td>
+              <td class="hoja-ref">Costo base varía por tipo</td>
+              <td></td></tr>
+          <tr><td class="hoja-label">📦 Canal principal</td>
+              <td>${sel('canalPrincipal',canalOpts)}</td>
+              <td class="hoja-ref">Define costo, comisión e impacto vendedores</td>
+              <td>${ta('canal','¿Por qué este canal?')}</td></tr>
+          <tr><td class="hoja-label">📦 Canal secundario</td>
+              <td>${sel('canalSecundario',canal2Opts)}</td>
+              <td class="hoja-ref">Opcional — promedia con canal principal</td>
+              <td></td></tr>
+          <tr><td class="hoja-label">⭐ Calidad (1–10)</td>
+              <td>${inp('calidad',productoActivo.calidad,'number','min="1" max="10" step="1"')}</td>
+              <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
+              <td></td></tr>
+          <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
+              <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
+              <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
+              <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
+          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
+              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
+              <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||20000)} unid</td>
+              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+        <!-- S2: MARKETING DESAGREGADO -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">2 · Marketing y Fuerza de Ventas</div>
+      <table class="hoja-table">
+        <thead><tr><th>Rubro</th><th>Monto (Bs)</th><th>Referencia</th><th>Justificación</th></tr></thead>
+        <tbody>
+          <tr><td class="hoja-label">📣 Publicidad</td>
+              <td>${inp('publicidad',productoActivo.publicidad,'number','min="0" step="500"')}</td>
+              <td class="hoja-ref">Impacto en atractivo competitivo</td>
+              <td>${ta('marketing','¿Cómo distribuiste el presupuesto?')}</td></tr>
+          <tr><td class="hoja-label">🎁 Promoción</td>
+              <td>${inp('promocion',productoActivo.promocion,'number','min="0" step="500"')}</td>
+              <td class="hoja-ref">Alta eficacia en segmentos masivos</td><td></td></tr>
+          <tr><td class="hoja-label">🎪 Eventos</td>
+              <td>${inp('eventos',productoActivo.eventos,'number','min="0" step="500"')}</td>
+              <td class="hoja-ref">Eficacia media; fortalece posicionamiento</td><td></td></tr>
+          <tr><td class="hoja-label">📱 Marketing en redes</td>
+              <td>${inp('marketingRedes',productoActivo.marketingRedes,'number','min="0" step="500"')}</td>
+              <td class="hoja-ref">Alta eficacia en segmentos Natural y Cosmético</td><td></td></tr>
+          <tr><td class="hoja-label">📰 Relaciones públicas</td>
+              <td>${inp('relacionesPublicas',productoActivo.relacionesPublicas,'number','min="0" step="500"')}</td>
+              <td class="hoja-ref">Alta eficacia en segmentos diferenciados</td><td></td></tr>
+          <tr style="border-top:2px solid var(--border2)">
+            <td class="hoja-label">👥 Vendedores actuales</td>
+            <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
+            <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
+          <tr><td class="hoja-label">➕ Contratar vendedores</td>
+              <td>${inp('contratarVendedores',decision.contratarVendedores??0,'number','min="0" max="10" step="1"')}</td>
+              <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
+          <tr><td class="hoja-label">➖ Despedir vendedores</td>
+              <td>${inp('despedirVendedores',decision.despedirVendedores??0,'number','min="0" step="1"')}</td>
+              <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+        <!-- S2.5: OPERARIOS — Etapa 3.2 -->
+    ${(p.costoOperario !== undefined && p.modulos_modOperarios !== 0) ? `
+    <div class="hoja-section">
+      <div class="hoja-section-title">2.5 · RRHH — Operarios de Producción</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="hoja-label">🏭 Operarios actuales</td>
+            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
+            <td class="hoja-ref">Propagado de ronda anterior</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">➕ Contratar operarios</td>
+            <td>${inp('contratarOperarios', decision.contratarOperarios ?? 0, 'number', 'min="0" max="20" step="1"')}</td>
+            <td class="hoja-ref">Costo contratación: Bs ${fmt.num(p.costoContratacionOperario ?? 800)} c/u</td>
+            <td style="font-size:.78rem;color:var(--text3)">Sueldo: Bs ${fmt.num(p.costoOperario ?? 3200)}/trim/operario</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">➖ Despedir operarios</td>
+            <td>${inp('despedirOperarios', decision.despedirOperarios ?? 0, 'number', 'min="0" step="1"')}</td>
+            <td class="hoja-ref">Costo despido: Bs ${fmt.num(p.costoDespidoOperario ?? 1200)} c/u</td>
+            <td style="font-size:.78rem;color:var(--text3)">Mínimo final: 0 operarios</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🎓 Inversión en capacitación (Bs)</td>
+            <td>${inp('montoCapacitacion', decision.montoCapacitacion ?? 0, 'number', 'min="0" step="1000"')}</td>
+            <td class="hoja-ref">+${fmt.pct(p.factorCapacitacion ?? 0.05)} productividad por cada Bs 10.000</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. = operarios × ${p.productividadBase ?? 440} × (1 + factor)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+        <!-- S2.6: MATERIA PRIMA — Etapa 3.1 -->
+    ${(ref.proveedores && ref.proveedores.length > 0 && p.modulos_modMateriaPrima !== 0) ? `
+    <div class="hoja-section">
+      <div class="hoja-section-title">2.6 · Materia Prima — Compra de insumos</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="hoja-label">📦 Stock MP disponible</td>
+            <td><span class="hoja-value-ro">${fmt.num(decision.stockMPInicial ?? 0)} unid</span></td>
+            <td class="hoja-ref">Heredado + pedidos recibidos esta ronda</td>
+            <td style="font-size:.78rem;color:var(--text3)">
+              Producibles: ${fmt.num(Math.floor((decision.stockMPInicial ?? 0) / (p.unidadesMPporUnidad ?? 1)))} unid
+              ${decision.pedidosPendientes?.length > 0
+                ? ' · <strong style="color:var(--accent3)">Pedidos en tránsito: ' + decision.pedidosPendientes.length + '</strong>'
+                : ''}
+            </td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🏢 Proveedor a elegir</td>
+            <td>${isEditable
+              ? `<select class="hoja-select editable" data-hoja-field="proveedorElegido">
+                  <option value="">— Sin pedido este trimestre —</option>
+                  ${ref.proveedores.map(pv =>
+                    `<option value="${pv.id}" ${decision.proveedorElegido===pv.id?'selected':''}>
+                      ${pv.nombre} · Bs ${pv.costoMP}/unid · Lead time: ${pv.leadTime} trim.
+                    </option>`
+                  ).join('')}
+                </select>`
+              : `<span class="hoja-value-ro">${decision.proveedorElegido || '—'}</span>`
+            }</td>
+            <td class="hoja-ref">El stock llega en la ronda indicada por el lead time</td>
+            <td style="font-size:.78rem;color:var(--accent4)">⚠ Pedir con anticipación</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🛒 Cantidad a pedir (unid MP)</td>
+            <td>${inp('cantidadMPpedida', decision.cantidadMPpedida ?? 0, 'number', 'min="0" step="100"')}</td>
+            <td class="hoja-ref">Almacenamiento MP sobrante: Bs ${p.costoAlmacenamientoMP ?? 0.05}/unid/trim</td>
+            <td style="font-size:.78rem;color:var(--text3)">0 si no vas a pedir. 1 unid MP → ${p.unidadesMPporUnidad ?? 1} unid producidas</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+        ${hojaProductoActivo === 0 ? `
+    <!-- S3: FINANCIAMIENTO -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">3 · Financiamiento</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Justificación</th></tr></thead>
+        <tbody>
+          <tr><td class="hoja-label">🏦 Tipo de préstamo</td>
+              <td>${sel('tipoPrestamo',tipoPresOpts)}</td>
+              <td class="hoja-ref">Operativo: ${fmt.pct(p.tasaPrestamoOperativo||0.04)} trim. · Inversión: ${fmt.pct(p.tasaPrestamoInversion||0.03)} trim.</td>
+              <td>${ta('finanzas','¿Necesitas financiamiento? ¿Por qué?')}</td></tr>
+          <tr><td class="hoja-label">💵 Monto (Bs)</td>
+              <td>${inp('montoPrestamo',decision.montoPrestamo,'number','min="0" step="1000"')}</td>
+              <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
+          <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
+              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number','min="1" max="8" step="1"')}</td>
+              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||2} trim. · Inv: ${p.plazoPrestamoInversion||4} trim.</td><td></td></tr>
+          <tr><td class="hoja-label">📉 Amortización (Bs)</td>
+              <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
+              <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2)">
+        <strong>Situación financiera actual:</strong>
+        Caja Bs ${fmt.bs(decision.cajaInicial)} · CxC Bs ${fmt.bs(decision.cxcInicial)} · Deuda Bs ${fmt.bs(decision.deudaInicial)} · Inventario ${fmt.num(decision.inventarioInicial)} unid
+      </div>
+    </div>
+    ` : ''}
+
+      <!-- S4: INNOVACIÓN -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">4 · Innovación</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Referencia</th><th>Justificación</th></tr></thead>
+        <tbody>
+          <tr><td class="hoja-label">💡 ¿Innovar este trimestre?</td>
+              <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" data-hoja-field="innovacion" ${productoActivo.innovacion ? 'checked' : ''} ${isEditable ? '' : 'disabled'}/>
+                Sí, innovar
+              </label></td>
+              <td class="hoja-ref">Afecta costo unitario o atractivo según tipo</td>
+              <td>${ta('innovacion','¿Por qué innovar y en qué?')}</td></tr>
+          <tr><td class="hoja-label">🔧 Tipo de innovación</td>
+              <td>${sel('tipoInnovacion',tipoInnOpts)}</td>
+              <td class="hoja-ref">Producto: +CU · Proceso: −CU · Canal: +atractivo</td><td></td></tr>
+          <tr><td class="hoja-label">💰 Inversión en innovación (Bs)</td>
+              <td>${inp('montoInnovacion',productoActivo.montoInnovacion,'number','min="0" step="1000"')}</td>
+              <td class="hoja-ref">Se desembolsa este trimestre (gasto operativo)</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+      ${hojaProductoActivo === 0 ? `
+    <!-- S5: INVESTIGACIÓN DE MERCADO -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">5 · Investigación de Mercado</div>
+      <table class="hoja-table">
+        <thead><tr><th>Decisión</th><th>Tu elección</th><th>Qué incluye</th><th>Justificación</th></tr></thead>
+        <tbody>
+          <tr><td class="hoja-label">🔍 Tipo de reporte</td>
+              <td>${sel('tipoInvestigacion',tipoInvOpts)}</td>
+              <td class="hoja-ref">
+                <strong>Básico Bs ${fmt.num(p.costoInvestigacionBasica||4000)}:</strong> tamaño de mercado, precios, alertas<br>
+                <strong>Premium Bs ${fmt.num(p.costoInvestigacionPremium||7500)}:</strong> + participación, sensibilidad, recomendaciones
+              </td>
+              <td>${ta('investigacion','¿Por qué comprar este reporte?')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    <!-- S6: RESUMEN DE VALORES -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">6 · Resumen de Valores</div>
+      <div class="hoja-resumen-grid" id="hojaResumen">${hojaResumenV2(decision)}</div>
+    </div>
+
+    ${resultado ? hojaKpiHTML(resultado) : ''}
+
+    <div class="hoja-actions">
+      ${isEditable
+        ? `<button class="btn btn-ghost" id="btnHojaGuardar">💾 Guardar borrador</button>
+           <button class="btn btn-success" id="btnHojaEnviar">✓ Enviar decisiones</button>`
+        : `<span style="color:var(--text3);font-size:.82rem">
+             ${roundState==='simulated' ? '🔒 Simulada — ver Estados Financieros en el menú 📊'
+               : roundState==='pending' ? '⏸ Esperando activación del profesor.'
+               : isLocked ? '🔒 Envío cerrado.'
+               : '✅ Enviada — esperando simulación.'}
+           </span>`}
+    </div>
+  </div>`;
+
+if (isEditable) {
+  cont.querySelectorAll('[data-hoja-field]').forEach(el => {
+
+    el.addEventListener(
+      el.type === 'checkbox' ? 'change' : 'input',
+      () => {
+
+        const v =
+          el.type === 'checkbox' ? el.checked
+          : el.type === 'number' ? +el.value
+          : el.tagName === 'SELECT'
+            ? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/, '').trim()
+            : el.value;
+
+        const productFields = [
+          'producto',
+          'segmentoObjetivo',
+          'canalPrincipal',
+          'canalSecundario',
+          'calidad',
+          'precioVenta',
+          'produccion',
+          'publicidad',
+          'promocion',
+          'eventos',
+          'marketingRedes',
+          'relacionesPublicas',
+          'innovacion',
+          'tipoInnovacion',
+          'montoInnovacion',
+          // Etapa 3.2: Operarios
+          'contratarOperarios',
+          'despedirOperarios',
+          'montoCapacitacion',
+          // Etapa 3.1: Materia Prima
+          'cantidadMPpedida',
+          'proveedorElegido',
+        ];
+
+        const field = el.dataset.hojaField;
+
+        if (productFields.includes(field)) {
+
+          if (!state.decisiones.productos) {
+            state.decisiones.productos = [];
+          }
+
+          if (!state.decisiones.productos[hojaProductoActivo]) {
+            state.decisiones.productos[hojaProductoActivo] =
+              crearProductoDefault(hojaProductoActivo);
+          }
+
+          // Campos de EMPRESA: se guardan en state.decisiones raíz (no en el producto)
+          const camposEmpresa = [
+            'contratarVendedores','despedirVendedores',
+            'contratarOperarios','despedirOperarios','montoCapacitacion',
+            'tipoPrestamo','montoPrestamo','plazoPrestamo','amortizacion',
+            'tipoInvestigacion',
+          ];
+
+          if (camposEmpresa.includes(field)) {
+            // Campo de empresa: guardar en raíz y sincronizar en todos los productos
+            state.decisiones[field] = v;
+            if (Array.isArray(state.decisiones.productos)) {
+              state.decisiones.productos.forEach(p => { p[field] = v; });
+            }
+          } else {
+            // Campo de producto: guardar solo en el producto activo
+            const prod = state.decisiones.productos[hojaProductoActivo];
+            if (prod) prod[field] = v;
+            if (productoActivo) productoActivo[field] = v;
+            // Compatibilidad con producto 1
+            if (hojaProductoActivo === 0) state.decisiones[field] = v;
+          }
+
+          decision = state.decisiones;
+
+        } else {
+
+          decision[field] = v;
+
+          if (state.decisiones) {
+            state.decisiones[field] = v;
+          }
+        }
+
+        const r = document.getElementById('hojaResumen');
+
+        if (r) {
+          r.innerHTML = hojaResumenV2(decision);
+        }
+      }
+    );
+  });
+}
+
+  
+
+
+
+    cont.querySelectorAll('[data-hoja-just]').forEach(el => {
+      el.addEventListener('input', () => {
+        if (!decision.justificaciones) decision.justificaciones = {};
+        decision.justificaciones[el.dataset.hojaJust] = el.value;
+        if (state.decisiones?.justificaciones) state.decisiones.justificaciones[el.dataset.hojaJust] = el.value;
+      });
+    });
+    document.getElementById('btnHojaGuardar')?.addEventListener('click', async () => {
+      try { await api('POST','/api/decisiones/guardar',{decision}); toast('💾 Guardado','success'); }
+      catch(e) { toast(e.message,'error'); }
+    });
+    document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
+      if (!confirm('¿Enviar decisiones?\n\nEl profesor ejecutará la simulación cuando todos los equipos hayan enviado.')) return;
+      try {
+        const _d3 = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
+        await api('POST','/api/decisiones/enviar',{decision: _d3});
+        toast('✅ Enviado','success');
+        await loadHojaDecision();
+      } catch(e) { toast(e.message,'error'); }
+    });
+  }
+
+
+function hojaResumenV2(d) {
+  if (!d) return '';
+  const rows = [
+    ['Producto',        d.producto],
+    ['Segmento',        d.segmentoObjetivo],
+    ['Canal principal', d.canalPrincipal],
+    ['Canal secundario',d.canalSecundario||'Ninguno'],
+    ['Calidad',         d.calidad],
+    ['Precio venta',    `Bs ${d.precioVenta??0}`],
+    ['Producción',      fmt.num(d.produccion??0)+' unid'],
+    ['Publicidad',      fmt.bs(d.publicidad??0)],
+    ['Promoción',       fmt.bs(d.promocion??0)],
+    ['Eventos',         fmt.bs(d.eventos??0)],
+    ['Mkt redes',       fmt.bs(d.marketingRedes??0)],
+    ['RRPP',            fmt.bs(d.relacionesPublicas??0)],
+    ['Contratar vend.', d.contratarVendedores??0],
+    ['Despedir vend.',  d.despedirVendedores??0],
+    ['Préstamo tipo',   d.tipoPrestamo||'Ninguno'],
+    ['Monto préstamo',  fmt.bs(d.montoPrestamo??0)],
+    ['Amortización',    fmt.bs(d.amortizacion??0)],
+    ['Innovación',      d.innovacion?`Sí — ${d.tipoInnovacion}`:'No'],
+    ['Monto innovación',fmt.bs(d.montoInnovacion??0)],
+    ['Investigación',   d.tipoInvestigacion||'No'],
+  ];
+  return rows.map(([l,v])=>`
+    <div class="hoja-resumen-row">
+      <span class="hoja-resumen-label">${l}</span>
+      <span class="hoja-resumen-val">${v??'—'}</span>
+    </div>`).join('');
+}
+
+// KPI rápido al final de la hoja (cuando la ronda está simulada)
+function hojaKpiHTML(r) {
+  if (!r) return '';
+  return `
+  <div class="hoja-section">
+    <div class="hoja-section-title" style="color:var(--accent5)">📊 Resultados del Trimestre (resumen)</div>
+    <div class="hoja-resumen-grid">
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Ventas reales</span><span class="hoja-resumen-val">${fmt.num(r.ventasReales)} unid</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Market share</span><span class="hoja-resumen-val">${fmt.pct(r.shareReal)}</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Ventas netas</span><span class="hoja-resumen-val">${fmt.bs(r.ventasNetas)}</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Utilidad bruta</span><span class="hoja-resumen-val" style="color:${r.utilidadBruta>=0?'var(--accent2)':'var(--accent4)'}">${fmt.bs(r.utilidadBruta)}</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Utilidad neta</span><span class="hoja-resumen-val" style="color:${r.utilidadNeta>=0?'var(--accent5)':'var(--accent4)'}">${fmt.bs(r.utilidadNeta)}</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Caja final</span><span class="hoja-resumen-val" style="color:${r.cajaFinal>=0?'var(--accent2)':'var(--accent4)'}">${fmt.bs(r.cajaFinal)} <span class="badge ${r.alertaCaja==='ALERTA'?'badge-alert':'badge-ok'}">${r.alertaCaja}</span></span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Costo unitario</span><span class="hoja-resumen-val">Bs ${fmt.d(r.costoUnitario,3)}</span></div>
+      <div class="hoja-resumen-row"><span class="hoja-resumen-label">Inventario final</span><span class="hoja-resumen-val">${fmt.num(r.inventarioFinal)} unid</span></div>
+    </div>
+    <p style="padding:8px 14px;font-size:.78rem;color:var(--text2)">Ver <strong>📊 Estados Financieros</strong> para P&L completo, Balance General y Flujo de Efectivo.</p>
+  </div>`;
+}
+
+async function loadEquipoResultados() {
+  const data = await api('GET','/api/resultados');
+  const el = document.getElementById('equipoResultadosContent');
+  if (!el) return;
+
+  if (!data.historial?.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>Aún no hay rondas simuladas.</p></div>`;
+    return;
+  }
+
+  const latest = data.historial[data.historial.length - 1];
+  const nav = data.historial.map(h=>`<button class="ronda-btn simulated" onclick="mostrarKpiRonda(${h.ronda})">Ronda ${h.ronda}</button>`).join('');
+  el.innerHTML = `<div class="ronda-selector">${nav}</div><div id="kpiDetalle"></div>`;
+  mostrarKpiRonda(latest.ronda, data.historial);
+}
+
+window.mostrarKpiRonda = (n, historial) => {
+  document.querySelectorAll('#equipoResultadosContent .ronda-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace('Ronda ',''))===n);
+  });
+  if (!historial) { api('GET','/api/resultados').then(d=>mostrarKpiRonda(n,d.historial)); return; }
+  const item = historial.find(h=>h.ronda===n);
+  if (!item) return;
+  const r = item.resultado;
+
+  // ── Calculated KPIs ──
+  const mgBruto   = r.ventasNetas>0 ? (r.utilidadBruta/r.ventasNetas*100).toFixed(2) : '—';
+  const mgNeto    = r.ventasNetas>0 ? (r.utilidadNeta/r.ventasNetas*100).toFixed(2)  : '—';
+  const endeud    = r.totalActivos>0 ? (r.deudaFinal/r.totalActivos*100).toFixed(2)  : '0.00';
+  const invProd   = r.produccion>0 ? (r.inventarioFinal/r.produccion*100).toFixed(1) : '0.0';
+  const vendFin   = r.vendedoresFinales || 0;
+  const ventasPorVend = vendFin>0 ? fmt.num(Math.round(r.ventasReales/vendFin)) : '—';
+  const ingrPorVend  = vendFin>0 ? fmt.bs(Math.round(r.ventasNetas/vendFin))   : '—';
+  const utilPorUnid  = r.ventasReales>0 ? fmt.d((r.ventasNetas-r.costoVentas)/r.ventasReales,3) : '—';
+  const liquidez  = r.deudaFinal>0 ? fmt.d((r.cajaFinal+r.cxcFinal+r.invFinalValorizado)/r.deudaFinal,2) : '∞';
+
+  const kpiSection = (title) =>
+    '<tr><td colspan="3" style="padding:6px 14px 2px;font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;border-top:1px solid var(--border)">' + title + '</td></tr>';
+
+  const kpiRow = (label, value, color='', hint='') =>
+    `<tr><td style="padding:8px 14px;color:var(--text2);font-size:.82rem">${label}</td>
+         <td style="padding:8px 14px;font-family:var(--font-mono);font-size:.82rem;text-align:right;color:${color||'var(--text)'}">${value}</td></tr>`;
+
+  document.getElementById('kpiDetalle').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:14px">
+
+      <!-- ── Gerente de Marketing ────────────────────── -->
+      <div class="result-round-card">
+        <div class="result-round-header"><h3>📣 Gerente de Marketing</h3></div>
+        <table style="width:100%;border-collapse:collapse">
+
+          ${/* ─ Penetración y posicionamiento ─ */kpiSection('🎯 Penetración y Posicionamiento')}
+          ${kpiRow('Market Share real',
+              fmt.pct(r.shareReal),
+              r.shareReal>0.35?'var(--accent5)':r.shareReal>0.15?'var(--accent3)':'var(--accent4)',
+              r.shareReal>0.35?'Líder de mercado':r.shareReal>0.15?'Posición competitiva':'Posición débil')}
+          ${kpiRow('Demanda formal del segmento',   fmt.num(r.demandaFormal||0),     'var(--text2)')}
+          ${kpiRow('Demanda asignada a la empresa', fmt.num(r.demandaAsignada||0),   'var(--accent3)')}
+          ${kpiRow('Unidades vendidas',             fmt.num(r.ventasReales||0),      r.ventasReales>0?'var(--accent5)':'var(--accent4)')}
+          ${kpiRow('% Demanda capturada',
+              r.demandaFormal>0 ? fmt.pct((r.ventasReales||0)/(r.demandaFormal)) : '—',
+              'var(--text2)')}
+
+          ${kpiSection('💰 Rentabilidad Comercial')}
+          ${kpiRow('Ventas brutas (Bs)',            fmt.bs(r.ventasBrutas||0),       'var(--text2)')}
+          ${kpiRow('Ventas netas (Bs)',             fmt.bs(r.ventasNetas||0),        'var(--accent3)')}
+          ${kpiRow('Margen bruto (%)',
+              r.ventasNetas>0 ? ((r.utilidadBruta||0)/r.ventasNetas*100).toFixed(1)+'%' : '—',
+              (r.utilidadBruta||0)>=0?'var(--accent5)':'var(--accent4)',
+              (r.utilidadBruta||0)>=0?'Margen positivo':'Margen negativo')}
+          ${kpiRow('Precio de venta (Bs)',
+              fmt.bs(r.precioVenta||0),
+              'var(--text2)')}
+          ${kpiRow('Costo unitario (Bs)',
+              fmt.bs(r.costoUnitario||0),
+              'var(--text2)')}
+          ${kpiRow('Margen unitario (Bs)',
+              fmt.bs((r.precioVenta||0)-(r.costoUnitario||0)),
+              (r.precioVenta||0)>(r.costoUnitario||0)?'var(--accent5)':'var(--accent4)')}
+
+          ${kpiSection('📢 Inversión y Eficiencia de Marketing')}
+          ${kpiRow('Gasto publicidad (Bs)',         fmt.bs(r.publicidad||0),         'var(--text2)')}
+          ${kpiRow('Gasto total marketing (Bs)',    fmt.bs(r.pagoMktTotal||0),       'var(--text2)')}
+          ${kpiRow('ROI Marketing',
+              fmt.d(r.roiMarketing??0,2)+'x',
+              (r.roiMarketing??0)>=2?'var(--accent5)':(r.roiMarketing??0)>=1?'var(--accent3)':'var(--accent4)',
+              (r.roiMarketing??0)>=2?'Excelente':(r.roiMarketing??0)>=1?'Aceptable':'Bajo')}
+          ${kpiRow('Costo por unidad vendida (Mkt)',
+              r.ventasReales>0 ? fmt.bs((r.pagoMktTotal||0)/(r.ventasReales)) : '—',
+              'var(--text2)')}
+          ${kpiRow('Ingresos por Bs 1 de publicidad',
+              r.publicidad>0 ? fmt.d((r.ventasNetas||0)/(r.publicidad),1)+'x' : '—',
+              (r.publicidad||0)>0&&(r.ventasNetas||0)/(r.publicidad)>3?'var(--accent5)':'var(--text2)')}
+
+          ${kpiSection('⭐ Marca y Fidelización')}
+          ${kpiRow('Brand Equity',
+              (r.brandEquityFinal ?? 50).toFixed(1)+' pts',
+              (r.brandEquityFinal||50)>70?'var(--accent5)':(r.brandEquityFinal||50)>50?'var(--accent3)':'var(--accent4)',
+              (r.brandEquityFinal||50)>70?'Marca fuerte':(r.brandEquityFinal||50)>50?'En construcción':'Marca débil')}
+          ${kpiRow('Atractivo competitivo',
+              fmt.d(r.atractivo||0,2)+' pts',
+              (r.atractivo||0)>10?'var(--accent5)':(r.atractivo||0)>5?'var(--accent3)':'var(--accent4)')}
+
+        </table>
+      </div>
+
+      <!-- ── Gerente de Producción ───────────────────── -->
+      <div class="result-round-card">
+        <div class="result-round-header"><h3>🏭 Gerente de Producción</h3></div>
+        <table style="width:100%;border-collapse:collapse">
+          ${kpiRow('Producción (pares)',             fmt.num(r.produccion))}
+          ${kpiRow('Inventario final (unidades)',   fmt.num(r.inventarioFinal))}
+          ${kpiRow('Inventario / Producción',       invProd+'%', +invProd>20?'var(--accent4)':'var(--accent5)')}
+          ${kpiRow('Capacidad efectiva (pares)',    fmt.num(r.capacidadEfectiva ?? '—'))}
+          ${kpiRow('Stock MP disponible (unid)',    fmt.num(r.stockMPFinal ?? '—'))}
+        </table>
+      </div>
+
+      <!-- ── Gerente de RRHH ─────────────────────────── -->
+      <div class="result-round-card">
+        <div class="result-round-header"><h3>👥 Gerente de RRHH</h3></div>
+        <table style="width:100%;border-collapse:collapse">
+          ${kpiRow('Vendedores finales',             vendFin)}
+          ${kpiRow('Ventas por vendedor (unid)',     ventasPorVend)}
+          ${kpiRow('Ingresos netos por vendedor',    ingrPorVend)}
+          ${kpiRow('Operarios finales',              fmt.num(r.operariosFinales ?? '—'))}
+          ${kpiRow('Costo operarios (Bs)',           r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—')}
+        </table>
+      </div>
+
+      <!-- ── Gerente Financiero ──────────────────────── -->
+      <div class="result-round-card" style="grid-column:span 2">
+        <div class="result-round-header"><h3>💰 Gerente Financiero</h3></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+          <table style="width:100%;border-collapse:collapse">
+            ${kpiRow('Costo unitario (Bs)',           fmt.d(r.costoUnitario,3))}
+            ${kpiRow('Margen bruto',                  mgBruto+'%',  +mgBruto<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Margen neto',                   mgNeto+'%',   +mgNeto<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Utilidad por unidad vendida',   utilPorUnid)}
+            ${kpiRow('Utilidad neta (Bs)',             fmt.bs(r.utilidadNeta), r.utilidadNeta<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('EBIT (Bs)',                      fmt.bs(r.ebit??0),      (r.ebit??0)<0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Caja final (Bs)',                fmt.bs(r.cajaFinal),    r.cajaFinal<=0?'var(--accent4)':'var(--accent5)')}
+            ${kpiRow('Sobregiro (Bs)',                 r.sobregiro>0?fmt.bs(r.sobregiro):'—', r.sobregiro>0?'var(--accent4)':'')}
+          </table>
+          <table style="width:100%;border-collapse:collapse">
+            ${kpiRow('Deuda total (Bs)',               fmt.bs(r.deudaFinal))}
+            ${kpiRow('Endeudamiento (Deuda/Activos)',  endeud+'%', +endeud>50?'var(--accent4)':+endeud>30?'var(--accent3)':'var(--accent5)')}
+            ${kpiRow('Liquidez corriente',             liquidez)}
+            ${kpiRow('IVA neto pagado (Bs)',           r.ivaAPagar!=null?fmt.bs(r.ivaAPagar):'—', 'var(--accent4)')}
+            ${kpiRow('IT pagado (Bs)',                 r.impuestoIT!=null?fmt.bs(r.impuestoIT):'—', 'var(--accent4)')}
+            ${kpiRow('IUE pagado (Bs)',                r.impuestoIUE>0?fmt.bs(r.impuestoIUE):'(pago anual)', r.impuestoIUE>0?'var(--accent4)':'')}
+            ${kpiRow('Provisión IUE (Bs)',             r.provisionIUE!=null?fmt.bs(r.provisionIUE):'—', 'var(--accent3)')}
+          </table>
+        </div>
+      </div>
+
+    </div>`;
+};
+
+// ─── Estados Financieros Completos ───────────────────────────
+async function loadEquipoFinanciero() {
+  const el = document.getElementById('eq-financiero-content');
+  const nav = document.getElementById('eq-financiero-nav');
+  if (!el) return;
+
+  const data = await api('GET','/api/resultados');
+  if (!data.historial?.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>Sin rondas simuladas aún.</p></div>`;
+    return;
+  }
+
+  const latest = data.historial[data.historial.length-1].ronda;
+  if (nav) {
+    nav.innerHTML = data.historial.map(h =>
+      `<button class="ronda-btn simulated" onclick="mostrarFinanciero(${h.ronda})">${h.ronda===latest?'<strong>':''}Ronda ${h.ronda}${h.ronda===latest?'</strong>':''}</button>`
+    ).join('');
+  }
+
+  // Store historial globally for tab switching
+  window._finHistorial = data.historial;
+  mostrarFinanciero(latest);
+}
+
+window.mostrarFinanciero = (n) => {
+  document.querySelectorAll('#eq-financiero-nav .ronda-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace(/\D+/g,''))===n);
+  });
+  const item = (window._finHistorial||[]).find(h=>h.ronda===n);
+  const el = document.getElementById('eq-financiero-content');
+  if (!item || !el) return;
+  const r = item.resultado;
+
+  el.innerHTML = `
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-ghost" id="tabPL" onclick="showFinTab('pl')" style="background:var(--accent);color:#fff">📋 Estado de Resultados</button>
+    <button class="btn btn-ghost" id="tabBG" onclick="showFinTab('bg')">🏦 Balance General</button>
+    <button class="btn btn-ghost" id="tabFC" onclick="showFinTab('fc')">💧 Flujo de Efectivo</button>
+  </div>
+
+  <!-- Estado de Resultados -->
+  <div id="finPL">
+    <div class="result-round-card">
+      <div class="result-round-header" style="display:flex;align-items:center;justify-content:space-between">
+        <h3>Estado de Resultados — Ronda ${n}</h3>
+        <button class="btn btn-ghost btn-sm no-print" style="font-size:.72rem;padding:3px 10px" onclick="printFinancieroCompleto((state.me&&state.me.nombre)||'',${n})">🖨️ Imprimir completo</button>
+      </div>
+      <div style="padding:16px 20px">
+
+        ${/* Tabla desglose por producto */
+          (r.productos && r.productos.length > 1) ? (() => {
+            const filas = r.productos.map((p,i) => {
+              const mb     = p.utilidadBruta || 0;
+              const mbPct  = (p.ventasNetas||0) > 0 ? (mb/(p.ventasNetas)*100).toFixed(1) + '%' : '—';
+              const color  = mb >= 0 ? 'var(--accent2)' : 'var(--accent4)';
+              return '<tr style="border-bottom:1px solid var(--border)">'
+                + '<td style="padding:5px 10px;font-weight:600;white-space:nowrap">' + (p.producto||'—') + '</td>'
+                + '<td style="padding:5px 10px;font-size:.74rem;color:var(--text3)">' + (p.segmento||'—').substring(0,22) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.num(p.ventasReales||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.precioVenta||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoUnitario||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.ventasNetas||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.bs(p.costoVentas||0) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+color+'">' + fmt.bs(mb) + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);color:'+color+'">' + mbPct + '</td>'
+                + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono)">' + fmt.pct(p.shareReal||0) + '</td>'
+                + '</tr>';
+            }).join('');
+            const colorTot = r.utilidadBruta>=0?'var(--accent2)':'var(--accent4)';
+            const mbPctTot = (r.ventasNetas||0)>0 ? (r.utilidadBruta/r.ventasNetas*100).toFixed(1)+'%' : '—';
+            return '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:4px 0 6px 0;border-bottom:1px solid var(--border);margin-bottom:8px">📦 Desglose por Producto</div>'
+              + '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:.79rem">'
+              + '<thead><tr style="background:rgba(255,255,255,.04)">'
+              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Producto</th>'
+              + '<th style="padding:5px 10px;text-align:left;font-size:.63rem;color:var(--text3);text-transform:uppercase">Segmento</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>unid</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Precio<br>venta</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>unitario</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Ventas<br>netas</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Costo<br>ventas</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--accent2);text-transform:uppercase">Margen<br>bruto</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Margen<br>%</th>'
+              + '<th style="padding:5px 10px;text-align:right;font-size:.63rem;color:var(--text3);text-transform:uppercase">Market<br>share</th>'
+              + '</tr></thead>'
+              + '<tbody>' + filas + '</tbody>'
+              + '<tfoot><tr style="background:rgba(6,255,165,.06);border-top:2px solid var(--border2)">'
+              + '<td colspan="2" style="padding:5px 10px;font-weight:700;font-size:.78rem">TOTAL EMPRESA</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.num(r.ventasReales||0) + '</td>'
+              + '<td></td><td></td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.ventasNetas||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700">' + fmt.bs(r.costoVentas||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + fmt.bs(r.utilidadBruta||0) + '</td>'
+              + '<td style="padding:5px 10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:'+colorTot+'">' + mbPctTot + '</td>'
+              + '<td></td></tr></tfoot>'
+              + '</table></div>'
+              + '<div style="font-family:var(--font-mono);font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px">📊 Estado de Resultados Consolidado</div>';
+          })() : ''
+        }
+
+        ${finRow('Ventas brutas',              r.ventasBrutas,         false, 'neutral')}
+        ${finRow('(−) Comisiones canal',       -r.comisiones,          false, 'neg')}
+        ${finRowSub('= Ventas netas',          r.ventasNetas,          true)}
+        ${finRow('(−) Costo de ventas',        -r.costoVentas,         false, 'neg')}
+        ${finRowSub('= Utilidad bruta',        r.utilidadBruta,        true)}
+        <div style="height:6px"></div>
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Gastos Operativos</div>
+        ${finRow('Publicidad',                 -r.publicidad,          false,'neg')}
+        ${finRow('Promoción',                  -r.promocion,           false,'neg')}
+        ${finRow('Eventos',                    -r.eventos,             false,'neg')}
+        ${finRow('Marketing en redes',         -r.marketingRedes,      false,'neg')}
+        ${finRow('Relaciones públicas',        -r.relacionesPublicas,  false,'neg')}
+        ${finRow('Fuerza de ventas',           -r.costoVendedores,     false,'neg')}
+        ${finRow('Gasto administrativo fijo',  -r.gastoAdminFijo,      false,'neg')}
+        ${finRow('Gasto fijo de planta',       -r.gastoFijoPlanta,     false,'neg')}
+        ${finRow('Depreciación',               -r.depreciacion,        false,'neg')}
+        ${finRow('Almacenamiento inventario',  -r.costoAlmacenamiento, false,'neg')}
+        ${r.gastoInnovacion>0 ? finRow('Innovación',-(r.gastoInnovacion), false,'neg') : ''}
+        ${finRow('Intereses préstamo',         -r.interesesPrestamo,   false,'neg')}
+        ${r.interesSobregiro>0 ? finRow('Intereses sobregiro',-(r.interesSobregiro), false,'neg') : ''}
+        ${finRow('Comisión apertura préstamo', -r.comisionApertura,    false,'neg')}
+        <div style="height:4px;border-top:1px dashed var(--border)"></div>
+        ${finRowSub('= EBIT (Resultado operativo antes de impuestos)', r.ebit??0, true)}
+        ${finRowSub('= EBITDA (EBIT + Depreciación)', (r.ebit??0)+(r.depreciacion??0), true, 'var(--accent3)')}
+        <div style="height:6px"></div>
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Impuestos</div>
+        ${finRow('IVA a pagar',                -r.ivaAPagar,           false,'neg')}
+        ${finRow('IT (3% ventas brutas)',       -r.impuestoIT,          false,'neg')}
+        ${r.impuestoIUE>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE), false,'neg') : ''}
+        <div style="height:4px;border-top:2px solid var(--border2)"></div>
+        ${finRowSub('= Utilidad neta',         r.utilidadNeta,         true)}
+      </div>
+    </div>
+  </div>
+
+  <!-- Balance General -->
+  <div id="finBG" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="result-round-card">
+        <div class="result-round-header"><h3>Activos</h3></div>
+        <div style="padding:16px 20px">
+          ${finRow('Caja',                    r.cajaFinal,           false,'pos')}
+          ${finRow('Cuentas por cobrar (CxC)', r.cxcFinal,           false,'neutral')}
+          ${finRow('Inventarios',              r.invFinalValorizado,  false,'neutral')}
+          ${finRow('Activos fijos netos',      r.afNetos,            false,'neutral')}
+          <div style="height:4px;border-top:2px solid var(--border2)"></div>
+          ${finRowSub('= Total Activos',       r.totalActivos,        true)}
+        </div>
+      </div>
+      <div>
+        <div class="result-round-card" style="margin-bottom:12px">
+          <div class="result-round-header"><h3>Pasivos</h3></div>
+          <div style="padding:16px 20px">
+            ${finRow('Deuda total (préstamos)', r.deudaFinal,        false,'neg')}
+            <div style="height:4px;border-top:2px solid var(--border2)"></div>
+            ${finRowSub('= Total Pasivos',      r.deudaFinal,         true)}
+          </div>
+        </div>
+        <div class="result-round-card">
+          <div class="result-round-header"><h3>Patrimonio</h3></div>
+          <div style="padding:16px 20px">
+            ${finRow('Capital contable',        r.capitalContable,    false,'neutral')}
+            ${finRow('Resultado acumulado',     r.resultadoAcumulado, false, r.resultadoAcumulado>=0?'pos':'neg')}
+            <div style="height:4px;border-top:2px solid var(--border2)"></div>
+            ${finRowSub('= Patrimonio',         r.patrimonio,         true)}
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:8px 12px;background:${Math.abs(r.totalActivos-r.deudaFinal-r.patrimonio)<1?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)'};border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">
+          ${Math.abs(r.totalActivos-r.deudaFinal-r.patrimonio)<1?'✓ Balance cuadra':'⚠ Verificar balance'}
+          (Activos = ${fmt.bs(r.totalActivos)} | P+P = ${fmt.bs(r.deudaFinal + r.patrimonio)})
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flujo de Efectivo -->
+  <div id="finFC" style="display:none">
+    <div class="result-round-card">
+      <div class="result-round-header"><h3>Flujo de Efectivo — Ronda ${n}</h3></div>
+      <div style="padding:16px 20px">
+        ${finRow('Caja inicial',               r.cajaInicial,          false,'neutral')}
+        <div style="height:6px"></div>
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Entradas</div>
+        ${finRow('Cobros al contado + CxC cobrado', r.cobrosContado,   false,'pos')}
+        ${r.ingresoPrestamo>0 ? finRow('Ingreso préstamo', r.ingresoPrestamo, false,'pos') : ''}
+        ${r.sobregiro>0 ? finRow('Sobregiro tomado', r.sobregiro, false,'pos') : ''}
+        <div style="height:6px"></div>
+        <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas</div>
+        ${finRow('Pago producción',            -r.pagoProduccion,       false,'neg')}
+        ${finRow('Pago marketing total',       -r.pagoMktTotal,         false,'neg')}
+        ${r.pagoInnovacion>0 ? finRow('Pago innovación', -r.pagoInnovacion, false,'neg') : ''}
+        ${finRow('Pago gastos administrativos',-r.pagoAdmin,            false,'neg')}
+        ${finRow('Pago gastos de planta',      -r.pagoPlanta,           false,'neg')}
+        ${finRow('Pago intereses',             -r.pagoIntereses,        false,'neg')}
+        ${r.pagoApertura>0 ? finRow('Pago comisión apertura', -r.pagoApertura, false,'neg') : ''}
+        ${finRow('Pago almacenamiento',        -r.pagoAlmacen,          false,'neg')}
+        <div style="height:4px;border-top:2px solid var(--border2)"></div>
+        ${finRowSub('= Caja final',            r.cajaFinal,             true)}
+        ${r.sobregiro>0 ? `<div style="padding:6px 0;font-size:.76rem;color:var(--accent4)">⚠ Sobregiro activado: Bs ${fmt.num(r.sobregiro)} · Interés: Bs ${fmt.num(r.interesSobregiro||0)}</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+};
+
+function finRow(label, value, bold=false, type='neutral') {
+  const col = type==='pos' ? 'var(--accent5)' : type==='neg' ? 'var(--accent4)' : 'var(--text)';
+  const w = bold ? 'font-weight:700' : '';
+  return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.83rem;${w}">
+    <span style="color:var(--text2)">${label}</span>
+    <span style="font-family:var(--font-mono);font-size:.8rem;color:${col}">${fmt.bs(value)}</span>
+  </div>`;
+}
+
+function finRowSub(label, value, bold=false) {
+  const col = value>=0 ? 'var(--accent5)' : 'var(--accent4)';
+  return `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;font-weight:700;margin-top:2px">
+    <span>${label}</span>
+    <span style="font-family:var(--font-mono);color:${col}">${fmt.bs(value)}</span>
+  </div>`;
+}
+
+window.showFinTab = (tab) => {
+  ['pl','bg','fc'].forEach(t => {
+    const el = document.getElementById(`fin${t.toUpperCase()}`);
+    if (el) el.style.display = t===tab ? '' : 'none';
+  });
+  const labels = {pl:'tabPL',bg:'tabBG',fc:'tabFC'};
+  Object.entries(labels).forEach(([t,id]) => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.style.background = t===tab?'var(--accent)':''; btn.style.color = t===tab?'#fff':''; }
+  });
+};
+
+window.mostrarRondaResultado = async (n, historial) => {
+  // Update active btn
+  document.querySelectorAll('#equipoResultadosContent .ronda-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace('Ronda ','')) === n);
+  });
+
+  if (!historial) {
+    const data = await api('GET','/api/resultados');
+    historial = data.historial;
+  }
+  const item = historial.find(h => h.ronda === n);
+  if (!item) return;
+  const r = item.resultado;
+
+  document.getElementById('resultadoRondaDetalle').innerHTML = `
+    <div class="result-round-card">
+      <div class="result-round-header">
+        <h3>Ronda ${n} — ${r.segmento} · ${r.tipoProducto}</h3>
+        <span style="font-size:.74rem;color:var(--text3)">${fmt.dt(item.ejecutadaAt)}</span>
+      </div>
+      <div class="kpi-grid">
+        <div>
+          <div class="kpi-row"><span class="kpi-label">Demanda estimada</span><span class="kpi-value">${fmt.num(r.demandaEstimada)} unid</span></div>
+          <div class="kpi-row"><span class="kpi-label">Ventas reales</span><span class="kpi-value warn">${fmt.num(r.ventasReales)} unid</span></div>
+          <div class="kpi-row"><span class="kpi-label">Inventario final</span><span class="kpi-value">${fmt.num(r.inventarioFinal)} unid</span></div>
+          <div class="kpi-row"><span class="kpi-label">Ingresos</span><span class="kpi-value">${fmt.bs(r.ingresos)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">Costo de ventas</span><span class="kpi-value">${fmt.bs(r.costoVentas)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">EBIT</span><span class="kpi-value ${r.ebit>=0?'up':'down'}">${fmt.bs(r.ebit)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">Utilidad neta</span><span class="kpi-value ${r.utilidadNeta>=0?'up':'down'}">${fmt.bs(r.utilidadNeta)}</span></div>
+        </div>
+        <div>
+          <div class="kpi-row"><span class="kpi-label">Caja final</span><span class="kpi-value ${r.cajaFinal>=0?'up':'down'}">${fmt.bs(r.cajaFinal)} <span class="badge ${r.alertaCaja==='ALERTA'?'badge-alert':'badge-ok'}">${r.alertaCaja}</span></span></div>
+          <div class="kpi-row"><span class="kpi-label">CxC final</span><span class="kpi-value">${fmt.bs(r.cxcFinal)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">Deuda final</span><span class="kpi-value">${fmt.bs(r.deudaFinal)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">Market share seg.</span>
+            <div class="share-bar-wrap">
+              <div class="share-bar-bg"><div class="share-bar-fill" style="width:${Math.min(100,r.shareReal*100)}%"></div></div>
+              <span class="share-val">${fmt.pct(r.shareReal)}</span>
+            </div>
+          </div>
+          <div class="kpi-row"><span class="kpi-label">Costo unitario</span><span class="kpi-value">Bs ${fmt.d(r.costoUnitario,3)}</span></div>
+          <div class="kpi-row"><span class="kpi-label">ROI Marketing</span><span class="kpi-value ${r.roiMarketing>=1?'up':'down'}">${fmt.d(r.roiMarketing,2)}x</span></div>
+          <div class="kpi-row"><span class="kpi-label">Brand Equity</span><span class="kpi-value" style="color:var(--accent3)">${(r.brandEquityFinal ?? 50).toFixed(1)} <span style="font-size:.7rem;color:var(--text3)">pts</span></span></div>
+          <div class="kpi-row"><span class="kpi-label">Dotación (Op/Adm/Vend)</span><span class="kpi-value">${r.operarios}/${r.admins}/${r.vendedoresFinales}</span></div>
+        </div>
+      </div>
+    </div>
+    ${buildEvoChart(historial)}
+  `;
+  renderEvoCharts(historial);
+};
+
+function buildEvoChart(historial) {
+  if (historial.length < 2) return '';
+  return `<div class="charts-row" style="margin-top:16px">
+    <div class="chart-card"><h4>Evolución EBIT (Bs)</h4><div class="chart-wrap"><canvas id="chartEvo"></canvas></div></div>
+    <div class="chart-card"><h4>Evolución Caja (Bs)</h4><div class="chart-wrap"><canvas id="chartCajaEvo"></canvas></div></div>
+  </div>`;
+}
+
+function renderEvoCharts(historial) {
+  ['chartEvo','chartCajaEvo'].forEach(id => {
+    const c = document.getElementById(id);
+    if (!c) return;
+    const labels = historial.map(h => `R${h.ronda}`);
+    const defOpts = { responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}},y:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}}} };
+    const isEBIT = id === 'chartEvo';
+    const values = historial.map(h => isEBIT ? h.resultado.ebit : h.resultado.cajaFinal);
+    new Chart(c, { type:'line', data:{ labels, datasets:[{data:values, borderColor:isEBIT?'#6C63FF':'#4ECDC4', backgroundColor:isEBIT?'rgba(108,99,255,.1)':'rgba(78,205,196,.1)', fill:true, tension:.3, pointRadius:4}]}, options:defOpts });
+  });
+}
+
+// ── Equipo Reportes ────────────────────────────────────────
+async function loadEquipoReportes() {
+  const data = await api('GET','/api/resultados');
+  const el = document.getElementById('reportesContent');
+  if (!el) return;
+
+  if (!data.historial?.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Aún no hay rondas simuladas.</p></div>`;
+    return;
+  }
+
+  const rondas = data.historial;
+  const sel = `<div class="ronda-selector">${rondas.map(h=>`<button class="ronda-btn simulated" onclick="mostrarReporteRonda(${h.ronda})">Ronda ${h.ronda}</button>`).join('')}</div>`;
+  el.innerHTML = sel + `<div id="reporteDetalle"></div>`;
+  mostrarReporteRonda(rondas[rondas.length-1].ronda, data.historial);
+}
+
+window.mostrarReporteRonda = async (n, historialCache) => {
+  document.querySelectorAll('#reportesContent .ronda-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace('Ronda ',''))===n);
+  });
+  const det = document.getElementById('reporteDetalle');
+  if (!det) return;
+  try {
+    const [repData, resData] = await Promise.all([
+      api('GET', `/api/reportes/${n}`),
+      api('GET', '/api/resultados'),
+    ]);
+    const rep = repData.reportes;
+    const historial = historialCache || resData.historial;
+    const item = historial?.find(h=>h.ronda===n);
+    const miResult = item?.resultado;
+
+    let html = '';
+
+    // ── RANKING ANÓNIMO (siempre visible) ──────────────────
+    if (miResult) {
+      const allRes = await api('GET', `/api/dashboard/${n}`);
+      const posicion = allRes.ranking.findIndex(r=>r.esYo) + 1;
+      const total = allRes.ranking.length;
+      const rows = allRes.ranking.map((r,i) => `
+        <tr style="${r.esYo?'background:rgba(108,99,255,.08);font-weight:700':''}">
+          <td style="text-align:center;font-family:var(--font-mono)">${i+1}</td>
+          <td>${r.esYo?'⭐ <strong>Mi equipo</strong>':'Equipo '+(i+1)}</td>
+          <td class="num ${r.utilidadNeta>=0?'pos':'neg'}">${fmt.bs(r.utilidadNeta)}</td>
+          <td class="num">${fmt.num(r.ventas)}</td>
+          <td class="num">${fmt.pct(r.share)}</td>
+          <td class="num ${r.caja<=0?'neg':'pos'}">${fmt.bs(r.caja)}</td>
+        </tr>`).join('');
+      html += `
+        <div class="result-round-card" style="margin-bottom:16px">
+          <div class="result-round-header">
+            <h3>🏆 Ranking — Ronda ${n}</h3>
+            <span class="badge ${posicion===1?'badge-ok':'badge-pending'}">Tu posición: ${posicion}/${total}</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Equipo</th><th>Utilidad neta</th><th>Ventas (unid)</th><th>Market share</th><th>Caja final</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p style="padding:8px 16px;font-size:.74rem;color:var(--text3)">Los demás equipos aparecen anónimos. Para ver participación detallada, compra el reporte Premium.</p>
+        </div>`;
+    }
+
+    // ── INVESTIGACIÓN COMPRADA ─────────────────────────────
+    if (!rep.investigacion) {
+      html += `<div class="result-round-card">
+        <div class="result-round-header"><h3>📊 Investigación de Mercado — Ronda ${n}</h3></div>
+        <div style="padding:24px;text-align:center;color:var(--text3)">
+          <div style="font-size:2rem;margin-bottom:10px">📭</div>
+          <p style="margin-bottom:10px">No compraste reporte de investigación en la ronda ${n}.</p>
+          <p style="font-size:.78rem">Puedes comprar <strong>Básico (Bs 4,000)</strong> o <strong>Premium (Bs 7,500)</strong> en tu próxima hoja de decisión.</p>
+        </div>
+      </div>`;
+    } else {
+      const inv = rep.investigacion;
+      // Mercado
+      const mktRows = inv.mercado.map(s=>`<tr>
+        <td><strong>${s.segmento}</strong></td>
+        <td class="num">${fmt.num(s.demandaBase)}</td>
+        <td class="num warn">${s.contrabando}</td>
+        <td class="num pos">${fmt.num(s.mercadoFormal)}</td>
+        <td><span class="badge ${s.tendencia==='Alto crecimiento'?'badge-high':s.tendencia==='Creciente'?'badge-grow':'badge-stable'}">${s.tendencia}</span></td>
+      </tr>`).join('');
+      const precRows = inv.precios.map(s=>`<tr>
+        <td><strong>${s.segmento}</strong></td>
+        <td class="num">${s.precioMin!=null?'Bs '+s.precioMin:'—'}</td>
+        <td class="num">${s.precioProm!=null?'Bs '+s.precioProm:'—'}</td>
+        <td class="num">${s.precioMax!=null?'Bs '+s.precioMax:'—'}</td>
+      </tr>`).join('');
+
+      html += `
+        <div class="result-round-card" style="margin-bottom:16px">
+          <div class="result-round-header"><h3>📊 ${inv.titulo} — Ronda ${n}</h3></div>
+          <div style="padding:16px 20px">
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Tamaño de Mercado</p>
+            <div class="table-wrap" style="margin-bottom:16px">
+              <table><thead><tr><th>Segmento</th><th>Demanda total</th><th>Contrabando</th><th>Mercado formal</th><th>Tendencia</th></tr></thead>
+              <tbody>${mktRows}</tbody></table>
+            </div>
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Precios Observados</p>
+            <div class="table-wrap" style="margin-bottom:16px">
+              <table><thead><tr><th>Segmento</th><th>Precio mínimo</th><th>Precio promedio</th><th>Precio máximo</th></tr></thead>
+              <tbody>${precRows}</tbody></table>
+            </div>
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Alertas</p>
+            <ul style="list-style:none;padding:0">
+              ${inv.alertas.map(a=>`<li style="padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--accent3)">⚠ ${a}</li>`).join('')}
+            </ul>`;
+
+      // Premium additions
+      if (inv.tipo === 'Premium') {
+        const partRows = inv.participacion.map(p=>`<tr>
+          <td><strong>${p.segmento}</strong></td>
+          <td class="num">${p.equiposCompitiendo}</td>
+          <td class="num">${fmt.pct(p.shareMaximo)}</td>
+          <td class="num">${fmt.pct(p.sharePromedio)}</td>
+        </tr>`).join('');
+        const sensRows = inv.sensibilidad.map(s=>`<tr>
+          <td><strong>${s.segmento}</strong></td>
+          <td>${s.precio}</td><td>${s.calidad}</td><td>${s.redes}</td><td>${s.canal}</td>
+        </tr>`).join('');
+
+        html += `
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:16px 0 8px">PREMIUM — Participación de Mercado</p>
+            <div class="table-wrap" style="margin-bottom:16px">
+              <table><thead><tr><th>Segmento</th><th>Equipos</th><th>Share máx.</th><th>Share prom.</th></tr></thead>
+              <tbody>${partRows}</tbody></table>
+            </div>
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">Sensibilidad del Consumidor</p>
+            <div class="table-wrap" style="margin-bottom:16px">
+              <table><thead><tr><th>Segmento</th><th>Precio</th><th>Calidad</th><th>Redes</th><th>Canal</th></tr></thead>
+              <tbody>${sensRows}</tbody></table>
+            </div>
+            <p style="font-family:var(--font-mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">Recomendaciones Estratégicas</p>
+            ${inv.recomendaciones.map(rec=>`
+              <div style="background:var(--bg3);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 var(--r) var(--r) 0;margin-bottom:8px;font-size:.82rem">
+                <strong style="color:var(--accent2)">${rec.estrategia}</strong><br>
+                Precio: ${rec.precio} · Prioridad: ${rec.prioridad}<br>
+                Producción: ${rec.produccion}<br>
+                Meta inventario: ${rec.meta}
+              </div>`).join('')}`;
+      }
+      html += `</div></div>`;
+    }
+
+    document.getElementById('reporteDetalle').innerHTML = html;
+  } catch(e) {
+    document.getElementById('reporteDetalle').innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
+  }
+};
+
+// ── Créditos del Equipo ────────────────────────────────────
+async function loadEquipoCreditos() {
+  const el = document.getElementById('eq-creditos-content');
+  if (!el) return;
+  el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>`;
+  try {
+    const data = await api('GET', '/api/resultados');
+    renderCreditosEquipo(el, data.historial || [], data.currentRound, data.roundState);
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
+  }
+}
+
+function renderCreditosEquipo(el, historial, currentRound, roundState) {
+  if (!historial.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🏦</div><p>Sin rondas simuladas aún.</p></div>`;
+    return;
+  }
+
+  // Build loan ledger from historial
+  const prestamos = [];
+  let deudaAcum = 0;
+
+  historial.forEach(item => {
+    const d = item.decision;
+    const r = item.resultado;
+    if (!d || !r) return;
+
+    if (d.tipoPrestamo && d.tipoPrestamo !== 'Ninguno' && d.montoPrestamo > 0) {
+      const tasa = d.tipoPrestamo === 'Operativo' ? 0.04 : 0.03;
+      const plazo = d.plazoPrestamo || (d.tipoPrestamo === 'Operativo' ? 2 : 4);
+      const cuota = Math.round(d.montoPrestamo / plazo * 100) / 100;
+      prestamos.push({
+        rondaOrigen: item.ronda,
+        tipo: d.tipoPrestamo,
+        monto: d.montoPrestamo,
+        tasa,
+        plazo,
+        cuota,
+        comision: Math.round(d.montoPrestamo * 0.01 * 100) / 100,
+      });
+    }
+
+    // Track sobregiro
+    if (r.sobregiro > 0) {
+      prestamos.push({
+        rondaOrigen: item.ronda,
+        tipo: 'Sobregiro',
+        monto: r.sobregiro,
+        tasa: 0.06,
+        plazo: 1,
+        cuota: r.sobregiro,
+        comision: 0,
+        interes: r.interesSobregiro,
+      });
+    }
+  });
+
+  if (!prestamos.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>Sin préstamos ni sobregiros registrados.</p></div>`;
+    return;
+  }
+
+  const cards = prestamos.map(p => {
+    const intTotal = Math.round(p.monto * p.tasa * p.plazo * 100) / 100;
+    const totalAPagar = Math.round((p.monto + intTotal + p.comision) * 100) / 100;
+    const rows = Array.from({length: p.plazo}, (_,i) => {
+      const ronda = p.rondaOrigen + i + 1;
+      const pagado = ronda <= currentRound;
+      return `<tr style="${pagado?'color:var(--text3)':''}">
+        <td style="text-align:center;font-family:var(--font-mono)">${ronda}</td>
+        <td class="num">${fmt.bs(p.cuota)}</td>
+        <td class="num">${fmt.bs(Math.round(p.monto * p.tasa * 100)/100)}</td>
+        <td class="num">${fmt.bs(Math.round((p.cuota + p.monto * p.tasa)*100)/100)}</td>
+        <td style="text-align:center">${pagado ? '<span class="badge badge-ok">✓ Pagado</span>' : '<span class="badge badge-pending">⏳ Pendiente</span>'}</td>
+      </tr>`;
+    }).join('');
+
+    const colorTipo = p.tipo === 'Sobregiro' ? 'var(--accent4)' : p.tipo === 'Operativo' ? 'var(--accent2)' : 'var(--accent3)';
+    return `
+      <div class="result-round-card" style="margin-bottom:16px">
+        <div class="result-round-header">
+          <h3>💳 Préstamo ${p.tipo} — Ronda ${p.rondaOrigen}</h3>
+          <span class="badge" style="background:rgba(108,99,255,.1);color:${colorTipo}">${p.tipo}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0;border-bottom:1px solid var(--border)">
+          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Monto</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px">${fmt.bs(p.monto)}</div></div>
+          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Tasa trimestral</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent3)">${fmt.pct(p.tasa)}</div></div>
+          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Plazo</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px">${p.plazo} trim.</div></div>
+          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Comisión apertura</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent4)">${fmt.bs(p.comision)}</div></div>
+          <div style="padding:12px 16px"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Total a pagar</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent4)">${fmt.bs(totalAPagar)}</div></div>
+        </div>
+        <div class="table-wrap" style="border-radius:0">
+          <table>
+            <thead><tr><th>Ronda</th><th>Amortización</th><th>Interés</th><th>Cuota total</th><th>Estado</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Summary
+  const deudaTotal = historial[historial.length-1]?.resultado?.deudaFinal || 0;
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-label">Préstamos registrados</div><div class="stat-value" style="color:var(--accent2)">${prestamos.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Deuda total actual</div><div class="stat-value" style="color:${deudaTotal>0?'var(--accent4)':'var(--accent5)'}">${fmt.bs(deudaTotal)}</div></div>
+    </div>
+    ${cards}`;
+}
+
+// ── Créditos Admin ─────────────────────────────────────────
+async function loadAdminCreditos() {
+  if (!requireSimSelected('adminCreditosContent')) return;
+  const el = document.getElementById('adminCreditosContent');
+  if (!el) return;
+  el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>`;
+
+  try {
+    const [equipos, historialResp] = await Promise.all([
+      api('GET', '/admin/equipos'),
+      api('GET', '/admin/historial'),
+    ]);
+
+    if (!historialResp.length) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon">🏦</div><p>Sin rondas simuladas aún.</p></div>`;
+      return;
+    }
+
+    // Load all simulated rounds
+    const rondaData = {};
+    for (const h of historialResp.filter(h=>['simulated','calculada'].includes(h.estado))) {
+      try {
+        const r = await api('GET', `/admin/resultados/${h.ronda}`);
+        rondaData[h.ronda] = r;
+      } catch {}
+    }
+
+    // Build per-equipo credit summary
+    const tabs = equipos.map((eq,i) => `<button class="seg-tab ${i===0?'active':''}" data-eq="${eq.id}" onclick="showAdminCreditoEquipo('${eq.id}')">${eq.nombre}</button>`).join('');
+
+    const panels = equipos.map((eq,i) => {
+      const historialEquipo = Object.entries(rondaData).map(([ronda, rd]) => {
+        const res = rd.resultados?.find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || r.equipo?.startsWith(eq.id));
+        return res ? { ronda: parseInt(ronda), resultado: res } : null;
+      }).filter(Boolean).sort((a,b)=>a.ronda-b.ronda);
+
+      // Reconstruct decisions from rounds (resultados have key fields)
+      const prestamos = [];
+      historialEquipo.forEach(({ronda, resultado: r}) => {
+        if (r.ingresoPrestamo > 0) {
+          const esSobregiro = r.sobregiro > 0 && r.ingresoPrestamo === r.sobregiro;
+          if (!esSobregiro) {
+            const plazo = r.plazoPrestamo || 2;
+            prestamos.push({ rondaOrigen:ronda, tipo:'Préstamo', monto:r.ingresoPrestamo, tasa: r.interesesPrestamo/r.ingresoPrestamo||0.04, plazo, comision:r.comisionApertura||0 });
+          }
+        }
+        if (r.sobregiro > 0) {
+          prestamos.push({ rondaOrigen:ronda, tipo:'Sobregiro', monto:r.sobregiro, tasa:0.06, plazo:1, comision:0, interes:r.interesSobregiro });
+        }
+      });
+
+      if (!prestamos.length) {
+        return `<div class="seg-panel ${i===0?'active':''}" id="eqCredit_${eq.id}">
+          <div class="empty-state"><div class="empty-icon">✅</div><p>Sin préstamos para ${eq.nombre}.</p></div>
+        </div>`;
+      }
+
+      const cards = prestamos.map(p => {
+        const currentR = Math.max(...Object.keys(rondaData).map(Number));
+        const intTotal = Math.round(p.monto * (p.tasa||0) * p.plazo * 100)/100;
+        const totalPagar = Math.round((p.monto + intTotal + p.comision)*100)/100;
+        const rows = Array.from({length:p.plazo},(_,j)=>{
+          const ronda = p.rondaOrigen + j + 1;
+          const pagado = ronda <= currentR;
+          return `<tr style="${pagado?'color:var(--text3)':''}">
+            <td style="text-align:center;font-family:var(--font-mono)">${ronda}</td>
+            <td class="num">${fmt.bs(Math.round(p.monto/p.plazo*100)/100)}</td>
+            <td class="num">${fmt.bs(Math.round(p.monto*(p.tasa||0)*100)/100)}</td>
+            <td class="num">${fmt.bs(Math.round((p.monto/p.plazo + p.monto*(p.tasa||0))*100)/100)}</td>
+            <td style="text-align:center">${pagado?'<span class="badge badge-ok">✓</span>':'<span class="badge badge-pending">⏳</span>'}</td>
+          </tr>`;
+        }).join('');
+        return `<div class="result-round-card" style="margin-bottom:12px">
+          <div class="result-round-header"><h3>${p.tipo} — Ronda ${p.rondaOrigen}</h3>
+            <span style="font-family:var(--font-mono);font-size:.72rem;color:var(--text3)">${fmt.bs(p.monto)} · ${fmt.pct(p.tasa||0)} trim.</span></div>
+          <div class="table-wrap" style="border-radius:0">
+            <table><thead><tr><th>Ronda pago</th><th>Capital</th><th>Interés</th><th>Cuota total</th><th>Estado</th></tr></thead>
+            <tbody>${rows}</tbody></table>
+          </div>
+          <div style="padding:8px 14px;font-size:.78rem;color:var(--text3)">Total a pagar: <strong>${fmt.bs(totalPagar)}</strong> | Comisión apertura: <strong>${fmt.bs(p.comision)}</strong></div>
+        </div>`;
+      }).join('');
+
+      const ultimaDeuda = historialEquipo[historialEquipo.length-1]?.resultado?.deudaFinal || 0;
+      return `<div class="seg-panel ${i===0?'active':''}" id="eqCredit_${eq.id}">
+        <div class="stat-grid" style="margin-bottom:16px">
+          <div class="stat-card"><div class="stat-label">Préstamos / Sobregiros</div><div class="stat-value" style="color:var(--accent2)">${prestamos.length}</div></div>
+          <div class="stat-card"><div class="stat-label">Deuda final última ronda</div><div class="stat-value" style="color:${ultimaDeuda>0?'var(--accent4)':'var(--accent5)'}">${fmt.bs(ultimaDeuda)}</div></div>
+        </div>
+        ${cards}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `<div class="seg-tabs-bar">${tabs}</div><div class="seg-panels">${panels}</div>`;
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
+  }
+}
+
+window.showAdminCreditoEquipo = (id) => {
+  document.querySelectorAll('#adminCreditosContent .seg-tab').forEach(b => b.classList.toggle('active', b.dataset.eq===id));
+  document.querySelectorAll('#adminCreditosContent .seg-panel').forEach(p => p.classList.toggle('active', p.id==='eqCredit_'+id));
+};
+
+
+// ── Dashboard Anónimo del Equipo ───────────────────────────
+async function loadEquipoDashboard() {
+  const el = document.getElementById('eq-dashboard-content');
+  if (!el) return;
+
+  const data = await api('GET', '/api/resultados');
+  const last = data.historial?.[data.historial.length - 1];
+
+  if (!last) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>Aún no hay rondas simuladas.</p></div>`;
+    return;
+  }
+
+  // Get anonymous comparison from server
+  try {
+    const cmp = await api('GET', `/api/dashboard/${last.ronda}`);
+    renderEquipoDashboard(el, cmp, last.resultado, data.historial);
+  } catch {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>Dashboard disponible tras la primera simulación.</p></div>`;
+  }
+}
+
+function renderEquipoDashboard(el, cmp, miResultado, historial) {
+  const miPos = cmp.ranking.findIndex(r => r.esYo) + 1;
+  const totalEq = cmp.ranking.length;
+
+  el.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Tu posición (EBIT)</div>
+        <div class="stat-value" style="color:var(--accent3)">${miPos}°<span style="font-size:.9rem;color:var(--text3)">/${totalEq}</span></div>
+        <div class="stat-sub">en ronda ${cmp.ronda}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tu EBIT</div>
+        <div class="stat-value" style="color:${miResultado.ebit>=0?'var(--accent5)':'var(--accent4)'}">${fmt.bs(miResultado.ebit)}</div>
+        <div class="stat-sub">EBIT mercado: ${fmt.bs(cmp.stats.ebitPromedio)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tu Market Share</div>
+        <div class="stat-value" style="color:var(--accent2)">${fmt.pct(miResultado.shareReal)}</div>
+        <div class="stat-sub">en tu segmento</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tu Caja Final</div>
+        <div class="stat-value" style="color:${miResultado.cajaFinal>=0?'var(--accent2)':'var(--accent4)'}">${fmt.bs(miResultado.cajaFinal)}</div>
+        <div class="stat-sub"><span class="badge ${miResultado.alertaCaja==='ALERTA'?'badge-alert':'badge-ok'}">${miResultado.alertaCaja}</span></div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h4>EBIT Comparativo — Anónimo (Ronda ${cmp.ronda})</h4>
+        <div class="chart-wrap"><canvas id="chartCmpEBIT"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h4>Tu Evolución EBIT (todas las rondas)</h4>
+        <div class="chart-wrap"><canvas id="chartMiEBIT"></canvas></div>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:20px">
+      <table>
+        <thead><tr><th>#</th><th>Empresa</th><th>EBIT</th><th>Ventas (unid)</th><th>Market Share</th><th>Caja</th></tr></thead>
+        <tbody>
+          ${cmp.ranking.map((r,i) => `
+            <tr style="${r.esYo?'background:rgba(108,99,255,.07);':''}">
+              <td class="num"><strong>${i+1}</strong></td>
+              <td><strong>${r.esYo ? '★ Tu empresa' : `Empresa ${String.fromCharCode(65+i)}`}</strong></td>
+              <td class="num ${r.ebit>=0?'pos':'neg'}">${fmt.bs(r.ebit)}</td>
+              <td class="num">${fmt.num(r.ventas)}</td>
+              <td class="num">
+                <div class="share-bar-wrap">
+                  <div class="share-bar-bg"><div class="share-bar-fill" style="width:${Math.min(100,r.share*100)}%;background:${r.esYo?'var(--accent)':'var(--border2)'}"></div></div>
+                  <span class="share-val">${fmt.pct(r.share)}</span>
+                </div>
+              </td>
+              <td class="num ${r.caja>=0?'pos':'neg'}">${fmt.bs(r.caja)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Charts
+  const defOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}},y:{ticks:{color:'#9BA3C4',font:{family:'Space Mono',size:9}},grid:{color:'#2A2F45'}}} };
+
+  new Chart(document.getElementById('chartCmpEBIT'), {
+    type:'bar',
+    data:{ labels: cmp.ranking.map((_,i) => i===miPos-1?'★ Yo':`E${String.fromCharCode(65+i)}`),
+      datasets:[{ data: cmp.ranking.map(r=>r.ebit),
+        backgroundColor: cmp.ranking.map(r => r.esYo ? '#6C63FF' : (r.ebit>=0?'rgba(6,255,165,.4)':'rgba(255,107,107,.4)')),
+        borderRadius:4 }]},
+    options: defOpts,
+  });
+
+  if (historial.length > 1) {
+    new Chart(document.getElementById('chartMiEBIT'), {
+      type:'line',
+      data:{ labels: historial.map(h=>`R${h.ronda}`),
+        datasets:[{ data: historial.map(h=>h.resultado.ebit),
+          borderColor:'#6C63FF', backgroundColor:'rgba(108,99,255,.1)', fill:true, tension:.3, pointRadius:4 }]},
+      options: defOpts,
+    });
+  }
+}
+function buildManual() {
+  window.open('/manual.html', '_blank');
+}
+
+
+// ── Función genérica de impresión / PDF ─────────────────────
+function printPanel(contentId, titulo, subtitulo) {
+  const content = document.getElementById(contentId);
+  if (!content) { toast('Sin contenido para imprimir', 'info'); return; }
+  const css = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:20px}',
+    'h1{font-size:15px;margin-bottom:4px;color:#2a2f45}',
+    '.sub{font-size:10px;color:#666;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #2a2f45}',
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10.5px}',
+    'th{background:#2a2f45;color:#fff;padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase}',
+    'td{padding:5px 10px;border:1px solid #ddd;vertical-align:top}',
+    'tr:nth-child(even) td{background:#f8f9ff}',
+    '.result-round-card{border:1px solid #ddd;border-radius:6px;margin-bottom:14px;overflow:hidden}',
+    '.result-round-header{background:#2a2f45;color:#fff;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase}',
+    '.fin-row{display:flex;justify-content:space-between;padding:4px 14px;border-bottom:1px solid #f0f0f0;font-size:10.5px}',
+    '.fin-row.sub{background:#f0f4ff;font-weight:700}',
+    '.pos,.up{color:#27ae60}.neg,.down{color:#e74c3c}',
+    '.num{text-align:right}',
+    'button,canvas,.no-print{display:none!important}',
+    '@media print{body{padding:8px}@page{margin:1cm;size:A4}}'
+  ].join('');
+  const win = window.open('', '_blank', 'width=1100,height=900');
+  const parts = [
+    '<!DOCTYPE html><html lang="es"><head>',
+    '<meta charset="UTF-8"/>',
+    '<title>' + titulo + '</title>',
+    '<style>' + css + '</style>',
+    '</head><body>',
+    '<h1>' + titulo + '</h1>',
+    '<div class="sub">' + (subtitulo||'') + ' | SimNego COM540 UAGRM</div>',
+    content.innerHTML,
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
+  win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 600);
+}
+
+// ── Imprimir Hoja de Decisión ──────────────────────────────
+function printHoja() {
+  const content = document.getElementById('hojaContent');
+  if (!content) return;
+  const win = window.open('', '_blank', 'width=1100,height=800');
+  const css = '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Segoe UI,sans-serif;font-size:11px;color:#111;background:#fff;padding:16px}'
+    + 'h1{font-size:15px;margin-bottom:4px}.sub{font-size:10px;color:#666;margin-bottom:14px}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10.5px}'
+    + 'th{background:#2a2f45;color:#fff;padding:5px 8px;text-align:left;font-size:9px;text-transform:uppercase}'
+    + 'td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}'
+    + 'tr:nth-child(even) td{background:#f9f9ff}'
+    + '.sec-title{background:#4a4080;color:#fff;padding:5px 10px;font-size:9px;font-weight:700;text-transform:uppercase;margin:10px 0 0}'
+    + '.readonly{color:#666;font-style:italic}'
+    + 'textarea,select,input{border:none;background:transparent;font-family:inherit;font-size:inherit;width:100%;padding:0}'
+    + '@media print{body{padding:0}button{display:none!important}}';
+  const nombre = (state.me && state.me.nombre) || '';
+  const ronda  = hojaRondaActual || 1;
+  const parts  = [
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>',
+    '<title>Hoja de Decisión — ' + nombre + ' — Ronda ' + ronda + '</title>',
+    '<style>' + css + '</style></head><body>',
+    '<h1>Hoja de Decisión — ' + nombre + '</h1>',
+    '<div class="sub">Trimestre ' + ronda + ' / 20 | Simulador de Negocios | Juego de Negocios</div>',
+    content.innerHTML,
+    '</body></html>'
+  ];
+  win.document.open();
+  win.document.write(parts.join(''));
+  win.document.close();
+  setTimeout(function(){ try{ win.print(); }catch(e){} }, 500);
+}
+
+
+// ============================
+// ADMIN - Gestión de Profesores
+// ============================
+
+async function loadAdminProfesores() {
+  const container = document.getElementById('profesoresContent');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>';
+  try {
+    const profesores = await api('GET', '/admin/usuarios');
+    renderProfesores(container, profesores);
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderProfesores(container, profesores) {
+  // El botón "Crear profesor" usa onclick="crearProfesor()" (función global window.crearProfesor).
+  // No se usa addEventListener para evitar problemas de timing al reconstruir el DOM.
+
+  if (!profesores.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">👨‍🏫</div>
+        <p>No hay profesores registrados. Crea el primero abajo.</p>
+      </div>
+      ${formAgregarProfesor()}
+    `;
+    return;
+  }
+
+  // BUG #4 CORREGIDO: muestra password_plain con toggle + botón copiar credenciales
+  const rows = profesores.map(prof => {
+    const pwId = `pw_${prof.id}`;
+    const pw   = prof.password_plain || '(ver con superadmin)';
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(prof.nombre)}</strong><br>
+          <span style="font-size:.7rem;color:var(--text3)">${prof.id}</span>
+        </td>
+        <td>${escapeHtml(prof.email || '—')}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="${pwId}" type="password" value="${escapeHtml(pw)}" readonly
+              style="border:none;background:var(--bg2);padding:3px 8px;border-radius:6px;
+                     font-family:monospace;font-size:.8rem;width:110px;color:var(--text1)">
+            <button class="btn btn-ghost btn-sm"
+              onclick="toggleInputPw('${pwId}',this)" title="Mostrar/ocultar">👁</button>
+            <button class="btn btn-ghost btn-sm" title="Copiar credenciales"
+              onclick="navigator.clipboard.writeText('Email: ${escapeHtml(prof.email)} | Contraseña: ${escapeHtml(pw)}').then(()=>toast('Credenciales copiadas','success'))">📋</button>
+          </div>
+        </td>
+        <td style="font-size:.78rem">${fmt.dt(prof.creado_at)}</td>
+        <td style="text-align:center">
+          <button class="btn btn-danger btn-sm"
+            onclick="eliminarProfesor('${prof.id}','${escapeHtml(prof.nombre)}')">✕ Eliminar</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table style="width:100%">
+        <thead>
+          <tr>
+            <th>Nombre / ID</th>
+            <th>Email (usar para login)</th>
+            <th>Contraseña</th>
+            <th>Registrado</th>
+            <th style="width:100px">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${formAgregarProfesor()}
+  `;
+}
+
+// ── FIX: función global para crear profesor (evita depender de addEventListener) ──
+window.crearProfesor = async () => {
+  const nombre   = (document.getElementById('profNombre')?.value || '').trim();
+  const email    = (document.getElementById('profEmail')?.value || '').trim();
+  const password = document.getElementById('profPassword')?.value || '';
+  const btn      = document.getElementById('btnCrearProfesor');
+
+  if (!nombre || !email || !password) {
+    toast('Complete todos los campos', 'error');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando...'; }
+  try {
+    const resultado = await api('POST', '/admin/usuarios', { nombre, email, password });
+    const pw = resultado.password_plain || password;
+    toast(`✓ Profesor "${nombre}" creado  |  Email: ${email}  |  Contraseña: ${pw}`, 'success');
+    // Copiar automáticamente al portapapeles
+    navigator.clipboard?.writeText(`Email: ${email} | Contraseña: ${pw}`).catch(() => {});
+    loadAdminProfesores();
+  } catch (err) {
+    toast(`Error al crear profesor: ${err.message}`, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Crear profesor'; }
+  }
+};
+
+function formAgregarProfesor() {
+  return `
+    <div class="param-card" style="margin-top:16px">
+      <div class="param-card-title">➕ Agregar nuevo profesor</div>
+      <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end">
+        <div style="flex:2; min-width:150px">
+          <label class="form-label">Nombre completo</label>
+          <input type="text" id="profNombre" class="form-input" placeholder="Ej: Prof. Juan Pérez">
+        </div>
+        <div style="flex:2; min-width:150px">
+          <label class="form-label">Correo electrónico</label>
+          <input type="email" id="profEmail" class="form-input" placeholder="juan@ejemplo.com">
+        </div>
+        <div style="flex:1; min-width:120px">
+          <label class="form-label">Contraseña</label>
+          <div class="pw-input-wrap">
+            <input type="password" id="profPassword" class="form-input" placeholder="******">
+            <button type="button" class="btn-eye-input" onclick="toggleInputPw('profPassword',this)">👁</button>
+          </div>
+        </div>
+        <div>
+          <button type="button" id="btnCrearProfesor" class="btn btn-primary"
+            onclick="crearProfesor()">✓ Crear profesor</button>
+        </div>
+      </div>
+      <p style="font-size:.72rem;color:var(--text3);margin-top:8px">
+        ℹ️ El profesor ingresará con su correo electrónico y la contraseña que definas aquí.
+      </p>
+    </div>
+  `;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
+window.eliminarProfesor = async (id, nombre) => {
+  if (!confirm(`¿Eliminar profesor "${nombre}"? Se eliminarán también sus simulaciones. Esta acción no se puede deshacer.`)) return;
+  try {
+    await api('DELETE', `/admin/usuarios/${id}`);
+    toast(`Profesor "${nombre}" eliminado`, 'success');
+    loadAdminProfesores();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+};
+
+// ── Logout ─────────────────────────────────────────────────
+async function doLogout() {
+  wsClient.desconectar();
+  await api('POST','/auth/logout');
+  state = { me:null, ref:null, decisiones:null, resultados:null };
+  showScreen('screen-login');
+  document.getElementById('loginId').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT — check existing session
+// ═══════════════════════════════════════════════════════════
+async function init() {
+  initLogin();
+  try {
+    const me = await api('GET', '/auth/me');
+    state.me = me;
+    if (me.rol === 'admin' || me.rol === 'superadmin' || me.rol === 'profesor') {
+      await initAdmin();
+    } else {
+      await initEquipo();
+    }
+  } catch {
+    showScreen('screen-login');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
