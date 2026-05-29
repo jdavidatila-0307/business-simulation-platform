@@ -2764,15 +2764,27 @@ function renderCompetenciaEditor() {
     ? state.segNombresIndustria
     : ['Masivo popular','Masivo aspiracional','Funcional familiar','Cosmético','Dermatológico','Natural','Institucional'];
 
+  // ── Auto-inicializar: un competidor por segmento si la lista está vacía ──
+  if (!competenciaLocal.length && segNombres.length) {
+    competenciaLocal = segNombres.map(seg => ({
+      segmento:        seg,
+      nombre:          `Competidor ${seg.split(' ')[0]}`,
+      precio:          150,
+      calidad:         5,
+      marketing:       3000,
+      participacionRef: 0.10,
+    }));
+  }
+
   const rows = competenciaLocal.map((c,i) => `
     <tr>
       <td>
-        <select class="param-input" data-comp="${i}" data-comp-field="segmento" style="min-width:160px">
+        <select class="param-input" data-comp="${i}" data-comp-field="segmento" style="min-width:180px">
           ${segNombres.map(s=>`<option ${s===c.segmento?'selected':''}>${s}</option>`).join('')}
         </select>
       </td>
       <td><input class="param-input" type="text"   data-comp="${i}" data-comp-field="nombre"           value="${c.nombre}"           style="min-width:160px"/></td>
-      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="precio"           value="${c.precio}"           step="0.1" style="width:80px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="precio"           value="${c.precio}"           step="0.1"  style="width:80px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="calidad"          value="${c.calidad}"          step="0.5" min="1" max="10" style="width:70px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="marketing"        value="${c.marketing}"        step="500"  style="width:90px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="participacionRef" value="${c.participacionRef}" step="0.01" min="0" max="1" style="width:80px"/></td>
@@ -2780,12 +2792,16 @@ function renderCompetenciaEditor() {
     </tr>`).join('');
 
   document.getElementById('adminCompetenciaContent').innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Segmento dominante</th><th>Nombre del competidor</th>
-          <th>Precio (Bs)</th><th>Calidad (1-10)</th>
-          <th>Marketing (Bs)</th><th>Participación ref.</th><th></th>
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr style="background:var(--bg3)">
+          <th style="padding:8px 10px;text-align:left;white-space:nowrap">Segmento dominante</th>
+          <th style="padding:8px 10px;text-align:left;white-space:nowrap">Nombre del competidor</th>
+          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Precio (Bs)</th>
+          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Calidad (1-10)</th>
+          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Marketing (Bs)</th>
+          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Participación ref.</th>
+          <th></th>
         </tr></thead>
         <tbody id="compRows">${rows}</tbody>
       </table>
@@ -2795,7 +2811,8 @@ function renderCompetenciaEditor() {
       <button class="btn btn-primary" id="btnSaveComp">💾 Guardar</button>
     </div>
     <p class="param-hint" style="margin-top:8px">
-      Estos actores externos influyen en el índice externo de cada segmento y aparecen en reportes de investigación de mercado.
+      Un competidor por segmento. Precio y calidad afectan el índice externo de atractivo en el modelo Logit.
+      Participación ref. = fracción del mercado que representa (0.10 = 10%).
     </p>`;
 
   document.querySelectorAll('[data-comp][data-comp-field]').forEach(el => {
