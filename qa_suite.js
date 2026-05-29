@@ -362,7 +362,7 @@ async function nivel4_archivos() {
     ['public/index.html',      'Shell HTML'],
     ['public/styles.css',      'Estilos'],
     ['test_cuadre.js',         'Suite test motor'],
-    ['validar_sim_realista.js','Validación canónica'],
+    ['scripts/validacion/validar_sim_realista.js','Validación canónica'],
   ];
 
   for (const [archivo, desc] of archivos) {
