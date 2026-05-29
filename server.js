@@ -364,7 +364,7 @@ async function route(req, res, body) {
           id:            found.equipo.id,
           nombre:        found.equipo.nombre,
           rol:           'equipo',
-          password_hash: found.equipo.password,
+          password_hash: found.equipo.password || found.equipo.password_hash,
         };
         sessionSimulacionId = found.simulacionId;
         console.log(`[LOGIN] equipo encontrado | id: ${user.id} | sim: ${sessionSimulacionId}`);
