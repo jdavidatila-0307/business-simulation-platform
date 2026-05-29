@@ -3964,6 +3964,8 @@ if (isEditable) {
       el.type === 'checkbox' ? 'change' : 'input',
       () => {
 
+        const field = el.dataset.hojaField;   // ← DECLARAR PRIMERO
+
         const v_raw =
           el.type === 'checkbox' ? el.checked
           : el.type === 'number' ? +el.value
@@ -4048,7 +4050,6 @@ if (isEditable) {
             refCell.innerHTML = `<span style="color:var(--accent5)">→ Nueva cap. efectiva: ${nuevaCap} u/trim</span>`;
           }
         }
-        const field = el.dataset.hojaField;
         let v = v_raw;
         if (el.type === 'number' && LIMITES_CAMPO[field]) {
           const lim = LIMITES_CAMPO[field];
@@ -4151,7 +4152,13 @@ if (isEditable) {
       });
     });
     document.getElementById('btnHojaGuardar')?.addEventListener('click', async () => {
-      try { await api('POST','/api/decisiones/guardar',{decision}); toast('💾 Guardado','success'); }
+      try {
+        // Sincronizar state.decisiones con la variable local decision
+        state.decisiones = decision;
+        const _d = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
+        await api('POST','/api/decisiones/guardar',{decision: _d});
+        toast('💾 Guardado','success');
+      }
       catch(e) { toast(e.message,'error'); }
     });
     document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
