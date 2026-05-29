@@ -666,8 +666,18 @@ async function route(req, res, body) {
       const plantillas = listarPlantillas();
       return send(res, 200, { plantillas });
     } catch (err) {
-      console.error('[server] Error listando plantillas:', err.message);
       return send(res, 500, { error: 'No se pudieron cargar las plantillas.' });
+    }
+  }
+
+  if (url.match(/^\/admin\/plantillas\/[^/]+$/) && method === 'GET') {
+    if (needAdmin()) return;
+    try {
+      const nombre   = decodeURIComponent(url.split('/')[3]);
+      const plantilla = cargarPlantilla(nombre);
+      return send(res, 200, plantilla);
+    } catch (err) {
+      return send(res, 404, { error: `Plantilla no encontrada: ${url.split('/')[3]}` });
     }
   }
 

@@ -2307,7 +2307,16 @@ async function loadAdminParametros() {
       const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
       if (v1?.params && !Object.keys(p).length) p = v1.params;
       if (v1?.proveedores?.length && !proveedoresDefault.length) proveedoresDefault = v1.proveedores;
-    } catch {}
+    } catch {
+      // Endpoint no disponible — usar proveedores canónicos por defecto
+      if (!proveedoresDefault.length) {
+        proveedoresDefault = [
+          { id:'prov_1', nombre:'Cueros Bolivia S.A.',          factorCosto:1.10, calidad:8, leadTime:1 },
+          { id:'prov_2', nombre:'Importado Asia (vía Oruro)',    factorCosto:0.75, calidad:5, leadTime:2 },
+          { id:'prov_3', nombre:'Insumos Locales (Cochabamba)', factorCosto:0.90, calidad:6, leadTime:1 },
+        ];
+      }
+    }
   }
   ref.proveedores = proveedoresDefault;
 
