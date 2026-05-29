@@ -275,7 +275,7 @@ function setupNav(screenId) {
         if (typeof loadAdminEquipos === 'function') loadAdminEquipos();
         else loadAdminSimulaciones(); // fallback
       }
-      if (btn.dataset.view === 'admin-rondas') loadAdminRondas();
+      if (btn.dataset.view === 'admin-inventarios') loadAdminInventarios();
       if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
       if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
       if (btn.dataset.view === 'admin-parametros') loadAdminParametros();
@@ -1699,7 +1699,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       }
       // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
-      html += finRow('Precio facturado al cliente', r.totalFacturado||0, false,'neutral')
+      html += finRow('Precio facturado al cliente (con IVA)', r.totalFacturado||((r.ventasBrutas||0)+(r.ivaDebito||0)), false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
         + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
@@ -3826,12 +3826,41 @@ if (isEditable) {
       el.type === 'checkbox' ? 'change' : 'input',
       () => {
 
-        const v =
+        const v_raw =
           el.type === 'checkbox' ? el.checked
           : el.type === 'number' ? +el.value
           : el.tagName === 'SELECT'
             ? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/, '').trim()
             : el.value;
+
+        // ── Validación de rangos (Meyer, Design by Contract) ──────────────
+        // Los límites HTML max/min son evadibles — se aplica clamp en JS también
+        const LIMITES_CAMPO = {
+          calidad:             { min:1,  max:10  },
+          contratarOperarios:  { min:0,  max:50  },
+          despedirOperarios:   { min:0,  max:50  },
+          contratarVendedores: { min:0,  max:10  },
+          despedirVendedores:  { min:0,  max:10  },
+          plazoPrestamo:       { min:1,  max:8   },
+          precioVenta:         { min:0,  max:9999 },
+          produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
+          montoCapacitacion:   { min:0,  max:50000 },
+          publicidad:          { min:0,  max:200000 },
+          promocion:           { min:0,  max:100000 },
+          eventos:             { min:0,  max:100000 },
+          marketingRedes:      { min:0,  max:100000 },
+          relacionesPublicas:  { min:0,  max:100000 },
+        };
+        const field = el.dataset.hojaField;
+        let v = v_raw;
+        if (el.type === 'number' && LIMITES_CAMPO[field]) {
+          const lim = LIMITES_CAMPO[field];
+          const clamped = Math.min(lim.max, Math.max(lim.min, v));
+          if (clamped !== v) {
+            el.value = clamped;
+            v = clamped;
+          }
+        }
 
         const productFields = [
           'producto',
@@ -3857,8 +3886,6 @@ if (isEditable) {
           'cantidadMPpedida',
           'proveedorElegido',
         ];
-
-        const field = el.dataset.hojaField;
 
         if (productFields.includes(field)) {
 
@@ -5656,6 +5683,123 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
 }
 
 // ── Créditos Admin ─────────────────────────────────────────
+// ── Inventarios (vista profesor — igual que estudiante pero para todos los equipos) ──
+async function loadAdminInventarios() {
+  const el = document.getElementById('adminInventariosContent');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:var(--text3)">Cargando inventarios…</div>';
+  try {
+    const [rondasData, simData] = await Promise.all([
+      api('GET', '/admin/rondas'),
+      api('GET', '/admin/config'),
+    ]);
+    const equipos = (simData?.users || []).filter(u => u.rol === 'equipo');
+    const rondas  = (rondasData?.rondas || rondasData || [])
+      .filter(r => r.resultados)
+      .sort((a,b) => a.numero - b.numero);
+
+    if (!rondas.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><p>Sin rondas simuladas aún.</p></div>';
+      return;
+    }
+
+    // Selector de equipo
+    const eqOpts = equipos.map(e =>
+      `<option value="${e.id}">${e.nombre}</option>`
+    ).join('');
+
+    el.innerHTML = `
+      <div style="padding:16px 20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <label style="font-size:.82rem;color:var(--text2)">Ver inventario de:</label>
+          <select id="invEqSelector" class="form-input" style="width:200px">${eqOpts}</select>
+        </div>
+        <div id="invEqContent"></div>
+      </div>`;
+
+    const renderInvEquipo = (eqId) => {
+      const eqNombre = equipos.find(e => e.id === eqId)?.nombre || eqId;
+      const productoMap = {};
+      rondas.forEach(ronda => {
+        const resObj = ronda.resultados?.resultados || ronda.resultados || {};
+        // buscar resultados de este equipo (puede ser eq__prod_1, etc.)
+        const keys = Object.keys(resObj).filter(k => k.startsWith(eqId));
+        if (!keys.length) return;
+        keys.forEach(key => {
+          const r   = resObj[key];
+          const pid = r.productoId || 'prod_1';
+          const pnom= r.producto   || 'Producto Principal';
+          if (!productoMap[pid]) productoMap[pid] = { nombre: pnom, rondas: [] };
+          productoMap[pid].rondas.push({
+            ronda:      ronda.numero,
+            invInicial: r.inventarioInicial ?? 0,
+            produccion: r.produccion        ?? 0,
+            ventas:     r.ventasReales      ?? 0,
+            invFinal:   r.inventarioFinal   ?? 0,
+            invValor:   r.invFinalValorizado ?? 0,
+            costoAlmac: r.costoAlmacenamiento ?? 0,
+          });
+        });
+      });
+
+      const secH = t => `<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:16px 0 8px">${t}</div>`;
+      let html = `<div style="font-weight:700;font-size:.9rem;margin-bottom:12px;color:var(--accent3)">📦 ${eqNombre}</div>`;
+
+      if (!Object.keys(productoMap).length) {
+        html += '<p style="color:var(--text3);font-size:.8rem">Sin datos de inventario para este equipo.</p>';
+        document.getElementById('invEqContent').innerHTML = html;
+        return;
+      }
+
+      html += secH('Kardex — Inventario de Productos Terminados');
+      Object.entries(productoMap).forEach(([pid, prod]) => {
+        const ult = prod.rondas[prod.rondas.length - 1];
+        const cob = (ult?.ventas||0) > 0 ? (ult.invFinal / ult.ventas).toFixed(1) : '—';
+        const rot = (ult?.invFinal||0) > 0 ? ((ult.ventas || 0) / (((ult.invFinal||0) + (ult.invInicial||0)) / 2)).toFixed(2) : '—';
+        const alerta = parseFloat(cob) > 3 ? '🔴 Crítico' : parseFloat(cob) > 1 ? '⚠ Alto' : '✅ Óptimo';
+        html += `<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-weight:700;font-size:.82rem">${prod.nombre}</span>
+            <span style="font-size:.74rem;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,.06)">${alerta}</span>
+          </div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">
+          <thead><tr style="background:rgba(255,255,255,.04)">${
+            ['Ronda','Inv.Ini','Prod.','Ventas','Inv.Final','Valor Bs','Almac. Bs'].map(h =>
+              `<th style="padding:5px 8px;text-align:right;font-size:.62rem;color:var(--text3);text-transform:uppercase">${h}</th>`
+            ).join('')
+          }</tr></thead><tbody>${
+            prod.rondas.map(rr => {
+              const col = rr.invFinal > rr.ventas * 2 ? 'var(--accent4)' : 'var(--text1)';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">R${rr.ronda}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${rr.invInicial.toLocaleString('es')}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent2)">${rr.produccion.toLocaleString('es')}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${rr.ventas.toLocaleString('es')}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-weight:700;color:${col}">${rr.invFinal.toLocaleString('es')}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${Math.round(rr.invValor).toLocaleString('es')}</td>
+                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent4)">${Math.round(rr.costoAlmac).toLocaleString('es')}</td>
+              </tr>`;
+            }).join('')
+          }</tbody></table></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:.75rem">
+            <span style="color:var(--text3)">Rotación: <b>${rot}</b></span>
+            <span style="color:var(--text3)">Cobertura: <b>${cob} rondas</b></span>
+            <span style="color:var(--text3)">Stock actual: <b>${(ult?.invFinal||0).toLocaleString('es')} u.</b></span>
+            <span style="color:var(--text3)">Valor: <b>Bs ${Math.round(ult?.invValor||0).toLocaleString('es')}</b></span>
+          </div></div>`;
+      });
+      document.getElementById('invEqContent').innerHTML = html;
+    };
+
+    // Render primero equipo
+    if (equipos.length) renderInvEquipo(equipos[0].id);
+    document.getElementById('invEqSelector')?.addEventListener('change', e => renderInvEquipo(e.target.value));
+
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><p style="color:var(--accent4)">${e.message}</p></div>`;
+  }
+}
+
 async function loadAdminCreditos() {
   if (!requireSimSelected('adminCreditosContent')) return;
   const el = document.getElementById('adminCreditosContent');
