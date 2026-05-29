@@ -2288,10 +2288,18 @@ async function loadAdminMercado() {
 async function loadAdminParametros() {
   if (!requireSimSelected('adminParametrosContent')) return;
   const data = await api('GET', '/admin/config');
-  const p   = data.parametros  || {};
+  let p   = data.parametros  || {};
   const tp  = data.tiposProducto || {};
   const can = data.canales      || {};
   const ref = data;
+
+  // Si la sim no tiene parámetros, cargar defaults desde V1
+  if (!Object.keys(p).length) {
+    try {
+      const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
+      if (v1?.params) p = v1.params;
+    } catch {}
+  }
 
   const pf = (label, key, hint='', step='any') => `
     <div class="param-row">
@@ -2471,7 +2479,7 @@ async function loadAdminParametros() {
         </div>
       </div>
 
-      <div class="param-card">
+      <div class="param-card" style="grid-column:span 2">
         <div class="param-card-title">🏭 Proveedores de Materia Prima</div>
         <p style="font-size:.78rem;color:var(--text3);margin:0 0 12px">
           Factor = multiplicador sobre el costo estándar de MP (costoBase × pctMateriaPrima).

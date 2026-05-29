@@ -681,6 +681,17 @@ async function route(req, res, body) {
     }
   }
 
+  if (url.match(/^\/admin\/plantillas\/[^/]+$/) && method === 'GET') {
+    if (needAdmin()) return;
+    try {
+      const nombre = decodeURIComponent(url.split('/')[3]);
+      const plantilla = cargarPlantilla(nombre);
+      return send(res, 200, plantilla);
+    } catch (err) {
+      return send(res, 404, { error: `Plantilla "${url.split('/')[3]}" no encontrada.` });
+    }
+  }
+
 
   // ═══ Todas las rutas siguientes requieren contexto de simulación ═══
   const sim = await getCurrentSimulation(s);
