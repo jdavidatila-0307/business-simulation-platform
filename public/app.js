@@ -785,7 +785,13 @@ async function loadAdminSimulaciones() {
   } catch {}
   const plantillasOpts = plantillasDisponibles
     .filter(p => p !== 'jaboncillos_v1')
-    .map(p => { const lbl = p.replace(/_v\d+$/, '').replace(/_/g, ' '); const cap = lbl.charAt(0).toUpperCase() + lbl.slice(1); return `<option value="${p}">${cap}</option>`; })
+    .map(p => {
+      const lbl = p === 'Calzados_COM540_1_2026_V1'
+        ? 'Calzados Especializados — COM540 2026 V1'
+        : p.replace(/_v\d+$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const sel = p === 'Calzados_COM540_1_2026_V1' ? ' selected' : '';
+      return `<option value="${p}"${sel}>${lbl}</option>`;
+    })
     .join('');
 
   const el = document.getElementById('adminSimulacionesContent');
@@ -866,8 +872,7 @@ async function loadAdminSimulaciones() {
             <div>
               <label class="form-label">Industria / Plantilla</label>
               <select class="form-input" id="newSimIndustria">
-                <option value="" disabled selected>— Seleccionar industria —</option>
-                <option value="jaboncillos_v1">Jaboncillos</option>
+                <option value="" disabled>— Seleccionar industria —</option>
                 ${plantillasOpts}
               </select>
               <div style="font-size:.72rem;color:var(--text3);margin-top:4px">
