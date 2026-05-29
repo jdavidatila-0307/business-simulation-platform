@@ -816,6 +816,7 @@ async function route(req, res, body) {
     if (idx === -1) return send(res, 404, { error: 'No encontrado' });
     equipos.splice(idx, 1);
     await storage.updateSimulacion(sim.id, { users: equipos });
+    await storage.deleteEquipoDecisiones(sim.id, eqId);
     return send(res, 200, { ok: true });
   }
 
