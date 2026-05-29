@@ -13,7 +13,7 @@
  *
  * REGLAS APLICADAS:
  *   R1 — Completitud: claves que el motor necesita y no están → auto-completar + advertir
- *   R2 — Balance apertura (partida doble): cajaInicial + activosFijosIniciales = capitalInicial
+ *   R2 — Caja inicial > 0: previene sobregiro fantasma desde R1
  *   R3 — Consistencia cobros (S2): pctVentasContado + pctVentasCredito = 1.0
  */
 
@@ -24,7 +24,7 @@
 // Siempre se prefiere la plantilla de la industria sobre estos defaults.
 const DEFAULTS_CANON = {
   // Capital e inventario inicial
-  activosFijosIniciales: 80000, cajaInicial: 600000, capitalInicial: 680000,
+  activosFijosIniciales: 80000, cajaInicial: 600000,
   cxcInicial: 0, deudaInicial: 0, inventarioInicialUnid: 0,
   capacidadMaxProduccion: 1500,
   // Costos fijos
@@ -100,20 +100,18 @@ function validarYCompletarParams(params, plantillaCanonica = {}) {
     }
   }
 
-  // ── R2: Balance apertura — partida doble ─────────────────────────────────
-  //   DEBE: cajaInicial + activosFijosIniciales
-  //   HABER: capitalInicial
-  //   DESCUADRE = Bs 0 exigido
+  // ── R2: Balance apertura — caja inicial > 0 ──────────────────────────────
+  //   capitalContable se deriva automáticamente: cajaInicial + AF − deuda
+  //   Si cajaInicial = 0, el motor genera sobregiro fantasma desde R1
   const caja = Number(p.cajaInicial ?? 0);
   const af   = Number(p.activosFijosIniciales ?? 0);
-  const cap  = Number(p.capitalInicial ?? 0);
-  if (cap > 0 && Math.abs((caja + af) - cap) > 1) {
+  if (caja <= 0) {
     errores.push(
-      `❌ [R2] Balance apertura descuadrado:\n` +
-      `   cajaInicial (${caja}) + activosFijosIniciales (${af}) = ${caja + af}\n` +
-      `   capitalInicial = ${cap}\n` +
-      `   DESCUADRE = Bs ${Math.abs((caja + af) - cap).toLocaleString()}\n` +
-      `   Corrige cajaInicial o activosFijosIniciales antes de crear la simulación.`
+      `❌ [R2] cajaInicial debe ser mayor a 0.\n` +
+      `   Valor actual: ${caja}\n` +
+      `   Con caja = 0, todos los equipos arrancan con sobregiro desde R1.\n` +
+      `   El capital contable inicial = cajaInicial + activosFijosIniciales (${af}) = ${caja + af}.\n` +
+      `   Corrige cajaInicial antes de crear la simulación.`
     );
   }
 
