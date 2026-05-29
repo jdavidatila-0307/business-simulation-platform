@@ -971,8 +971,8 @@ function ejecutarSimulador(decisiones, cfg) {
     // Producto vacío = equipo no decidió
     // Se cobran costos fijos pero no hay ventas
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
-      const vend     = Math.max(1, d.vendedoresIniciales||2);
-      const oper     = Math.max(1, d.operariosIniciales||4);
+      const vend     = Math.max(0, d.vendedoresIniciales ?? params.vendedoresIniciales ?? 0);
+      const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
       // Usar parámetros reales de la industria — sin fallbacks hardcodeados
       const dep      = params.depreciacionTrimestral || 0;
       const gAdmin   = params.gastoAdminFijo         || 0;
@@ -1484,8 +1484,8 @@ function propagarEstado(decision, resPrev, params = {}) {
     deudaInicial:               Math.max(0, resPrev.deudaFinal           ?? 0),
     activosFijosIniciales:      Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? params.activosFijosIniciales ?? 80000),
     brandEquityInicial:         resPrev.brandEquityFinal                 ?? 50,
-    vendedoresIniciales:        Math.max(1, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 2),
-    operariosIniciales:         Math.max(1, resPrev.operariosFinales     ?? params.operariosIniciales  ?? 4),
+    vendedoresIniciales:        Math.max(0, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 0),
+    operariosIniciales:         Math.max(1, resPrev.operariosFinales     ?? params.operariosIniciales  ?? 1),
     resultadoAcumuladoAnterior: resPrev.resultadoAcumulado               ?? 0,
     ivaAPagarAnterior:          Math.max(0, resPrev.ivaAPagar            ?? 0),
     saldoIUEcompensable:        Math.max(0, resPrev.saldoIUEfinal        ?? 0),

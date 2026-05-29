@@ -3221,7 +3221,7 @@ function crearProductoDefault(idx) {
     innovacion: false,
     tipoInnovacion: 'Producto',
     montoInnovacion: 0,
-    vendedoresIniciales: 2,
+    vendedoresIniciales: state?.ref?.parametros?.vendedoresIniciales ?? 0,
     contratarVendedores: 0,
     despedirVendedores: 0,
     // Etapa 3.2: Operarios
