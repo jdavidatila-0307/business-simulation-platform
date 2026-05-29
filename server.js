@@ -1596,21 +1596,40 @@ async function route(req, res, body) {
         // Campos ACUMULABLES por producto (variables — se suman)
         // cxcFinal e invFinalValorizado son campos DE EMPRESA — NO sumar
         // (representan saldo al cierre, no acumulables por producto)
-        const sumar = ['ventasBrutas','ventasNetas','ventasNetasReal','ventasReales','costoVentas',
-          'utilidadBruta','gastosOp','utilidadNeta','ebit',
+        const sumar = [
+          // Ventas
+          'totalFacturado',       // CRÍTICO: precio facturado consolidado
+          'ventasBrutas','ventasNetas','ventasNetasReal','ventasReales',
+          'comisiones','comisionesNeto',
+          // Costos y márgenes
+          'costoVentas','utilidadBruta',
+          // Gastos comerciales (líneas del ER)
+          'gastoPublicidad','gastoPromocion','gastoEventos','gastoMktRedes','gastoRRPP',
+          'gastoCostoVend','costoVendedores',
+          // Gastos administrativos y planta (0 en prod_2-5 con modelo mixto → suma = prod_1)
+          'gastoAdminFijo','gastoFijoPlanta','depreciacion',
+          'costoAlmacenamiento','gastoInnovacionNeto','gastoInvMktNeto',
+          // Operarios y producción
+          'costoOperarios','gastoOperarios','pagoOperarios',
+          'produccion',
+          // Totales P&L
+          'gastosOp','utilidadNeta','ebit',
           'impuestoIT','impuestoIUE','totalImpuestos',
-          'pagoProduccion','pagoMktTotal','totalPagos','cobrosContado',
-          'inventarioFinal','ingresoPrestamo',
-          'publicidad','comisiones','comisionesNeto',
-          'gastoCostoVend','gastoOperarios','gastoInvMktNeto',
+          // Caja
+          'pagoProduccion','pagoMP','pagoMktTotal','totalPagos','cobrosContado',
+          'ingresoPrestamo','publicidad',
+          // IVA
           'ivaDebito','ivaCredito',
-          'roiMarketing','demandaAsignada','demandaFormal'];
+          // Inventarios y otros
+          'inventarioFinal','invFinalValorizado',
+          'roiMarketing','demandaAsignada','demandaFormal',
+        ];
         // cxcFinal e invFinalValorizado: usar del primer producto (ya en ...r inicial)
         sumar.forEach(k => {
           porEmpresa[eqId][k] = (porEmpresa[eqId][k] || 0) + (r[k] || 0);
         });
-        // Campos de empresa — tomar del primer producto (pasivos únicos)
-        porEmpresa[eqId].ivaAPagar           = porEmpresa[eqId].ivaAPagar;           // ya en prod_1
+        // ivaAPagar: valor de empresa — viene de prod_1 (no sumar)
+        porEmpresa[eqId].ivaAPagar           = porEmpresa[eqId].ivaAPagar;
         porEmpresa[eqId].totalPasivos        = porEmpresa[eqId].totalPasivos;
         porEmpresa[eqId].resultadoAcumulado  = porEmpresa[eqId].resultadoAcumulado;
         porEmpresa[eqId].pagoIVAPeriodoAnterior = porEmpresa[eqId].pagoIVAPeriodoAnterior;
