@@ -3499,7 +3499,13 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             </p>
           </div>
 
-          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
+        <div style="background:rgba(158,216,48,0.06);border:1px solid rgba(158,216,48,0.2);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-size:.8rem;color:var(--text2)">
+          <strong style="color:var(--accent3)">📌 Cómo leer esta tabla:</strong><br>
+          <span style="color:var(--text3)">Demanda total segmento</span> = todos los compradores potenciales del segmento este trimestre (incluye competidores externos como contrabando).<br>
+          <span style="color:var(--text3)">Tu market share</span> = la fracción que tu empresa captura frente a <strong>todos</strong> los competidores (otros equipos + competidor externo).<br>
+          <strong style="color:var(--accent5)">Tu demanda asignada</strong> = unidades que puedes vender = Demanda total × Tu share. <strong>Este es el número importante.</strong><br>
+          <span style="color:var(--text3)">El admin ve directamente tu demanda asignada — por eso el número que ves y el que ve el profesor son distintos pero correctos.</span>
+        </div>
             <div style="background:var(--bg3);padding:8px 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">
               Resultados del cálculo de mercado
             </div>
@@ -3510,9 +3516,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">#</th>
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producto</th>
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Segmento</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Demanda formal</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Market share</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Demanda asignada</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase" title="Total de compradores potenciales en el segmento este trimestre">Demanda total segmento</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase" title="Fracción del mercado que tu empresa capta frente a todos los competidores">Tu market share</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase" title="Unidades que puedes vender = Demanda total × Tu share">Tu demanda asignada</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producción</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Ventas estimadas</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Inv. final est.</th>
