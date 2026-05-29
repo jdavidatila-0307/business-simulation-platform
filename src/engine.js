@@ -507,8 +507,9 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaCredMPtotal  = Math.round(costoMPtotal * 13/100);        // IVA sobre total → sin pérdida
   const costoMPnetoTot  = costoMPtotal - ivaCredMPtotal;            // neto total exacto
   const cuVarMP    = costoMPnetoTot / produccionMP;                  // neto por par — sin roundBs para preservar precisión
-  const _pctCalVar  = params?.pctCostoCalidad ?? 0.08;
-  const cuVarCalid  = tp_cu ? tp_cu.costoBase * _pctCalVar * ((d.calidad || 5) - 5) : 0;  // calidad por par
+  const _pctCalVar   = params?.pctCostoCalidad ?? 0.08;
+  const _costoBaseCV = (tiposProducto[d.producto] || tiposProducto[d.tipoProducto])?.costoBase ?? 0;
+  const cuVarCalid   = _costoBaseCV * _pctCalVar * ((d.calidad || 5) - 5);  // calidad por par
   const cuVar      = cuVarMP + cuVarCalid;           // CU variable — sin roundBs, preserva precisión
 
   // invFinalValorizado usa cuVar (CU variable real) — consistente con costoVentas
