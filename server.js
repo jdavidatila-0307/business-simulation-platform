@@ -13,7 +13,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { hashPassword, verifyPassword } = require('./src/auth');
 
 const { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault } = require('./src/plantillas');
-const { generarDecisionBot, generarBotsParaSegmentos, PERFILES_BOT } = require('./src/bot_service');
+const { generarDecisionBot, PERFILES_BOT } = require('./src/bot_service');
 const { initWebSocket, broadcast, clientesConectados } = require('./src/ws_service');
 
 inicializarPlantillaDefault();
@@ -463,19 +463,7 @@ async function route(req, res, body) {
     } else {
       const user = await storage.findUserById(s.userId);
       if (!user) return send(res, 401, { error: 'Sesión inválida' });
-      // Retornar simulacionId activa para que initAdmin restaure el estado
-      let simNombre = null;
-      if (s.simulacionId) {
-        try {
-          const simActiva = await storage.getSimulacion(s.simulacionId);
-          simNombre = simActiva?.nombre || null;
-        } catch {}
-      }
-      return send(res, 200, {
-        id: user.id, nombre: user.nombre, rol: user.rol, miembros: [],
-        simulacionId: s.simulacionId || null,
-        simNombre,
-      });
+      return send(res, 200, { id: user.id, nombre: user.nombre, rol: user.rol, miembros: [] });
     }
   }
 
@@ -678,18 +666,8 @@ async function route(req, res, body) {
       const plantillas = listarPlantillas();
       return send(res, 200, { plantillas });
     } catch (err) {
+      console.error('[server] Error listando plantillas:', err.message);
       return send(res, 500, { error: 'No se pudieron cargar las plantillas.' });
-    }
-  }
-
-  if (url.match(/^\/admin\/plantillas\/[^/]+$/) && method === 'GET') {
-    if (needAdmin()) return;
-    try {
-      const nombre   = decodeURIComponent(url.split('/')[3]);
-      const plantilla = cargarPlantilla(nombre);
-      return send(res, 200, plantilla);
-    } catch (err) {
-      return send(res, 404, { error: `Plantilla no encontrada: ${url.split('/')[3]}` });
     }
   }
 
@@ -952,49 +930,16 @@ async function route(req, res, body) {
     if (!decisiones.length) return send(res, 400, { error: 'Sin equipos registrados' });
     try {
       const simCfg = {
-        params:             sim.parametros,
-        tiposProducto:      sim.tipos_producto,
-        canales:            sim.canales,
-        segmentos:          sim.segmentos,
-        afinidadMatrix:     sim.afinidad_matrix,
-        competenciaExterna: sim.competencia_externa,
-        proveedores:        sim.proveedores || [],
+        params: sim.parametros,
+        tiposProducto: sim.tipos_producto,
+        canales: sim.canales,
+        segmentos: sim.segmentos,
+        afinidadMatrix: sim.afinidad_matrix,
+        competenciaExterna: sim.competencia_externa
       };
-
-      // ── Generar bots dinámicos para segmentos sin equipo humano ──────────
-      if (process.env.ANTHROPIC_API_KEY) {
-        try {
-          const decisionesHumanas = decisiones.filter(d => !d.isBot);
-          const botsGenerados     = await generarBotsParaSegmentos(decisionesHumanas, simCfg, n);
-          if (botsGenerados.length > 0) {
-            // Guardar bots en ronda.decisiones para que también participen en simulación final
-            for (const bot of botsGenerados) {
-              ronda.decisiones[bot.equipo] = bot;
-            }
-            await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
-            decisiones = [...decisiones, ...botsGenerados];
-            console.log(`[server] ${botsGenerados.length} bot(s) IA agregados a R${n}`);
-          }
-        } catch (errBots) {
-          console.error('[server] Error generando bots IA:', errBots.message, '— presim continúa sin bots');
-        }
-      } else {
-        console.warn('[server] ANTHROPIC_API_KEY no definida — bots IA desactivados');
-      }
-
       const preResult = calcularPreSimulacion(decisiones, simCfg);
       const preSimulacion = {};
-      preResult.resultado.forEach(r => {
-        // Preservar razonamiento del bot si existe
-        const decOriginal = ronda.decisiones[r.equipo];
-        preSimulacion[r.equipo] = {
-          ...r,
-          confirmado:       false,
-          esBot:            decOriginal?.isBot || decOriginal?.esBot || false,
-          _botRazonamiento: decOriginal?._botRazonamiento || '',
-          _botEstrategia:   decOriginal?._botEstrategia   || '',
-        };
-      });
+      preResult.resultado.forEach(r => { preSimulacion[r.equipo] = { ...r, confirmado: false }; });
       await storage.updateRonda(sim.id, n, { preSimulacion, preSimMercado: preResult.mercadoSegmentos });
       sim.config.roundState = 'pre-sim';
       await storage.updateSimulacion(sim.id, { config: sim.config });
@@ -1349,8 +1294,8 @@ async function route(req, res, body) {
         deudaFinal:            0,
         afNetos:               sim.parametros?.activosFijosIniciales ?? 360000,
         brandEquityFinal:      50,
-        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 0,
-        operariosFinales:      sim.parametros?.operariosIniciales ?? 1,
+        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
+        operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
         inventarioFinal:       0,
         stockMPFinal:          0,
         pedidosPendientesResta:[],
@@ -1699,7 +1644,7 @@ async function route(req, res, body) {
     return send(res, 200, hist);
   }
 
-  // /admin/rondas — alias de historial con formato extendido para inventarios
+  // /admin/rondas — formato extendido para inventarios
   if (url === '/admin/rondas' && method === 'GET') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
@@ -1711,8 +1656,7 @@ async function route(req, res, body) {
         numero:      i,
         estado:      r.estado,
         ejecutadaAt: r.ejecutadaAt,
-        resultados:  r.resultados ? true : false,
-        decisiones:  r.decisiones || {},
+        resultados:  r.resultados || null,
       });
     }
     return send(res, 200, { rondas });
@@ -1725,17 +1669,15 @@ async function route(req, res, body) {
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
     if (!ronda) return send(res, 404, { error: `Ronda ${n} no encontrada` });
-    const resObj = ronda.resultados?.resultados || ronda.resultados || {};
+    const resObj  = ronda.resultados?.resultados || ronda.resultados || {};
     const equipos = await storage.getEquipos(sim.id);
-    // Enriquecer resultados con nombre del equipo
     const resultados = Object.entries(resObj).map(([eqId, r]) => {
       const eq = equipos.find(e => e.id === eqId);
-      return { ...r, equipo: eqId, equipoNombre: eq?.nombre || eqId, isBot: eq?.isBot || r.isBot || eqId.startsWith('bot_') };
+      return { ...r, equipo: eqId, equipoNombre: eq?.nombre || eqId,
+               isBot: eq?.isBot || r?.isBot || eqId.startsWith('bot_') };
     });
     return send(res, 200, { ronda: n, estado: ronda.estado, resultados, equipos });
   }
-
-  // ─── ADMIN — Config ───────────────────────────────────────────
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
