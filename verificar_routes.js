@@ -33,3 +33,4 @@ if (faltantes.length <= 4) {
   console.log(C.bold('══════════════════════════════════════════════════\n'));
   process.exit(faltantes.length > 4 ? 1 : 0);
 }
+
