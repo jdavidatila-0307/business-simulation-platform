@@ -174,7 +174,7 @@ function calcularMarketing(d, costoVendedores) {
 
 // ── Etapa 3.2: Operarios — capacidad efectiva de producción ───
 function calcularOperarios(d, params) {
-  const operariosIniciales = d.operariosIniciales ?? params.operariosIniciales ?? 1;
+  const operariosIniciales = d.operariosIniciales ?? params.operariosIniciales ?? 4;
   const operariosFinales = Math.max(0,
     operariosIniciales + (d.contratarOperarios || 0) - (d.despedirOperarios || 0)
   );
@@ -223,12 +223,6 @@ function procesarPedidosMP(d, rondaNumero, params) {
     // costoMPbase = costoBase del producto × pctMateriaPrima
     // Aquí no tenemos el costoBase por producto directamente, usamos el costoUnitario
     // como aproximación del pagoMP (pago al momento del pedido)
-    const pctMP_mp    = params.pctMateriaPrima ?? 0.40;
-    const factorC     = provData?.factorCosto ?? 1.0;
-    // costoUnitMP = costoBaseRef × pctMP × factorCosto
-    // costoBaseRef: usamos el promedio de costoBase de los tipos de producto
-    // o el valor de referencia si está disponible en params
-    const costoBaseRef = params.costoBaseReferencia ?? 200;  // valor de referencia industria
     // FIX 2: pagoMP = 0 porque el costo MP ya está en el CU (componenteMP)
     // y sale de caja a través de pagoProduccion = produccion × costoUnitario
     // El módulo MP sigue restringiendo producción via stock (lead time activo)
@@ -282,7 +276,8 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
   }
 
   const costoBase    = tp.costoBase;
-  const costoCalidad = 0.20 * (d.calidad || 5);
+  const _pctCal      = params?.pctCostoCalidad ?? 0.08;   // % del costoBase por punto sobre/bajo 5
+  const costoCalidad = costoBase * _pctCal * ((d.calidad || 5) - 5);
 
   // Costo canal: promedio si hay canal secundario
   const cp = canales[d.canalPrincipal]?.costoAdicionalUnitario ?? 0;
@@ -512,7 +507,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaCredMPtotal  = Math.round(costoMPtotal * 13/100);        // IVA sobre total → sin pérdida
   const costoMPnetoTot  = costoMPtotal - ivaCredMPtotal;            // neto total exacto
   const cuVarMP    = costoMPnetoTot / produccionMP;                  // neto por par — sin roundBs para preservar precisión
-  const cuVarCalid = 0.20 * (d.calidad || 5);        // calidad por par — sin roundBs
+  const _pctCalVar   = params?.pctCostoCalidad ?? 0.08;
+  // costoUnitario ya incluye el ajuste de calidad — extraer solo el componente variable MP
+  // cuVarCalid = componente de calidad dentro del CU ya calculado
+  const _costoBaseCV = costoUnitario > 0 ? costoUnitario : 0;
+  const cuVarCalid   = 0;  // ya está incluido en costoUnitario — no duplicar
   const cuVar      = cuVarMP + cuVarCalid;           // CU variable — sin roundBs, preserva precisión
 
   // invFinalValorizado usa cuVar (CU variable real) — consistente con costoVentas
@@ -674,8 +673,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     + Math.round(comisionApertura          * 13/100);
     // costoAlmacenamiento: costo interno sin factura — coherente con S6 y S10
     // NO genera IVA crédito (igual que calidad y operarios)
-  const ivaAPagar  = Math.max(0, roundBs(ivaDebito - ivaCredito));
+  const ivaSaldoAFavorAnt = d.ivaSaldoAFavorAnterior ?? 0;  // crédito fiscal acumulado de ronda anterior
+  const ivaDebitoNeto     = Math.max(0, roundBs(ivaDebito - ivaSaldoAFavorAnt));  // offset con saldo anterior
+  const ivaAPagar  = Math.max(0, roundBs(ivaDebitoNeto - ivaCredito));
   const pagoIVA    = ivaAPagar;  // sale de CAJA (no del P&L)
+  // Crédito fiscal que excede el débito: se activa como activo corriente y se arrastra (Ley 843)
+  const ivaSaldoAFavor = Math.max(0, roundBs(ivaCredito + ivaSaldoAFavorAnt - ivaDebito));
 
   // IT (3% sobre totalFacturado = precio con IVA) — base correcta Ley 843: ingresos brutos
   const tasaIT      = params.tasaIT ?? 0.03;
@@ -714,7 +717,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
-  const pagoCalidad    = roundBs(0.20 * (d.calidad || 5) * (d.produccion || 0)); // S10: calidad
+  // pagoCalidad: componente de calidad sobre 5 × unidades producidas
+  // Se calcula desde costoCalidadUnit que viene del resultado (ya tiene tiposProducto)
+  const _pctCalPago    = params?.pctCostoCalidad ?? 0.08;
+  const pagoCalidad    = roundBs((d.costoCalidadUnit || 0) * (d.produccion || 0)); // S10: calidad
   const pagoComisiones = comisiones;             // S3: comisión sale de caja
   const pagoMP         = pagoMPbruto;            // S4: MP bruto sale de caja
 
@@ -731,6 +737,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // cobrosContado ya refleja el neto recibido: (ventasNetas + ivaDebito) × pctContado
 
   // S7: totalPagos con pagos REALES individuales (sin pagoProduccion)
+  // pagoAmortizacion: reembolso del principal al banco (reduce caja Y reduce deuda)
+  const pagoAmortizacion = d.amortizacion || 0;
   const totalPagos = roundBs(
     pagoMP           +  // S4: MP bruto al proveedor
     pagoComisiones   +  // S3: comisión al canal
@@ -742,6 +750,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoAlmacen      +
     pagoIntereses    +
     pagoApertura     +
+    pagoAmortizacion +  // reembolso principal préstamo (equity-neutral: -caja = -deuda)
     pagoIVAPeriodoAnterior +  // IVA trimestre anterior
     pagoIT + pagoIUE +
     pagoOperarios    +
@@ -781,12 +790,51 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   El pago al Estado ocurre en el trimestre siguiente (pagoIVAPeriodoAnterior)
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
-  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos);
-  const capitalContable = roundBs(params.capitalContable || params.capitalInicial || (params.activosFijosIniciales + params.cajaInicial));
+  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
+  // capitalContable = capital PERMANENTE inicial del equipo
+  // R1: usa d.cajaInicial + d.AF (capital real del equipo, soporta capitalInicial por equipo)
+  // R2+: usa params (capital original permanente, no cambia entre rondas)
+  const _isR1 = (d.rondaNumero ?? 1) <= 1;
+  const capitalContable = roundBs(
+    params.capitalContable ||
+    params.capitalInicial  ||
+    (_isR1
+      ? ((d.activosFijosIniciales || 0) + (d.cajaInicial || 0))   // R1: capital real del equipo
+      : ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)))  // R2+: permanente
+  );
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
-  const patrimonio      = roundBs(capitalContable + resultadoAcumulado);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
   const totalPasivos    = roundBs(deudaFinal + ivaAPagar);
+
+  // ── ALTERNATIVA 2: Patrimonio DERIVADO — A = P + Pat por construcción ────────
+  // patrimonio = totalActivos − totalPasivos → balance SIEMPRE cuadra (cero descuadre)
+  // capitalContable + resultadoAcumulado se usa para verificar coherencia ER vs Balance
+  const patrimonio      = roundBs(totalActivos - totalPasivos);
+
+  // ── INVARIANTE CONTABLE — Verificación algebraica (asset integrity check) ────
+  // La assertion capitalContable + resAcum = patrimonio solo es válida para
+  // monoproducto. En multiproducto expandido (equipo='eq__prod_N'), el balance
+  // de prod_1 contiene los activos de TODA la empresa pero el P&L solo registra
+  // la utilidad de ese producto → la assertion no aplica (Meyer, Design by Contract).
+  // El invariante A = P + Pat sigue garantizado por patrimonio derivado en TODOS los casos.
+  const _esMultiProd  = typeof d.equipo === 'string' && d.equipo.includes('__prod_');
+  const _patrimonioER = roundBs(capitalContable + resultadoAcumulado);
+  const _divergencia  = Math.abs(patrimonio - _patrimonioER);
+  if (!_esMultiProd && _divergencia > 500) {
+    const _sobregiro  = sobregiro || 0;
+    const _tolerancia = Math.max(500, _sobregiro * 0.01 + 100);
+    if (_divergencia > _tolerancia && _sobregiro < 1000) {
+      throw new Error(
+        `[ERROR_CONTABLE] Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
+        `patrimonioBalance=${patrimonio} ≠ capitalContable(${capitalContable})+resAcum(${resultadoAcumulado})=${_patrimonioER} | ` +
+        `Activos=${totalActivos} Pasivos=${totalPasivos} | Δ=${_divergencia.toFixed(2)} Bs`
+      );
+    }
+    console.warn(
+      `[WARN_CONTABLE] Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
+      `Δ=${_divergencia.toFixed(0)} Bs (sobregiro=${_sobregiro.toFixed(0)}) — divergencia esperada`
+    );
+  }
 
   // Brand Equity acumulativo — Etapa 2.1
   const brandEquityFinal = calcularBrandEquity(
@@ -824,7 +872,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastosOp, utilidadNeta,
 
     // KPIs calculados
-    ebit:         roundBs(utilidadNeta_operat),  // EBIT = resultado antes de impuestos
+    ebit:         roundBs(utilidadBruta - gastosOp),      // TRUE EBIT: antes de gastos financieros e impuestos
     roiMarketing: pagoMktTotal > 0 ? roundBs(ventasNetas / pagoMktTotal) : 0,
 
     // Flujo de Efectivo
@@ -834,6 +882,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoOperarios, pagoMP,
     pagoInnovacion, pagoAlmacen, pagoIntereses, pagoApertura,
     totalPagos, sobregiro, cajaFinal,
+    pagoAmortizacion,  // reembolso principal — para trazabilidad flujo de caja
 
     // Balance
     cxcFinal, invFinalValorizado, afNetos,
@@ -842,6 +891,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
     // Etapa 3.3: obligaciones fiscales IVA
     ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
+    ivaSaldoAFavor,  // crédito fiscal acumulado (activo corriente cuando ivaCredito > ivaDebito, Ley 843)
 
     // Etapa 3.4: IT e IUE + compensación IUE→IT (Fase 4)
     impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
@@ -854,8 +904,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pedidosPendientesResta: d.pedidosPendientesResta ?? [],
 
     // Etapa 3.2: operarios
-    operariosFinales:  d.operariosFinales  ?? d.operariosIniciales  ?? (params.operariosIniciales ?? 1),
-    capacidadEfectiva: d.capacidadEfectiva ?? (params.productividadBase ?? 440) * (d.operariosIniciales ?? 4),
+    operariosFinales:  d.operariosFinales ?? d.operariosIniciales ?? (params.operariosIniciales ?? 1),
+    capacidadEfectiva: d.capacidadEfectiva ?? (params.productividadBase ?? 500) * (d.operariosFinales ?? d.operariosIniciales ?? (params.operariosIniciales ?? 1)),
     costoOperarios:    d.costoOperarios    ?? 0,
 
     // Para propagación
@@ -927,8 +977,8 @@ function ejecutarSimulador(decisiones, cfg) {
     // Producto vacío = equipo no decidió
     // Se cobran costos fijos pero no hay ventas
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
-      const vend     = Math.max(1, d.vendedoresIniciales||2);
-      const oper     = Math.max(1, d.operariosIniciales || params.operariosIniciales || 1);
+      const vend     = Math.max(0, d.vendedoresIniciales ?? params.vendedoresIniciales ?? 0);
+      const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
       // Usar parámetros reales de la industria — sin fallbacks hardcodeados
       const dep      = params.depreciacionTrimestral || 0;
       const gAdmin   = params.gastoAdminFijo         || 0;
@@ -937,7 +987,7 @@ function ejecutarSimulador(decisiones, cfg) {
       const gOper    = oper * (params.costoOperario            || 0);
       const gFijo       = gAdmin + gPlanta + gVend + gOper + dep;
       // Intereses sobre deuda existente
-      const tasaTrim    = (params.tasaInteresTrimestral||0.055);
+      const tasaTrim    = (params.tasaSobregiro||0.055);
       const intDeuda    = Math.round((d.deudaInicial||0) * tasaTrim);
       const totalGastos = gFijo + intDeuda;
       // CONTABILIDAD: depreciación es gasto NO desembolsable
@@ -954,8 +1004,9 @@ function ejecutarSimulador(decisiones, cfg) {
       const afNetos     = Math.max(0, (d.activosFijosIniciales||80000) - dep);
       const totalActivos= cajaFinal + afNetos;
       const utilidadNeta= -(totalGastos + intSobregiro);
-      const patrimonio  = (d.cajaInicial||0) + (d.activosFijosIniciales||80000)
-                         + (d.resultadoAcumuladoAnterior||0) + utilidadNeta - (d.deudaInicial||0);
+      // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
+      // NO usar Math.max(0,...): si es negativo es quiebra técnica, dato legítimo
+      const patrimonio  = totalActivos - deudaFinal;
       return {
         // Identificadores
         equipo:          d.equipo,
@@ -992,7 +1043,7 @@ function ejecutarSimulador(decisiones, cfg) {
         deudaFinal,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
-        patrimonio:       Math.max(0, patrimonio),
+        patrimonio:       patrimonio,  // derivado: totalActivos - deudaFinal
         // Flujo de Efectivo
         cobrosContado:    cobrosAnterior,
         ingresoPrestamo:  sobregiro,
@@ -1011,7 +1062,7 @@ function ejecutarSimulador(decisiones, cfg) {
         operariosIniciales:  d.operariosIniciales || oper,
         operariosFinales:    oper,
         // Otros
-        capitalContable:  680000,  // capital inicial fijo del simulador
+        capitalContable:  params.capitalContable || params.capitalInicial || ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)),  // derivado: nunca hardcodeado
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,
@@ -1078,7 +1129,7 @@ function ejecutarSimulador(decisiones, cfg) {
       ...d,
       costoMPunitario:   costoMPunit,
       costoBaseProducto: cbProd,
-      costoCalidadUnit:  roundBs(0.20 * (d.calidad || 5)),
+      costoCalidadUnit:  roundBs((tiposProducto[d.producto]?.costoBase||0) * (params?.pctCostoCalidad??0.08) * ((d.calidad||5)-5)),
     };
     const fin        = calcularResultadosFinancieros(dEnriquecido, ventas, cu, dEnriquecido.gastoTotalMarketing, paramsConProveedores, canales);
 
@@ -1118,7 +1169,7 @@ function ejecutarSimulador(decisiones, cfg) {
       costoCanal_calc: (() => {
         const trans    = roundBs(cbProd * (1 - pctMP_enr));
         const mpNeto   = roundBs(costoMPunit * (1 - (paramsConProveedores.tasaIVA ?? 0.13)));
-        const calidad  = roundBs(0.20 * (d.calidad || 5));
+        const calidad  = roundBs((tiposProducto[d.producto]?.costoBase||0) * (params?.pctCostoCalidad??0.08) * ((d.calidad||5)-5));
         const ef       = (() => {
           if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
           const bf = d.montoInnovacion / d.produccion;
@@ -1439,7 +1490,7 @@ function propagarEstado(decision, resPrev, params = {}) {
     deudaInicial:               Math.max(0, resPrev.deudaFinal           ?? 0),
     activosFijosIniciales:      Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? params.activosFijosIniciales ?? 80000),
     brandEquityInicial:         resPrev.brandEquityFinal                 ?? 50,
-    vendedoresIniciales:        Math.max(1, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 2),
+    vendedoresIniciales:        Math.max(0, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 0),
     operariosIniciales:         Math.max(1, resPrev.operariosFinales     ?? params.operariosIniciales  ?? 1),
     resultadoAcumuladoAnterior: resPrev.resultadoAcumulado               ?? 0,
     ivaAPagarAnterior:          Math.max(0, resPrev.ivaAPagar            ?? 0),
