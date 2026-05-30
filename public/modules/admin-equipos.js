@@ -117,7 +117,7 @@ window.editarEquipo = async function(id) {
     + '<input id="edit-pass-' + id + '" type="text" placeholder="' + (eq.passwordPlain||'contraseña actual') + '" '
     + 'style="background:var(--bg2);border:1px solid var(--border2);color:var(--white);padding:7px 12px;border-radius:6px;font-size:.85rem;width:200px"></div>'
     + '<button class="btn btn-ghost btn-sm" style="border-color:rgba(158,216,48,0.4);color:#9ED830" onclick="guardarEdicionEquipo(\'' + id + '\')">💾 Guardar</button>'
-    + '<button class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-form-' + id + '').remove()">Cancelar</button>'
+    + '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'edit-form-\' + id + \'\'  ).remove()">Cancelar</button>'
     + '</div></div></td>';
 
   tr.insertAdjacentElement('afterend', td);
