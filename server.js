@@ -1336,7 +1336,7 @@ async function route(req, res, body) {
         deudaFinal:            0,
         afNetos:               sim.parametros?.activosFijosIniciales ?? 360000,
         brandEquityFinal:      50,
-        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 0,
+        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
         operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
         inventarioFinal:       0,
         stockMPFinal:          0,
@@ -1413,7 +1413,7 @@ async function route(req, res, body) {
           deudaInicial:               Math.max(0, estado.deudaFinal ?? 0),
           activosFijosIniciales:      Math.max(0, estado.afNetos ?? 78000),
           brandEquityInicial:         estado.brandEquityFinal ?? 50,
-          vendedoresIniciales:        Math.max(0, estado.vendedoresFinales ?? sim.parametros?.vendedoresIniciales ?? 0),
+          vendedoresIniciales:        Math.max(1, estado.vendedoresFinales ?? 2),
           operariosIniciales:         Math.max(1, estado.operariosFinales ?? 4),
           inventarioInicial:          Math.max(0, estado.inventarioFinal ?? 0),
           stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
@@ -1535,7 +1535,7 @@ async function route(req, res, body) {
             deudaFinal:            p0.deudaFinal   ?? 0,
             afNetos:               p0.afNetos      ?? 0,
             brandEquityFinal:      p0.brandEquityFinal ?? 50,
-            vendedoresFinales:     p0.vendedoresFinales ?? sim.parametros?.vendedoresIniciales ?? 0,
+            vendedoresFinales:     p0.vendedoresFinales ?? 2,
             operariosFinales:      p0.operariosFinales ?? 4,
             inventarioFinal:       invFinalTotal,
             stockMPFinal:          p0.stockMPFinal ?? 0,
@@ -1748,6 +1748,67 @@ async function route(req, res, body) {
     }
     return send(res, 200, { rondas });
   }
+  }
+
+  // ─── ADMIN — Backup ───────────────────────────────────────────
+  if (url === '/admin/backup' && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación activa' });
+    try {
+      const equipos  = await storage.getEquipos(sim.id);
+      const usuarios = await storage.listUsers();
+      const rondas   = [];
+      const decisiones = [];
+      const resultados = [];
+
+      for (let i = 1; i <= (sim.config?.currentRound ?? 1); i++) {
+        const r = await storage.getRonda(sim.id, i);
+        if (!r) continue;
+        rondas.push({ numero: i, estado: r.estado, ejecutadaAt: r.ejecutadaAt });
+        // Decisiones de esta ronda
+        if (r.decisiones) {
+          Object.entries(r.decisiones).forEach(([key, dec]) => {
+            decisiones.push({ ronda_numero: i, equipo_key: key, decisiones: dec });
+          });
+        }
+        // Resultados de esta ronda
+        if (r.resultados) {
+          Object.entries(r.resultados).forEach(([equipoId, res]) => {
+            resultados.push({ ronda_numero: i, equipo_id: equipoId, resultados: res });
+          });
+        }
+      }
+
+      const backup = {
+        _meta: {
+          version:    'SimNego v3.2',
+          simulacion: sim.nombre || sim.id,
+          sim_id:     sim.id,
+          fecha:      new Date().toISOString(),
+          ronda_actual: sim.config?.currentRound ?? 1,
+          equipos_count: equipos.length,
+        },
+        simulacion:  { id: sim.id, nombre: sim.nombre, config: sim.config, parametros: sim.parametros },
+        equipos:     equipos,
+        rondas:      rondas,
+        decisiones:  decisiones,
+        resultados:  resultados,
+        usuarios:    usuarios.map(u => ({ id: u.id, username: u.username, role: u.role, sim_id: u.sim_id })),
+      };
+
+      const json     = JSON.stringify(backup, null, 2);
+      const filename = `backup_simnego_${new Date().toISOString().slice(0,10)}_R${sim.config?.currentRound ?? 1}.json`;
+      res.writeHead(200, {
+        'Content-Type':        'application/json',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length':      Buffer.byteLength(json),
+      });
+      res.end(json);
+      console.log(`[backup] ${filename} — ${(json.length/1024).toFixed(1)} KB`);
+    } catch(e) {
+      console.error('[backup] ERROR:', e.message);
+      return send(res, 500, { error: 'Error generando backup: ' + e.message });
+    }
   }
 
   // ─── ADMIN — Config ───────────────────────────────────────────
