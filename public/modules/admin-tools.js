@@ -75,7 +75,11 @@ async function loadAdminRondas() {
       + '&nbsp;&nbsp;'
       + '<button class="btn btn-ghost" onclick="doBackupSimulacion()" style="margin-top:8px">'
       + '💾 Backup simulación</button>'
-      + '</div>';
+      + '&nbsp;&nbsp;'
+      + '<button class="btn btn-ghost" onclick="doRestaurarSimulacion()" style="border-color:rgba(255,193,7,0.4);color:#FFC107">'
+      + '📂 Restaurar backup</button>'
+      + '</div>'
+      + '<div id="restaurarModal" style="display:none"></div>';
 
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error al cargar rondas: ' + e.message + '</p>';
@@ -295,5 +299,139 @@ window.doBackupSimulacion = async function() {
     alert('Error en backup: ' + e.message);
     console.error('[backup]', e);
     if (btn) { btn.disabled = false; btn.textContent = '💾 Backup simulación'; }
+  }
+};
+
+// ── doBackupSimulacion ────────────────────────────────────────────────────────
+window.doBackupSimulacion = window.doBackupSimulacion || async function() {
+  const btn = document.querySelector('[onclick="doBackupSimulacion()"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+    const resp = await fetch('/admin/backup', {
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+    });
+    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error || resp.statusText); }
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match    = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : 'backup_simnego_' + new Date().toISOString().slice(0,10) + '.json';
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Descargado'; }
+    setTimeout(() => { if (btn) btn.textContent = '💾 Backup simulación'; }, 3000);
+  } catch(e) {
+    alert('Error en backup: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Backup simulación'; }
+  }
+};
+
+// ── doRestaurarSimulacion ─────────────────────────────────────────────────────
+window.doRestaurarSimulacion = function() {
+  const input = document.createElement('input');
+  input.type   = 'file';
+  input.accept = '.json';
+  input.onchange = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const backup = JSON.parse(ev.target.result);
+        _mostrarModalRestaurar(backup, file.name);
+      } catch(err) {
+        alert('❌ Archivo inválido — no es un JSON válido.');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+};
+
+function _mostrarModalRestaurar(backup, filename) {
+  if (!backup._meta || !backup.simulacion) {
+    alert('❌ Backup inválido — falta estructura _meta o simulacion.');
+    return;
+  }
+  const meta    = backup._meta;
+  const equipos = (backup.equipos    || []).length;
+  const rondas  = (backup.rondas     || []).length;
+  const decs    = (backup.decisiones || []).length;
+
+  const modal = document.getElementById('restaurarModal');
+  if (!modal) { alert('Error: contenedor modal no encontrado'); return; }
+
+  modal.style.cssText = 'display:block;margin-top:16px;background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.25);border-radius:8px;padding:16px';
+  modal.innerHTML = `
+    <div style="font-size:.85rem;font-weight:700;color:#FFC107;margin-bottom:10px">📂 Restaurar backup</div>
+    <div style="font-size:.78rem;color:var(--text3);margin-bottom:12px;line-height:1.6">
+      <strong style="color:var(--white)">Archivo:</strong> ${filename}<br>
+      <strong style="color:var(--white)">Simulación:</strong> ${meta.simulacion}<br>
+      <strong style="color:var(--white)">Fecha backup:</strong> ${new Date(meta.fecha).toLocaleString('es-BO')}<br>
+      <strong style="color:var(--white)">Ronda:</strong> T${meta.ronda_actual}
+      &nbsp;|&nbsp; <strong style="color:var(--white)">Equipos:</strong> ${equipos}
+      &nbsp;|&nbsp; <strong style="color:var(--white)">Rondas:</strong> ${rondas}
+      &nbsp;|&nbsp; <strong style="color:var(--white)">Decisiones:</strong> ${decs}
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-ghost" onclick="_ejecutarRestaurar('nueva')" style="border-color:rgba(158,216,48,0.4);color:#9ED830">
+        🆕 Nueva simulación<br>
+        <span style="font-size:.7rem;font-weight:400;opacity:.7">Crea copia — no toca nada existente</span>
+      </button>
+      <button class="btn btn-ghost" onclick="_pedirConfirmacionSobrescribir()" style="border-color:rgba(239,83,80,0.4);color:#EF5350">
+        ⚠️ Sobrescribir activa<br>
+        <span style="font-size:.7rem;font-weight:400;opacity:.7">Reemplaza la simulación actual</span>
+      </button>
+    </div>
+    <div id="confirmSobrescribir" style="display:none;margin-top:8px;padding:10px;background:rgba(239,83,80,0.08);border:1px solid rgba(239,83,80,0.3);border-radius:6px;font-size:.78rem;color:#EF5350">
+      ⚠️ <strong>Esto eliminará TODAS las rondas y decisiones actuales.</strong> ¿Confirmar?
+      &nbsp;&nbsp;
+      <button class="btn btn-ghost" onclick="_ejecutarRestaurar('sobrescribir')" style="border-color:rgba(239,83,80,0.5);color:#EF5350;padding:4px 10px">Sí, sobrescribir</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('confirmSobrescribir').style.display='none'" style="padding:4px 10px">Cancelar</button>
+    </div>
+    <div id="restaurarReporte" style="margin-top:10px"></div>
+  `;
+  modal._backup = backup;
+}
+
+window._pedirConfirmacionSobrescribir = function() {
+  const conf = document.getElementById('confirmSobrescribir');
+  if (conf) conf.style.display = 'block';
+};
+
+window._ejecutarRestaurar = async function(modo) {
+  const modal   = document.getElementById('restaurarModal');
+  const reporte = document.getElementById('restaurarReporte');
+  const backup  = modal?._backup;
+  if (!backup) { alert('Error: backup no encontrado'); return; }
+  if (reporte) reporte.innerHTML = '<span style="color:var(--text3)">⏳ Restaurando...</span>';
+  modal.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const resp = await fetch('/admin/restaurar', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || '')
+      },
+      body: JSON.stringify({ backup, modo, confirmar: true })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    const r = data.reporte || {};
+    if (reporte) reporte.innerHTML = `
+      <div style="padding:10px;background:rgba(158,216,48,0.08);border:1px solid rgba(158,216,48,0.2);border-radius:6px;font-size:.78rem">
+        ✅ <strong style="color:#9ED830">Restauración completada</strong><br>
+        <span style="color:var(--text3)">
+          Modo: <strong style="color:var(--white)">${modo === 'nueva' ? '🆕 Nueva simulación' : '⚠️ Sobrescrita'}</strong><br>
+          Nombre: <strong style="color:var(--white)">${data.nombre}</strong><br>
+          ID: <span style="font-family:monospace">${data.simId}</span><br>
+          Equipos: ${r.equipos} &nbsp;·&nbsp; Rondas: ${r.rondas} &nbsp;·&nbsp; Decisiones: ${r.decisiones}
+        </span>
+      </div>`;
+  } catch(e) {
+    if (reporte) reporte.innerHTML = `<span style="color:#EF5350">❌ Error: ${e.message}</span>`;
+    modal.querySelectorAll('button').forEach(b => b.disabled = false);
   }
 };
