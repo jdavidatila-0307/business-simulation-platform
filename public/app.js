@@ -1722,17 +1722,55 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       }
       // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
-      html += finRow('Precio facturado al cliente (con IVA)', (r.ventasBrutas||0)+(r.ivaDebito||0), false,'neutral')
+      const _vb   = r.ventasBrutas || 0;
+      const _tf   = r.totalFacturado || (_vb + (r.ivaDebito||0));
+      const _vn   = r.ventasNetasReal || r.ventasNetas || 0;
+      const _oper = r.pagoOperarios || r.costoOperarios || 0;
+      const _plt  = r.gastoFijoPlanta || 0;
+      const _dep  = r.depreciacion || 0;
+      const _cvTot = (r.costoVentas||0) + _oper + _plt + _dep;
+      const _ubReal = _vn - _cvTot;
+      html += finRow('Precio facturado al cliente (con IVA)', _tf, false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
-        + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
+        + finRowSub('= Ventas brutas (sin IVA)', _vb, true)
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
-        + finRowSub('= Ventas netas', r.ventasNetasReal||r.ventasNetas||0, true)
-        + finRow('(−) Costo de ventas', -(r.costoVentas||0), false,'neg')
-        + finRow('    MOD — Operarios producción', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')
-        + finRow('    Overhead — Gasto fijo planta', -(r.gastoFijoPlanta||0), false,'neg')
-        + finRow('    Depreciación planta', -(r.depreciacion||0), false,'neg')
-        + finRowSub('= Utilidad bruta', r.utilidadBruta||0, true)
+        + finRowSub('= Ventas netas', _vn, true)
+        + finRow('(−) Costo de ventas (variable)', -(r.costoVentas||0), false,'neg')
+        + finRow('    MOD — Operarios producción', -_oper, false,'neg')
+        + finRow('    Overhead — Gasto fijo planta', -_plt, false,'neg')
+        + finRow('    Depreciación planta', -_dep, false,'neg')
+        + finRowSub('= Total costo de ventas', -_cvTot, true)
+        + finRowSub('= Utilidad bruta', _ubReal, true)
         + sec('(-) Gastos Comerciales')
+        + finRow('Publicidad',              -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),         false,'neg')
+        + finRow('Promoción',               -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),          false,'neg')
+        + finRow('Eventos',                 -(r.gastoEventos||Math.round((r.eventos||0)*0.87)),            false,'neg')
+        + finRow('Marketing en redes',      -(r.gastoMktRedes||Math.round((r.marketingRedes||0)*0.87)),     false,'neg')
+        + finRow('Relaciones públicas',     -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')
+        + finRow('Fuerza de ventas',        -(r.costoVendedores||0),    false,'neg')
+        + sec('(-) Gastos Administrativos')
+        + finRow('Gastos administrativos fijos', -(r.gastoAdminFijo||0), false,'neg')
+        + sec('(-) Gastos Operativos')
+        + finRow('Almacenamiento',          -(r.costoAlmacenamiento||0),false,'neg')
+        + ((r.gastoInnovacion||0)>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)),false,'neg') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= EBITDA', (r.ebit??0)+(r.depreciacion??0), true)
+        + finRow('(-) Depreciación', -(r.depreciacion||0), false,'neg')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= EBIT / Utilidad Operativa', r.ebit??0, true)
+        + sec('(-) Gastos Financieros')
+        + finRow('Intereses préstamo', -(r.interesesPrestamo||0), false,'neg')
+        + ((r.comisionApertura||0)>0 ? finRow('Comisión apertura', -(r.comisionApertura||0), false,'neg') : '')
+        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
+        + finRowSub('= Utilidad antes de impuestos', (r.ebit??0)-(r.gastoFinanciero??0), true)
+        + sec('(-) Impuestos')
+        + finRow('IT (3% precio facturado)', -(r.impuestoIT||0), false,'neg')
+        + ((r.impuestoIUE||0)>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE||0), false,'neg') : '')
+        + '<div style="margin:8px 0;padding:8px 10px;background:rgba(59,130,246,.07);border-radius:6px;border-left:3px solid #3B82F6;font-size:.73rem;color:var(--text3);line-height:1.6">'
+        + '<strong style="color:#3B82F6">ⓘ IVA — tributo neutro (Ley 843)</strong><br>'
+        + 'Débito: '+fmt.bs(r.ivaDebito||0)+' · Crédito: '+fmt.bs(r.ivaCredito||0)+' · <strong>Neto a pagar: '+fmt.bs(r.ivaAPagar||0)+'</strong></div>'
+        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
+        + finRowSub('= Utilidad neta', r.utilidadNeta, true);
         + finRow('Publicidad',              -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),         false,'neg')
         + finRow('Promoción',               -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),          false,'neg')
         + finRow('Eventos',                 -(r.gastoEventos||Math.round((r.eventos||0)*0.87)),            false,'neg')
@@ -4652,16 +4690,17 @@ window.mostrarFinanciero = (n) => {
                                  : (r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87));
           const tieneInnov = prods ? prods.some(p=>p.gastoInnovacion>0) : r.gastoInnovacion>0;
 
-          // Consolidados de ventas
-          const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
-          const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
-          const totTotalFact = (prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0))
-                             + (prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0));
-          const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
-          const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
+          // Consolidados de ventas — SIEMPRE desde r raíz (motor agrega ahí)
+          const totVentasBrutas = r.ventasBrutas || (prods ? sumP(p=>p.ventasBrutas||0) : 0);
+          const totIvaDebito    = r.ivaDebito    || (prods ? sumP(p=>p.ivaDebito||0)    : 0);
+          const totTotalFact    = r.totalFacturado || (totVentasBrutas + totIvaDebito);
+          const totComisNeto    = r.comisionesNeto || r.comisiones || (prods ? sumP(p=>p.comisionesNeto||p.comisiones||0) : 0);
+          const totVentasNetas  = r.ventasNetasReal || r.ventasNetas || (prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : 0);
           // Costo de ventas detalle
-          const totCVmp    = prods ? sumP(p=>p.cvMP||(p.costoVentas-(p.pagoCalidad||0))||0) : (r.cvMP||(r.costoVentas-(r.pagoCalidad||0))||0);
-          const totCVcalid = prods ? sumP(p=>p.pagoCalidad||0) : (r.pagoCalidad||0);
+          const totCVmp    = r.cvMP    || (prods ? sumP(p=>p.cvMP||0) : 0);
+          const totCVcalid = r.pagoCalidad || (prods ? sumP(p=>p.pagoCalidad||0) : 0);
+          // Total costo ventas = variable + MOD + overhead fijo + depreciación (NIC 2)
+          const totCostoVentas = (r.costoVentas||0) + gOper + gPlanta + (r.depreciacion||0);
           // Gastos operativos adicionales
           const gCostoVend = prods ? sumP(p=>p.gastoCostoVend||p.costoVendedores||0) : (r.gastoCostoVend||r.costoVendedores||0);
           // gastoInvMkt es decisión de empresa (no por producto) — usar consolidado r
@@ -4687,8 +4726,8 @@ window.mostrarFinanciero = (n) => {
             + finRow('    MOD — Operarios producción', -gOper, false, 'neg')
             + finRow('    Overhead — Gasto fijo planta', -gPlanta, false, 'neg')
             + finRow('    Depreciación planta', -(r.depreciacion||0), false, 'neg')
-            + finRowSub('= Total costo de ventas', -r.costoVentas, true)
-            + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
+            + finRowSub('= Total costo de ventas', -totCostoVentas, true)
+            + finRowSub('= Utilidad bruta', totVentasNetas - totCostoVentas, true)
             + '<div style="height:4px"></div>'
             // ── GASTOS COMERCIALES ──────────────────────────────
             + secER('(-) Gastos Comerciales')
@@ -4893,7 +4932,10 @@ window.mostrarFinanciero = (n) => {
                        +(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
                        +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);
-          return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
+          // IVA crédito acumulado como activo — ajuste indirecto en flujo
+          const ivaCredAcum = r.ivaCreditoAcumulado || r.ivaFavorAcumulado || 0;
+          return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false)
+            + (ivaCredAcum > 0 ? finRow('ⓘ IVA crédito acumulado (activo corriente, no sale de caja)', ivaCredAcum, false, 'neutral') : '');
         })()}
         <div style="height:12px"></div>
 
