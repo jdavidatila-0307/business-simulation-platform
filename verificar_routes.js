@@ -14,7 +14,6 @@ const server = fs.readFileSync('server.js', 'utf8');
 
 console.log(C.bold('\n══════════════════════════════════════════════════'));
 console.log(C.bold('  VERIFICADOR DE ROUTES — SimNego v3.2'));
-console.log(C.bold('══════════════════════════════════════════════════\n'));
 
 const total   = Object.values(ROUTES).flat().length;
 const faltantes = verificarRegistro(server);
@@ -24,9 +23,7 @@ console.log(`Total rutas en registry: ${C.cyan(total)}`);
 console.log(`Implementadas: ${C.green(ok)}`);
 
 if (faltantes.length <= 4) {
-  console.log(C.yellow(C.bold(`  ⚠  ${faltantes.length} ruta(s) regex — falsos positivos documentados`)));
-  console.log(C.green(C.bold('  ✅ OK — 48+ rutas implementadas')));
-  console.log(C.bold('══════════════════════════════════════════════════\n'));
+      console.log(C.bold('══════════════════════════════════════════════════\n'));
   process.exit(0);
 } else {
   console.log(C.red(C.bold(`  ❌ FALLA — ${faltantes.length} ruta(s) faltantes`)));
