@@ -913,7 +913,6 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     activosFijosNetos: afNetos,
     costoUnitario, comisionPct,
     brandEquityFinal,
-    totalFacturado,   // display: precio facturado al cliente (con IVA)
   };
 }
 
@@ -1085,7 +1084,7 @@ function ejecutarSimulador(decisiones, cfg) {
     const unidMP = paramsConProveedores.unidadesMPporUnidad ?? 1;
     const produccionMaxMP = mpData.stockMPDisponible > 0
       ? Math.floor(mpData.stockMPDisponible / unidMP)
-      : Infinity;   // si no hay MP configurada, sin restricción (retrocompat.)
+      : (d.proveedorElegido ? 0 : Infinity);  // con proveedor: stock=0 → no produce; sin proveedor: sin restricción (retrocompat.)
     // Etapa 3.2: producción limitada por capacidad efectiva (operarios) y MP
     const produccionReal = Math.min(
       d.produccion || 0,
