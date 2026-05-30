@@ -58,7 +58,7 @@ async function loadAdminEquipos() {
         + '<td style="padding:14px 16px;text-align:center">' + estadoBadge + '</td>'
         + '<td style="padding:14px 16px;font-size:.78rem;color:var(--text3)">' + fecha + '</td>'
         + '<td style="padding:14px 16px;white-space:nowrap">'
-        + '<button class="btn btn-ghost btn-sm" onclick="cambiarClave(\'' + eq.id + '\',\'' + eq.nombre + '\')">🔑 Clave</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="editarEquipo(\'' + eq.id + '\')">✏️ Editar</button>'
         + '<button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="resetearEnvio(\'' + eq.id + '\',\'' + eq.nombre + '\')">↺ Resetear</button>'
         + '<button class="btn btn-sm" style="background:#EF4444;color:#fff;margin-left:4px" onclick="eliminarEquipo(\'' + eq.id + '\',\'' + eq.nombre + '\')">✕</button>'
         + '</td></tr>';
@@ -88,14 +88,58 @@ window.togglePassVis = function(btn, pass) {
   sp.textContent = sp.textContent.includes('•') ? pass : '••••••';
 };
 
-window.cambiarClave = async function(id, nombre) {
-  var nueva = prompt('Nueva contraseña para ' + nombre + ':');
-  if (!nueva) return;
+window.editarEquipo = async function(id) {
+  var equipos;
+  try { equipos = await api('GET', '/admin/equipos'); }
+  catch(e) { toast('Error: ' + e.message, 'error'); return; }
+  var eq = equipos.find(function(e) { return e.id === id; });
+  if (!eq) { toast('Equipo no encontrado', 'error'); return; }
+
+  var btn = document.querySelector('[onclick="editarEquipo(\'' + id + '\')"]');
+  if (!btn) return;
+  var tr  = btn.closest('tr');
+  if (!tr) return;
+
+  var existing = document.getElementById('edit-form-' + id);
+  if (existing) { existing.remove(); return; }
+  document.querySelectorAll('[id^="edit-form-"]').forEach(function(el) { el.remove(); });
+
+  var td = document.createElement('tr');
+  td.id  = 'edit-form-' + id;
+  td.innerHTML = '<td colspan="7" style="padding:0">'
+    + '<div style="padding:14px 16px;background:rgba(158,216,48,0.06);border-top:1px solid rgba(158,216,48,0.15);border-bottom:1px solid rgba(158,216,48,0.15)">'
+    + '<div style="font-family:var(--font-mono);font-size:.68rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">✏️ Editar equipo</div>'
+    + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'
+    + '<div><label style="font-size:.72rem;color:var(--text3);display:block;margin-bottom:4px">Nombre del equipo</label>'
+    + '<input id="edit-nombre-' + id + '" type="text" value="' + (eq.nombre||'').replace(/"/g,'&quot;') + '" '
+    + 'style="background:var(--bg2);border:1px solid var(--border2);color:var(--white);padding:7px 12px;border-radius:6px;font-size:.85rem;width:200px"></div>'
+    + '<div><label style="font-size:.72rem;color:var(--text3);display:block;margin-bottom:4px">Nueva contraseña <span style="opacity:.5">(vacío = no cambiar)</span></label>'
+    + '<input id="edit-pass-' + id + '" type="text" placeholder="' + (eq.passwordPlain||'contraseña actual') + '" '
+    + 'style="background:var(--bg2);border:1px solid var(--border2);color:var(--white);padding:7px 12px;border-radius:6px;font-size:.85rem;width:200px"></div>'
+    + '<button class="btn btn-ghost btn-sm" style="border-color:rgba(158,216,48,0.4);color:#9ED830" onclick="guardarEdicionEquipo(\'' + id + '\')">💾 Guardar</button>'
+    + '<button class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-form-' + id + '').remove()">Cancelar</button>'
+    + '</div></div></td>';
+
+  tr.insertAdjacentElement('afterend', td);
+  document.getElementById('edit-nombre-' + id).focus();
+};
+
+window.guardarEdicionEquipo = async function(id) {
+  var nombreInput = document.getElementById('edit-nombre-' + id);
+  var passInput   = document.getElementById('edit-pass-' + id);
+  var nombre = nombreInput ? nombreInput.value.trim() : '';
+  var pass   = passInput   ? passInput.value.trim()   : '';
+  if (!nombre) { toast('El nombre no puede estar vacío', 'error'); return; }
   try {
-    await api('POST', '/admin/equipos/' + id + '/clave', { password: nueva });
-    toast('✅ Contraseña actualizada', 'success');
+    await api('PUT', '/admin/equipos/' + id + '/editar', {
+      nombre:   nombre,
+      password: pass || undefined,
+    });
+    toast('✅ Equipo actualizado', 'success');
+    var form = document.getElementById('edit-form-' + id);
+    if (form) form.remove();
     loadAdminEquipos();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 };
 
 window.resetearEnvio = async function(id, nombre) {
