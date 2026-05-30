@@ -1,399 +1,408 @@
-// src/bot_service.js
-// =============================================================================
-// Servicio de bots con IA para SimNego.
-// Genera decisiones de negocio usando la API de Anthropic (claude-haiku)
-// para simular competidores artificiales con estrategias predefinidas.
+// bot_service.js — SimNego v3.2
+// ══════════════════════════════════════════════════════════════════════════════
+// Bot IA dinámico: genera un competidor por cada segmento sin equipo humano.
+// Usa Claude API para decidir estrategia libre, espejando al humano del segmento.
+// Los bots son efímeros: se crean en presim, compiten en simulación final,
+// NO se registran como usuarios permanentes.
 //
-// DEPENDENCIA: npm install @anthropic-ai/sdk
+// FLUJO:
+//   1. detectarSegmentosSinEquipo(decisiones, segmentos) → segmentos vacíos
+//   2. generarBotsParaSegmentos(segmentosSinEquipo, cfg, decisiones)
+//      → llama Claude API por cada segmento vacío
+//      → devuelve array de decisiones-bot listas para el motor
+//
 // ENV REQUERIDA: ANTHROPIC_API_KEY
-//
-// CAMBIOS v2.1:
-//   - decisionFallback: precio calculado sobre costo total (base+canal+calidad),
-//     no sobre costoBase solo. Hace la estrategia viable en cualquier industria.
-//   - decisionFallback: selección de producto con mayor afinidad para el segmento.
-//   - decisionFallback: producción como fracción directa (no /100), evita
-//     produccion=0 en industrias con capacidad < 100 unidades.
-//   - construirDecisionCompleta: busca resultado anterior con clave expandida
-//     (bot_id__prod_1) ademas de clave directa (bot_id).
-// =============================================================================
-
+// ══════════════════════════════════════════════════════════════════════════════
 'use strict';
 
-// ── Perfiles de bot ────────────────────────────────────────────────────────────
-const PERFILES_BOT = {
-  Agresivo: {
-    descripcion: 'Maximizar volumen de ventas. Precio siempre el mas bajo del mercado. '
-      + 'Alta produccion aunque genere inventario. Publicidad y promocion intensas. '
-      + 'Contrata vendedores agresivamente. No invierte en innovacion todavia. '
-      + 'Apunta al segmento de mayor demanda base. Usa el canal con mayor alcance.',
-    emoji: 'X',
-  },
-  Premium: {
-    descripcion: 'Diferenciacion por calidad y marca. Precio entre los mas altos del mercado. '
-      + 'Produccion moderada para no depreciar la exclusividad. Calidad maxima (9-10). '
-      + 'Alta inversion en relaciones publicas y eventos. Apunta a los segmentos mas rentables. '
-      + 'Canal propio o de mayor imagen. Innovacion de producto cuando hay presupuesto.',
-    emoji: 'D',
-  },
-  Equilibrado: {
-    descripcion: 'Estrategia de precio-valor: precio competitivo en el rango medio del mercado. '
-      + 'Produccion ajustada a la demanda estimada. Calidad moderada-alta (6-8). '
-      + 'Distribucion equilibrada del presupuesto de marketing entre publicidad, promocion y redes. '
-      + 'Segmento mas amplio disponible. Invierte en investigacion de mercado para ajustar.',
-    emoji: 'E',
-  },
-  Innovador: {
-    descripcion: 'Apuesta por la innovacion tecnologica o de proceso. Calidad alta (8-10). '
-      + 'Precio premium justificado por la innovacion. Produccion inicial conservadora. '
-      + 'Alta inversion en innovacion de producto o proceso cada 2-3 rondas. '
-      + 'Segmentos nicho y de alto crecimiento. Fuerza de ventas especializada. '
-      + 'Marketing digital y de relaciones publicas intenso.',
-    emoji: 'R',
-  },
-};
+// ── Nombres de empresas bolivianas para disfrazar los bots ───────────────────
+const NOMBRES_EMPRESAS = [
+  'Calzados Andinos S.R.L.',
+  'Piel Boliviana Ltda.',
+  'ZapaBolivia Comercial',
+  'Industrias Foot & Style',
+  'Calzatec Bolivia',
+  'OrthoPies S.A.',
+  'StepBol Manufacturas',
+  'AltoPie Diseños',
+  'Calzado Bolivariano',
+  'Pasos del Oriente S.R.L.',
+];
 
-// ── Constructor de decision bot fallback v2.1 ──────────────────────────────────
-function decisionFallback(bot, historialBot, cfg) {
-  const perfil    = bot.perfil || 'Equilibrado';
-  const segmentos = cfg.segmentos || [];
-  const canales   = Object.keys(cfg.canales || {});
-  const tipos     = Object.keys(cfg.tiposProducto || {});
-  const params    = cfg.params || {};
-  const afinidad  = cfg.afinidadMatrix || {};
+// Contador para asignar nombres únicos
+let _nombreIdx = 0;
+function siguienteNombreEmpresa() {
+  const nombre = NOMBRES_EMPRESAS[_nombreIdx % NOMBRES_EMPRESAS.length];
+  _nombreIdx++;
+  return nombre;
+}
 
-  const ultimoResultado  = historialBot?.resultados?.slice(-1)[0];
-  const cajaActual       = ultimoResultado?.cajaFinal        ?? params.cajaInicial        ?? 50000;
-
-  // ── 1. Parametros estrategicos por perfil ─────────────────────────────────
-  //  margen: porcentaje sobre costo total (no sobre costoBase solo)
-  //  produccionPct: fraccion directa de capacidad maxima (0.0–1.0)
-  const ESTRATEGIA = {
-    Agresivo:    { margen: 0.10, calidad: 5, produccionPct: 0.90, canalIdx: 0 },
-    Premium:     { margen: 0.65, calidad: 9, produccionPct: 0.40, canalIdx: 0 },
-    Equilibrado: { margen: 0.28, calidad: 7, produccionPct: 0.60, canalIdx: Math.min(1, canales.length - 1) },
-    Innovador:   { margen: 0.55, calidad: 9, produccionPct: 0.45, canalIdx: 0 },
-  };
-  const est = ESTRATEGIA[perfil] || ESTRATEGIA.Equilibrado;
-
-  // ── 2. Seleccion de segmento ──────────────────────────────────────────────
-  let segIdx;
-  if (perfil === 'Agresivo' || perfil === 'Equilibrado') {
-    // Mayor demanda base
-    segIdx = segmentos.reduce(
-      (best, s, i) => (s.demandaBase > (segmentos[best]?.demandaBase || 0) ? i : best), 0
-    );
-  } else if (perfil === 'Premium') {
-    // Menor porcentaje de contrabando (mayor disposicion a pagar precio premium)
-    segIdx = segmentos.reduce(
-      (best, s, i) => ((s.pctContrabando ?? 1) < (segmentos[best]?.pctContrabando ?? 1) ? i : best), 0
-    );
-  } else {
-    // Innovador: segmento de mayor tendencia de crecimiento
-    const crec = segmentos.findIndex(s =>
-      (s.tendencia || '').toLowerCase().includes('crec') ||
-      (s.tendencia || '').toLowerCase().includes('alto')
-    );
-    segIdx = crec !== -1 ? crec : Math.min(1, segmentos.length - 1);
-  }
-  segIdx = Math.min(segIdx, segmentos.length - 1);
-  const segmento = segmentos[segIdx] || segmentos[0];
-
-  // ── 3. Seleccion de producto con MAYOR AFINIDAD para el segmento ──────────
-  // FIX: evita que el bot compita con afinidad -2 cuando existe un producto +3
-  let mejorTipo      = tipos[0];
-  let mejorScore     = -Infinity;
-
-  tipos.forEach(tipo => {
-    const af   = afinidad[tipo]?.[segIdx] ?? 0;
-    const cost = cfg.tiposProducto[tipo]?.costoBase ?? 0;
-    // Premium/Innovador prefieren producto de mayor valor con buena afinidad
-    const score = (perfil === 'Premium' || perfil === 'Innovador')
-      ? af * 2 + cost * 0.01
-      : af;
-    if (score > mejorScore) {
-      mejorScore = score;
-      mejorTipo  = tipo;
-    }
-  });
-
-  // ── 4. Precio sobre costo TOTAL (FIX principal) ───────────────────────────
-  // Antes: precioVenta = costoBase * (1 + margen%)
-  //   → Jaboncillos: 2.1 * 1.85 = 3.89 Bs (OK)
-  //   → Calzados:   65  * 1.85 = 120 Bs  (demasiado caro para "Agresivo")
-  //
-  // Ahora: precioVenta = (costoBase + costoCanal + costoCalidad) * (1 + margen%)
-  //   → Calzados Agresivo: (65 + 15 + 1) * 1.10 = 89 Bs (competitivo vs humano en ~85 Bs)
-  //   → Jaboncillos Agresivo: (2.1 + 0.2 + 1) * 1.10 = 3.63 Bs (competitivo)
-  const canalKey   = canales[est.canalIdx] || canales[0];
-  const tipoCfg    = cfg.tiposProducto[mejorTipo] || {};
-  const costoBase  = tipoCfg.costoBase ?? 2.10;
-  const costoCanal = cfg.canales[canalKey]?.costoAdicionalUnitario ?? 0;
-  const costoTotal = costoBase + costoCanal + 0.20 * est.calidad;
-  const precioVenta = Math.round(costoTotal * (1 + est.margen) * 100) / 100;
-
-  // ── 5. Produccion (FIX: fraccion directa, sin /100 adicional) ────────────
-  // Antes: Math.round(capacidad * factor / 100) * 100
-  //   Si capacidad < 111, el /100 podria dar 0 unidades.
-  // Ahora: Math.round(capacidad * factor) — escala directamente.
-  const capacidad  = params.capacidadMaxProduccion || 500;
-  const produccion = Math.min(
-    capacidad,
-    Math.max(1, Math.round(capacidad * est.produccionPct))
+// ── Detectar segmentos sin equipo humano ──────────────────────────────────────
+function detectarSegmentosSinEquipo(decisiones, segmentos) {
+  // Segmentos que tienen al menos un equipo humano activo
+  const segmentosConEquipo = new Set(
+    decisiones
+      .filter(d => !d.isBot && d.segmentoObjetivo && d.producto && d.precioVenta)
+      .map(d => d.segmentoObjetivo)
   );
 
-  // ── 6. Presupuesto de marketing ───────────────────────────────────────────
-  const mktBudget = Math.min(cajaActual * 0.25, 30000);
-  const DIST_MKT = {
-    Agresivo:    { pub: 0.40, prom: 0.30, ev: 0.08, redes: 0.15, rrpp: 0.07 },
-    Premium:     { pub: 0.15, prom: 0.08, ev: 0.30, redes: 0.12, rrpp: 0.35 },
-    Equilibrado: { pub: 0.28, prom: 0.22, ev: 0.15, redes: 0.22, rrpp: 0.13 },
-    Innovador:   { pub: 0.12, prom: 0.08, ev: 0.22, redes: 0.38, rrpp: 0.20 },
-  }[perfil];
-
-  return {
-    producto:           mejorTipo,
-    segmentoObjetivo:   segmento.nombre,
-    canalPrincipal:     canalKey,
-    canalSecundario:    'Ninguno',
-    calidad:            est.calidad,
-    precioVenta,
-    produccion,
-    publicidad:         Math.round(mktBudget * DIST_MKT.pub),
-    promocion:          Math.round(mktBudget * DIST_MKT.prom),
-    eventos:            Math.round(mktBudget * DIST_MKT.ev),
-    marketingRedes:     Math.round(mktBudget * DIST_MKT.redes),
-    relacionesPublicas: Math.round(mktBudget * DIST_MKT.rrpp),
-    innovacion:         perfil === 'Innovador' && (historialBot?.rondaActual || 1) % 3 === 0,
-    tipoInnovacion:     'Producto',
-    montoInnovacion:    perfil === 'Innovador' ? Math.round(cajaActual * 0.08) : 0,
-    contratarVendedores: perfil === 'Agresivo' ? 1 : 0,
-    despedirVendedores:  0,
-    tipoPrestamo:       cajaActual < (params.cajaInicial ?? 50000) * 0.3 ? 'Operativo' : 'Ninguno',
-    montoPrestamo:      cajaActual < (params.cajaInicial ?? 50000) * 0.3
-                          ? Math.round((params.cajaInicial ?? 50000) * 0.5) : 0,
-    tipoInvestigacion:  perfil === 'Equilibrado' ? 'Basica' : 'No',
-    _fallback:          true,
-    _razonamiento:      `Fallback ${perfil}: ${mejorTipo} @ Bs${precioVenta} en "${segmento.nombre}" (af=${mejorScore.toFixed(1)})`,
-  };
+  // Retornar segmentos sin ningún equipo humano
+  return segmentos.filter(s => !segmentosConEquipo.has(s.nombre));
 }
 
-// ── Funcion principal: generarDecisionBot ──────────────────────────────────────
-async function generarDecisionBot(bot, historial, cfg) {
-  const perfil    = bot.perfil || 'Equilibrado';
-  const perfilCfg = PERFILES_BOT[perfil] || PERFILES_BOT.Equilibrado;
+// ── Generar decisión bot via Claude API ───────────────────────────────────────
+async function generarDecisionBotIA(segmento, equiposHumanosSim, cfg, rondaNum) {
+  const params   = cfg.params   || {};
+  const tipos    = Object.keys(cfg.tiposProducto || {});
+  const canales  = Object.keys(cfg.canales       || {});
+  const afinidad = cfg.afinidadMatrix            || {};
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn(`[bot_service] ANTHROPIC_API_KEY no configurada — usando fallback para bot "${bot.nombre}"`);
-    return construirDecisionCompleta(bot, historial, cfg, decisionFallback(bot, historial, cfg));
-  }
+  // Encontrar el mejor producto para este segmento según afinidad
+  const segIdx = (cfg.segmentos || []).findIndex(s => s.nombre === segmento.nombre);
+  let mejorProducto = tipos[0];
+  let mejorAfinidad = -Infinity;
+  tipos.forEach(tipo => {
+    const af = afinidad[tipo]?.[segIdx] ?? 0;
+    if (af > mejorAfinidad) { mejorAfinidad = af; mejorProducto = tipo; }
+  });
 
-  const segmentos   = (cfg.segmentos || []).map(s => s.nombre);
-  const canales     = Object.keys(cfg.canales || {});
-  const tipos       = Object.keys(cfg.tiposProducto || {});
-  const params      = cfg.params || {};
-  const ultimaRonda = historial?.ultimas2Rondas?.slice(-1)[0];
-  const miResultado = ultimaRonda?.resultados?.[bot.id];
+  // Contexto de los competidores humanos en la simulación (todos los segmentos)
+  const resumenHumanos = equiposHumanosSim
+    .filter(d => d.producto && d.precioVenta)
+    .map(d => `- ${d.equipoNombre||d.equipo}: ${d.producto} en "${d.segmentoObjetivo}", ` +
+              `precio=Bs ${d.precioVenta}, calidad=${d.calidad||5}, ` +
+              `pub=Bs ${(d.publicidad||0)+(d.promocion||0)+(d.eventos||0)}`)
+    .join('\n');
 
-  const contextoMercado = historial?.ultimas2Rondas?.length
-    ? JSON.stringify(
-        historial.ultimas2Rondas.map(r => ({
-          ronda: r.numero,
-          mercado: (r.mercadoSegmentos || []).map(s => ({
-            segmento: s.nombre, demanda: s.demandaTotal, lider: s.lider,
-          })),
-          miResultado: r.resultados?.[bot.id]
-            ? {
-                ventasReales: r.resultados[bot.id].ventasReales,
-                utilidadNeta: r.resultados[bot.id].utilidadNeta,
-                shareReal:    r.resultados[bot.id].shareReal,
-                cajaFinal:    r.resultados[bot.id].cajaFinal,
-              }
-            : null,
-        })),
-        null, 2
-      )
-    : 'Primera ronda, sin historial previo.';
+  // Contexto del segmento
+  const demFormal = segmento.demandaFormal || segmento.demandaBase || 0;
+  const compExt   = cfg.competenciaExterna?.find(c => c.segmento === segmento.nombre);
 
-  const prompt = `
-Eres el equipo competidor "${bot.nombre}" en una simulacion de negocios educativa.
-Tu estrategia es: ${perfilCfg.descripcion}
+  // Parámetros financieros del bot (igual que humanos)
+  const cajaBot        = params.cajaInicial          || 500000;
+  const opIniciales    = params.operariosIniciales   || 1;
+  const prodBase       = params.productividadBase    || 500;
+  const capMax         = params.capacidadMaxProduccion || 1500;
+  const capEfectiva    = opIniciales * prodBase;
 
-INDUSTRIA: ${cfg.meta?.nombre || 'Negocios'}
-RONDA ACTUAL: ${historial?.rondaActual || 1}
-TU CAJA DISPONIBLE: Bs ${miResultado?.cajaFinal ?? params.cajaInicial ?? 50000}
-TUS VENDEDORES: ${miResultado?.vendedoresFinales ?? params.vendedoresIniciales ?? 2}
+  const prompt = `Eres el director estratégico de una empresa de calzado boliviano compitiendo en el mercado de "${segmento.nombre}".
 
-TIPOS DE PRODUCTO disponibles: ${tipos.join(', ')}
-SEGMENTOS de mercado: ${segmentos.join(', ')}
-CANALES de distribucion: ${canales.join(', ')}
-PRECIO MINIMO SUGERIDO (costo base mas bajo): Bs ${Math.min(...Object.values(cfg.tiposProducto || {}).map(t => t.costoBase || 0)) || 2}
-PRODUCCION MAXIMA: ${params.capacidadMaxProduccion || 500} unidades
+CONTEXTO DEL SEGMENTO:
+- Demanda formal: ${Math.round(demFormal)} pares/trimestre
+- Competidor externo: ${compExt ? `${compExt.nombre} (precio Bs ${compExt.precio}, calidad ${compExt.calidad}/10, participación ref ${(compExt.participacionRef*100).toFixed(0)}%)` : 'Ninguno conocido'}
+- Ronda actual: ${rondaNum}
 
-CONTEXTO DE MERCADO (ultimas 2 rondas):
-${contextoMercado}
+COMPETIDORES HUMANOS EN LA SIMULACIÓN (otros segmentos):
+${resumenHumanos || '(Eres el único equipo por ahora)'}
 
-INSTRUCCION: Devuelve UNICAMENTE un objeto JSON valido, sin texto adicional, sin markdown, sin backticks.
-El JSON debe tener exactamente estas claves y tipos:
+PRODUCTOS DISPONIBLES: ${tipos.join(', ')}
+Mejor producto para este segmento por afinidad: ${mejorProducto} (afinidad +${mejorAfinidad})
+
+CANALES DISPONIBLES: ${canales.join(', ')}
+
+PARÁMETROS DE COSTOS:
+${tipos.map(t => `- ${t}: costoBase=Bs ${cfg.tiposProducto[t]?.costoBase || 0}`).join('\n')}
+- pctMateriaPrima: ${((params.pctMateriaPrima||0.40)*100).toFixed(0)}%
+- pctCostoCalidad: ${((params.pctCostoCalidad||0.08)*100).toFixed(0)}% del costoBase por punto sobre/bajo calidad 5
+
+RESTRICCIONES FINANCIERAS:
+- Caja disponible: Bs ${cajaBot.toLocaleString('es-BO')}
+- Operarios iniciales: ${opIniciales} → Capacidad efectiva: ${capEfectiva} u/trim
+- Capacidad máx planta: ${capMax} u/trim
+
+PROVEEDORES MP:
+- Cueros Bolivia S.A.: factorCosto=×1.10, calidad 8/10, leadTime 1 trim
+- Insumos Locales Cochabamba: factorCosto=×0.90, calidad 6/10, leadTime 1 trim  
+- Importado Asia vía Oruro: factorCosto=×0.75, calidad 5/10, leadTime 2 trim ⚠
+
+INSTRUCCIÓN:
+Adopta UNA estrategia competitiva de Porter (1980): liderazgo en costos, diferenciación o enfoque de nicho.
+Elige el producto con mayor afinidad para el segmento.
+El precio debe cubrir el costo unitario real (incluye transformación + MP + calidad + canal).
+La producción NO puede superar la capacidad efectiva (${capEfectiva} u/trim).
+Si necesitas más capacidad, contrata operarios (costo Bs ${params.costoContratacionOperario||3000}/op + sueldo Bs ${params.costoOperario||9600}/trim).
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown:
 {
-  "producto":            "<string - uno de los tipos disponibles>",
-  "segmentoObjetivo":    "<string - uno de los segmentos disponibles>",
-  "canalPrincipal":      "<string - uno de los canales disponibles>",
-  "canalSecundario":     "Ninguno",
-  "calidad":             <numero entero 1-10>,
-  "precioVenta":         <numero - mayor que el costoBase del tipo elegido>,
-  "produccion":          <numero entero - entre 50 y ${params.capacidadMaxProduccion || 500}>,
-  "publicidad":          <numero entero - monto en Bs>,
-  "promocion":           <numero entero - monto en Bs>,
-  "eventos":             <numero entero - monto en Bs>,
-  "marketingRedes":      <numero entero - monto en Bs>,
-  "relacionesPublicas":  <numero entero - monto en Bs>,
-  "innovacion":          <boolean>,
-  "tipoInnovacion":      "<Producto|Proceso|Canal>",
-  "montoInnovacion":     <numero entero - 0 si innovacion es false>,
-  "contratarVendedores": <numero entero 0-3>,
-  "despedirVendedores":  <numero entero 0-2>,
-  "tipoPrestamo":        "<Ninguno|Operativo|Inversion>",
-  "montoPrestamo":       <numero entero - 0 si tipoPrestamo es Ninguno>,
-  "tipoInvestigacion":   "<No|Basica|Premium>",
-  "razonamiento":        "<string breve - 1-2 oraciones explicando la decision>"
-}
-`.trim();
+  "producto": "<uno de los tipos disponibles>",
+  "segmentoObjetivo": "${segmento.nombre}",
+  "canalPrincipal": "<uno de los canales disponibles>",
+  "canalSecundario": "Ninguno",
+  "calidad": <entero 1-10>,
+  "precioVenta": <número - mayor que costo unitario total>,
+  "publicidad": <entero Bs>,
+  "promocion": <entero Bs>,
+  "eventos": <entero Bs>,
+  "marketingRedes": <entero Bs>,
+  "relacionesPublicas": <entero Bs>,
+  "contratarOperarios": <entero 0-5>,
+  "despedirOperarios": 0,
+  "montoCapacitacion": 0,
+  "produccion": <entero - máx ${capEfectiva + (5 * prodBase)} si contrata>,
+  "cantidadMPpedida": <entero - igual o mayor a produccion>,
+  "proveedorElegido": "<nombre exacto del proveedor>",
+  "tipoPrestamo": "Ninguno",
+  "montoPrestamo": 0,
+  "plazoPrestamo": 0,
+  "amortizacion": 0,
+  "tipoInvestigacion": "No",
+  "innovacion": false,
+  "tipoInnovacion": "",
+  "montoInnovacion": 0,
+  "estrategia": "<costos|diferenciacion|nicho>",
+  "razonamiento": "<1-2 oraciones explicando la decisión estratégica>"
+}`;
 
   try {
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client    = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const response = await client.messages.create({
-      model:      'claude-haiku-4-5',
-      max_tokens:  600,
-      messages: [{ role: 'user', content: prompt }],
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
     });
 
-    const texto = response.content[0]?.text || '';
+    if (!response.ok) throw new Error(`Anthropic API ${response.status}`);
+    const data  = await response.json();
+    const texto = data.content?.[0]?.text || '';
+
+    // Extraer JSON de la respuesta
     const match = texto.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('La respuesta no contiene JSON valido');
+    if (!match) throw new Error('Respuesta sin JSON');
 
-    const decision = JSON.parse(match[0]);
+    const dec = JSON.parse(match[0]);
 
-    if (!tipos.includes(decision.producto))             decision.producto         = tipos[0];
-    if (!segmentos.includes(decision.segmentoObjetivo)) decision.segmentoObjetivo = segmentos[0];
-    if (!canales.includes(decision.canalPrincipal))     decision.canalPrincipal   = canales[0];
+    // Validaciones y clamp
+    if (!tipos.includes(dec.producto))  dec.producto       = mejorProducto;
+    if (!canales.includes(dec.canalPrincipal)) dec.canalPrincipal = canales[0];
+    dec.segmentoObjetivo  = segmento.nombre;
+    dec.calidad           = Math.min(10, Math.max(1, parseInt(dec.calidad) || 5));
+    dec.contratarOperarios = Math.min(10, Math.max(0, parseInt(dec.contratarOperarios) || 0));
+    const opFinales        = opIniciales + dec.contratarOperarios;
+    const capEfFinal       = opFinales * prodBase;
+    dec.produccion        = Math.min(capEfFinal, Math.min(capMax, Math.max(1, parseInt(dec.produccion) || Math.round(capEfFinal * 0.7))));
+    dec.cantidadMPpedida  = Math.max(dec.produccion, parseInt(dec.cantidadMPpedida) || dec.produccion);
 
-    decision.calidad             = Math.min(10, Math.max(1, parseInt(decision.calidad) || 5));
-    decision.produccion          = Math.min(params.capacidadMaxProduccion || 500, Math.max(50, parseInt(decision.produccion) || 200));
-    decision.contratarVendedores = Math.min(5, Math.max(0, parseInt(decision.contratarVendedores) || 0));
-    decision.despedirVendedores  = Math.min(5, Math.max(0, parseInt(decision.despedirVendedores)  || 0));
-    decision.montoPrestamo       = decision.tipoPrestamo === 'Ninguno' ? 0 : (parseInt(decision.montoPrestamo) || 0);
-    decision.montoInnovacion     = decision.innovacion ? (parseInt(decision.montoInnovacion) || 0) : 0;
+    // Validar proveedor
+    const proveedoresValidos = (cfg.proveedores || []).map(p => p.nombre);
+    if (proveedoresValidos.length && !proveedoresValidos.includes(dec.proveedorElegido)) {
+      dec.proveedorElegido = proveedoresValidos[1] || proveedoresValidos[0]; // default Insumos Locales
+    }
 
-    console.log(`[bot_service] Decision IA para "${bot.nombre}" (${perfil}): ${decision.razonamiento || 'OK'}`);
-    return construirDecisionCompleta(bot, historial, cfg, decision);
+    // Validar precio > costo unitario mínimo
+    const costoBase = cfg.tiposProducto[dec.producto]?.costoBase || 100;
+    const precioMin = costoBase * 1.15;
+    if (!dec.precioVenta || dec.precioVenta < precioMin) {
+      dec.precioVenta = Math.round(costoBase * 1.4);
+    }
+
+    console.log(`[bot_service] ✅ IA generó bot para "${segmento.nombre}": ${dec.estrategia} | ${dec.producto} | Bs ${dec.precioVenta} | cal=${dec.calidad}`);
+    console.log(`[bot_service]    Razonamiento: ${dec.razonamiento}`);
+    return dec;
 
   } catch (err) {
-    console.error(`[bot_service] Error en API Anthropic para "${bot.nombre}": ${err.message}. Usando fallback.`);
-    return construirDecisionCompleta(bot, historial, cfg, decisionFallback(bot, historial, cfg));
+    console.error(`[bot_service] ⚠ Error IA para "${segmento.nombre}": ${err.message}. Usando fallback.`);
+    return decisionFallbackPorSegmento(segmento, cfg, opIniciales, prodBase, capMax, mejorProducto);
   }
 }
 
-// ── Construir objeto de decision completo compatible con el motor ──────────────
-function construirDecisionCompleta(bot, historial, cfg, decisionIA) {
-  const params = cfg.params || {};
+// ── Fallback sin IA (si falla la API) ────────────────────────────────────────
+function decisionFallbackPorSegmento(segmento, cfg, opIniciales, prodBase, capMax, mejorProducto) {
+  const params     = cfg.params || {};
+  const canales    = Object.keys(cfg.canales || {});
+  const costoBase  = cfg.tiposProducto[mejorProducto]?.costoBase || 100;
+  const capEf      = opIniciales * prodBase;
+  const produccion = Math.min(capEf, Math.round(capEf * 0.7));
 
-  // FIX v2.1: buscar resultado anterior del bot con clave directa, expandida o escaneo.
-  // Antes solo se buscaba con bot.id, pero los resultados se guardan como bot.id__prod_1.
-  const buscarResultadoBot = (resultadosObj) => {
-    if (!resultadosObj || typeof resultadosObj !== 'object') return null;
-    return resultadosObj[bot.id]
-      || resultadosObj[`${bot.id}__prod_1`]
-      || Object.values(resultadosObj).find(r => r && r.equipoOriginal === bot.id)
-      || null;
-  };
-
-  // historial.resultados puede ser:
-  //  a) Array de objetos resultado (del historialBot.resultados construido en server.js)
-  //  b) Vacio si no se encontro historial
-  let ultimoResultado = null;
-  if (historial?.resultados?.length) {
-    const ultimo = historial.resultados[historial.resultados.length - 1];
-    // Si ya es un objeto resultado directo (tiene cajaFinal), usarlo
-    ultimoResultado = (ultimo && ultimo.cajaFinal !== undefined)
-      ? ultimo
-      : buscarResultadoBot(ultimo);
-  }
-  // Fallback: buscar en ultimas2Rondas si todavia no encontramos
-  if (!ultimoResultado && historial?.ultimas2Rondas?.length) {
-    const ultimaRonda = historial.ultimas2Rondas[historial.ultimas2Rondas.length - 1];
-    ultimoResultado = buscarResultadoBot(ultimaRonda?.resultados);
-  }
-
-  const productoBase = {
-    productoId:         'prod_1',
-    activo:             true,
-    producto:           decisionIA.producto,
-    segmentoObjetivo:   decisionIA.segmentoObjetivo,
-    canalPrincipal:     decisionIA.canalPrincipal,
-    canalSecundario:    decisionIA.canalSecundario || 'Ninguno',
-    calidad:            decisionIA.calidad,
-    precioVenta:        decisionIA.precioVenta,
-    produccion:         decisionIA.produccion,
-    publicidad:         decisionIA.publicidad         || 0,
-    promocion:          decisionIA.promocion           || 0,
-    eventos:            decisionIA.eventos             || 0,
-    marketingRedes:     decisionIA.marketingRedes      || 0,
-    relacionesPublicas: decisionIA.relacionesPublicas  || 0,
-    innovacion:         !!decisionIA.innovacion,
-    tipoInnovacion:     decisionIA.tipoInnovacion      || '',
-    montoInnovacion:    decisionIA.montoInnovacion     || 0,
-  };
+  // Estrategia equilibrada por defecto
+  const precio = Math.round(costoBase * 1.45);
+  const caja   = params.cajaInicial || 500000;
+  const mkt    = Math.round(caja * 0.10);
 
   return {
-    equipo:       bot.id,
-    equipoNombre: bot.nombre,
-    isBot:        true,
-    botPerfil:    bot.perfil,
-
-    productos: [productoBase],
-    ...productoBase,
-
-    rrhh: {
-      contratarVendedores: decisionIA.contratarVendedores || 0,
-      despedirVendedores:  decisionIA.despedirVendedores  || 0,
-      contratarOperarios:  0,
-      despedirOperarios:   0,
-      capacitacion:        0,
-      productividadInicial: 1,
-    },
-    contratarVendedores: decisionIA.contratarVendedores || 0,
-    despedirVendedores:  decisionIA.despedirVendedores  || 0,
-
-    finanzas: {
-      tipoPrestamo:  decisionIA.tipoPrestamo  || 'Ninguno',
-      montoPrestamo: decisionIA.montoPrestamo || 0,
-      plazoPrestamo: 2,
-      amortizacion:  0,
-    },
-    tipoPrestamo:  decisionIA.tipoPrestamo  || 'Ninguno',
-    montoPrestamo: decisionIA.montoPrestamo || 0,
-    plazoPrestamo: 2,
-    amortizacion:  0,
-
-    investigacion:     { tipoInvestigacion: decisionIA.tipoInvestigacion || 'No' },
-    tipoInvestigacion: decisionIA.tipoInvestigacion || 'No',
-
-    vendedoresIniciales:        ultimoResultado?.vendedoresFinales ?? params.vendedoresIniciales ?? 2,
-    cajaInicial:                ultimoResultado?.cajaFinal         ?? params.cajaInicial          ?? 50000,
-    activosFijosIniciales:      ultimoResultado?.activosFijosNetos ?? params.activosFijosIniciales ?? 80000,
-    cxcInicial:                 ultimoResultado?.cxcFinal          ?? params.cxcInicial            ?? 0,
-    deudaInicial:               ultimoResultado?.deudaFinal        ?? params.deudaInicial          ?? 0,
-    inventarioInicial:          ultimoResultado?.inventarioFinal   ?? params.inventarioInicialUnid ?? 0,
-    resultadoAcumuladoAnterior: ultimoResultado?.resultadoAcumulado ?? 0,
-
-    submitted:   true,
-    submittedAt: new Date().toISOString(),
-
-    _botRazonamiento: decisionIA.razonamiento || decisionIA._razonamiento || '',
-    _botFallback:     !!decisionIA._fallback,
+    producto:           mejorProducto,
+    segmentoObjetivo:   segmento.nombre,
+    canalPrincipal:     canales[0] || 'Tienda Propia',
+    canalSecundario:    'Ninguno',
+    calidad:            6,
+    precioVenta:        precio,
+    publicidad:         Math.round(mkt * 0.4),
+    promocion:          Math.round(mkt * 0.3),
+    eventos:            Math.round(mkt * 0.15),
+    marketingRedes:     Math.round(mkt * 0.1),
+    relacionesPublicas: Math.round(mkt * 0.05),
+    contratarOperarios: 0,
+    despedirOperarios:  0,
+    montoCapacitacion:  0,
+    produccion,
+    cantidadMPpedida:   produccion,
+    proveedorElegido:   cfg.proveedores?.[1]?.nombre || cfg.proveedores?.[0]?.nombre || '',
+    tipoPrestamo:       'Ninguno',
+    montoPrestamo:      0,
+    plazoPrestamo:      0,
+    amortizacion:       0,
+    tipoInvestigacion:  'No',
+    innovacion:         false,
+    tipoInnovacion:     '',
+    montoInnovacion:    0,
+    estrategia:         'diferenciacion',
+    razonamiento:       `Estrategia equilibrada por defecto en el segmento ${segmento.nombre}.`,
+    _fallback:          true,
   };
 }
 
-module.exports = { generarDecisionBot, PERFILES_BOT };
+// ── Construir decisión completa compatible con el motor ───────────────────────
+function construirDecisionBot(botId, botNombre, decIA, params) {
+  const opIniciales = params.operariosIniciales ?? 1;
+  return {
+    // Identificación
+    equipo:             botId,
+    equipoOriginal:     botId,
+    equipoNombre:       botNombre,
+    isBot:              true,
+    esBot:              true,
+    _botRazonamiento:   decIA.razonamiento || '',
+    _botEstrategia:     decIA.estrategia   || 'diferenciacion',
+    _botFallback:       !!decIA._fallback,
+
+    // Producto (compatible con motor multiproducto)
+    productos: [{
+      productoId:         'prod_1',
+      activo:             true,
+      producto:           decIA.producto,
+      segmentoObjetivo:   decIA.segmentoObjetivo,
+      canalPrincipal:     decIA.canalPrincipal,
+      canalSecundario:    decIA.canalSecundario || 'Ninguno',
+      calidad:            decIA.calidad,
+      precioVenta:        decIA.precioVenta,
+      produccion:         decIA.produccion,
+      publicidad:         decIA.publicidad         || 0,
+      promocion:          decIA.promocion           || 0,
+      eventos:            decIA.eventos             || 0,
+      marketingRedes:     decIA.marketingRedes      || 0,
+      relacionesPublicas: decIA.relacionesPublicas  || 0,
+      innovacion:         false,
+      tipoInnovacion:     '',
+      montoInnovacion:    0,
+      cantidadMPpedida:   decIA.cantidadMPpedida    || decIA.produccion || 0,
+      proveedorElegido:   decIA.proveedorElegido     || '',
+    }],
+
+    // Campos raíz (compatibilidad con motor monoproducto)
+    producto:           decIA.producto,
+    segmentoObjetivo:   decIA.segmentoObjetivo,
+    canalPrincipal:     decIA.canalPrincipal,
+    canalSecundario:    decIA.canalSecundario || 'Ninguno',
+    calidad:            decIA.calidad,
+    precioVenta:        decIA.precioVenta,
+    produccion:         decIA.produccion,
+    publicidad:         decIA.publicidad         || 0,
+    promocion:          decIA.promocion           || 0,
+    eventos:            decIA.eventos             || 0,
+    marketingRedes:     decIA.marketingRedes      || 0,
+    relacionesPublicas: decIA.relacionesPublicas  || 0,
+    cantidadMPpedida:   decIA.cantidadMPpedida    || decIA.produccion || 0,
+    proveedorElegido:   decIA.proveedorElegido     || '',
+
+    // RRHH
+    vendedoresIniciales:  params.vendedoresIniciales  ?? 0,
+    contratarVendedores:  0,
+    despedirVendedores:   0,
+    operariosIniciales:   opIniciales,
+    contratarOperarios:   decIA.contratarOperarios || 0,
+    despedirOperarios:    0,
+    montoCapacitacion:    0,
+
+    // Financiamiento
+    tipoPrestamo:   'Ninguno',
+    montoPrestamo:  0,
+    plazoPrestamo:  0,
+    amortizacion:   0,
+
+    // Investigación
+    tipoInvestigacion: 'No',
+    innovacion:         false,
+    tipoInnovacion:     '',
+    montoInnovacion:    0,
+
+    // Estado financiero inicial (mismos que humanos R1)
+    cajaInicial:                params.cajaInicial              ?? 500000,
+    activosFijosIniciales:      params.activosFijosIniciales    ?? 80000,
+    cxcInicial:                 params.cxcInicial               ?? 0,
+    deudaInicial:               params.deudaInicial             ?? 0,
+    inventarioInicial:          params.inventarioInicialUnid    ?? 0,
+    resultadoAcumuladoAnterior: 0,
+    brandEquityInicial:         50,
+
+    submitted:    true,
+    submittedAt:  new Date().toISOString(),
+  };
+}
+
+// ── Función principal exportada ───────────────────────────────────────────────
+/**
+ * Genera bots para todos los segmentos sin equipo humano.
+ *
+ * @param {Array}  decisionesHumanas - Decisiones de equipos humanos ya guardadas
+ * @param {Object} cfg               - { params, tiposProducto, canales, segmentos, afinidadMatrix, competenciaExterna, proveedores }
+ * @param {number} rondaNum          - Número de ronda actual
+ * @returns {Array} Array de decisiones-bot listas para el motor
+ */
+async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
+  const segmentos = cfg.segmentos || [];
+
+  // 1. Detectar segmentos sin equipo humano
+  const segmentosSinEquipo = detectarSegmentosSinEquipo(decisionesHumanas, segmentos);
+
+  if (!segmentosSinEquipo.length) {
+    console.log('[bot_service] Todos los segmentos tienen al menos un equipo humano. Sin bots necesarios.');
+    return [];
+  }
+
+  console.log(`[bot_service] ${segmentosSinEquipo.length} segmento(s) sin equipo humano: ${segmentosSinEquipo.map(s => s.nombre).join(', ')}`);
+
+  // 2. Generar un bot por segmento vacío en paralelo
+  const bots = await Promise.all(
+    segmentosSinEquipo.map(async (segmento, idx) => {
+      const botId     = `bot_${segmento.nombre.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_r${rondaNum}`;
+      const botNombre = siguienteNombreEmpresa();
+
+      const decIA = await generarDecisionBotIA(
+        segmento,
+        decisionesHumanas,
+        cfg,
+        rondaNum
+      );
+
+      return construirDecisionBot(botId, botNombre, decIA, cfg.params || {});
+    })
+  );
+
+  console.log(`[bot_service] ✅ ${bots.length} bot(s) generados para R${rondaNum}`);
+  return bots;
+}
+
+// ── Mantener compatibilidad con código legacy de server.js ───────────────────
+// El server.js existente llama a generarDecisionBot(bot, historial, cfg)
+// para bots pre-registrados. Mantenemos esa función pero también
+// exportamos la nueva generarBotsParaSegmentos.
+async function generarDecisionBot(bot, historial, cfg) {
+  const segmentos    = cfg.segmentos || [];
+  const segmento     = segmentos.find(s => s.nombre === bot.segmentoObjetivo)
+                    || segmentos[0];
+  const decIA = await generarDecisionBotIA(segmento, [], cfg, historial?.rondaActual || 1);
+  return construirDecisionBot(bot.id, bot.nombre, decIA, cfg.params || {});
+}
+
+module.exports = {
+  generarDecisionBot,          // compatibilidad legacy
+  generarBotsParaSegmentos,    // nueva función principal
+  detectarSegmentosSinEquipo,  // exportada para tests
+  PERFILES_BOT: {},            // compatibilidad legacy (vacío — ya no se usan perfiles fijos)
+};
