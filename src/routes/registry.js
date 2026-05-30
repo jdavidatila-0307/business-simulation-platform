@@ -88,9 +88,9 @@ const ROUTES = {
 
   // ── ADMIN — Herramientas ────────────────────────────────────────────────────
   adminTools: [
-    { method: 'GET',  path: '/admin/historial',        desc: 'Historial de rondas' },
-    { method: 'GET',  path: '/admin/rondas',           desc: 'Rondas con resultados' },
-    { method: 'GET',  path: '/admin/resultados/:n',    desc: 'Resultados de ronda N' },
+    { method: 'GET',  path: '/admin/historial',          desc: 'Historial de rondas' },
+    { method: 'GET',  path: '/admin/rondas',             desc: 'Rondas con resultados — url.match en server.js' },
+    { method: 'GET',  path: '/admin/resultados',         desc: 'Resultados de ronda N — url.match /admin/resultados/\\d+' },
     { method: 'POST', path: '/admin/recalcular-balance', desc: 'Recalcular EF todas las rondas' },
   ],
 
@@ -102,9 +102,9 @@ const ROUTES = {
     { method: 'GET',  path: '/api/presim',             desc: 'Pre-simulación del equipo' },
     { method: 'POST', path: '/api/presim/confirmar',   desc: 'Confirmar recepción presim' },
     { method: 'GET',  path: '/api/resultados',         desc: 'Resultados del equipo' },
-    { method: 'GET',  path: '/api/reportes/:n',        desc: 'Reporte de mercado ronda N' },
+    { method: 'GET',  path: '/api/reportes',           desc: 'Reporte de mercado ronda N — url.match /api/reportes/\\d+' },
     { method: 'GET',  path: '/api/noticias',           desc: 'Noticias del macroentorno' },
-    { method: 'GET',  path: '/api/dashboard/:n',       desc: 'Dashboard ronda N' },
+    { method: 'GET',  path: '/api/dashboard',          desc: 'Dashboard ronda N — url.match /api/dashboard/\\d+' },
   ],
 };
 
