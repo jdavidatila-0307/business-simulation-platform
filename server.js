@@ -364,7 +364,7 @@ async function route(req, res, body) {
           id:            found.equipo.id,
           nombre:        found.equipo.nombre,
           rol:           'equipo',
-          password_hash: found.equipo.password,
+          password_hash: found.equipo.password || found.equipo.password_hash,
         };
         sessionSimulacionId = found.simulacionId;
         console.log(`[LOGIN] equipo encontrado | id: ${user.id} | sim: ${sessionSimulacionId}`);
@@ -463,7 +463,17 @@ async function route(req, res, body) {
     } else {
       const user = await storage.findUserById(s.userId);
       if (!user) return send(res, 401, { error: 'Sesión inválida' });
-      return send(res, 200, { id: user.id, nombre: user.nombre, rol: user.rol, miembros: [] });
+      // Incluir simulacionId activa en la sesión del admin/profesor
+      let simNombre = null;
+      if (s.simulacionId) {
+        const simActiva = await storage.getSimulacion(s.simulacionId);
+        simNombre = simActiva?.nombre || null;
+      }
+      return send(res, 200, {
+        id: user.id, nombre: user.nombre, rol: user.rol, miembros: [],
+        simulacionId: s.simulacionId || null,
+        simNombre,
+      });
     }
   }
 
@@ -547,7 +557,7 @@ async function route(req, res, body) {
           currentRound: 1,
           totalRounds:  totalRounds || 20,
           roundState:   'pending',
-          industria:    industriaNombre || 'jaboncillos_v1',  // metadata para el frontend
+          industria:    industriaNombre || 'Calzados_COM540_1_2026_V1',  // metadata para el frontend
         },
         // Prioridad: baseSim > plantilla > constants.js (jaboncillos)
         parametros:       baseSim?.parametros        || plantillaCfg?.params             || require('./src/constants').PARAMS,
@@ -671,6 +681,17 @@ async function route(req, res, body) {
     }
   }
 
+  if (url.match(/^\/admin\/plantillas\/[^/]+$/) && method === 'GET') {
+    if (needAdmin()) return;
+    try {
+      const nombre = decodeURIComponent(url.split('/')[3]);
+      const plantilla = cargarPlantilla(nombre);
+      return send(res, 200, plantilla);
+    } catch (err) {
+      return send(res, 404, { error: `Plantilla "${url.split('/')[3]}" no encontrada.` });
+    }
+  }
+
 
   // ═══ Todas las rutas siguientes requieren contexto de simulación ═══
   const sim = await getCurrentSimulation(s);
@@ -698,7 +719,7 @@ async function route(req, res, body) {
       const submitted    = dec?.submitted || false;
       const submittedAt  = dec?.submittedAt || null;
       return { id:eq.id, nombre:eq.nombre, miembros:eq.miembros||[],
-        submitted, submittedAt,
+        submitted, submittedAt, capitalInicial: eq.capitalInicial || null,
         registradoAt:eq.registradoAt||null, passwordPlain:eq.passwordPlain||null };
     });
     return send(res, 200, out);
@@ -816,7 +837,28 @@ async function route(req, res, body) {
     if (idx === -1) return send(res, 404, { error: 'No encontrado' });
     equipos.splice(idx, 1);
     await storage.updateSimulacion(sim.id, { users: equipos });
+    await storage.deleteEquipoDecisiones(sim.id, eqId);
     return send(res, 200, { ok: true });
+  }
+
+  // PUT /admin/equipos/:id/capital — asignar capital inicial específico a un equipo
+  if (url.match(/^\/admin\/equipos\/[^/]+\/capital$/) && method === 'PUT') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const eqId = url.split('/')[3];
+    const { capitalInicial } = body;
+    const equipos = await storage.getEquipos(sim.id);
+    const eq = equipos.find(e => e.id === eqId);
+    if (!eq) return send(res, 404, { error: 'Equipo no encontrado' });
+    if (capitalInicial !== null && capitalInicial !== undefined) {
+      if (typeof capitalInicial !== 'number' || capitalInicial <= 0)
+        return send(res, 400, { error: 'capitalInicial debe ser un número positivo o null' });
+      eq.capitalInicial = capitalInicial;
+    } else {
+      delete eq.capitalInicial;  // null = volver al global
+    }
+    await storage.updateSimulacion(sim.id, { users: equipos });
+    return send(res, 200, { ok: true, capitalInicial: eq.capitalInicial || null });
   }
 
   // ─── ADMIN — Rondas ───────────────────────────────────────────
@@ -1327,14 +1369,37 @@ async function route(req, res, body) {
         continue;
       }
 
+      // ── Sanitizar decisiones extremas ──────────────────────────────────
+      // Evita que una decisión extrema (ej: 6868 operarios) falle todo el recálculo.
+      // Los límites son pedagógicamente imposibles de alcanzar en condiciones normales.
+      const _capMax = sim.parametros?.capacidadMaxProduccion || 1500;
+      function sanitizarDecision(d) {
+        if (!d) return d;
+        const s = { ...d };
+        if ((s.contratarOperarios || 0) > 100)  { console.warn(`[recalc] sanitize equipo=${d.equipoNombre}: contratarOperarios ${s.contratarOperarios}→100`); s.contratarOperarios = 100; }
+        if ((s.despedirOperarios  || 0) > 100)  { s.despedirOperarios  = 100; }
+        if ((s.produccion         || 0) > _capMax) { s.produccion = _capMax; }
+        if ((s.precioVenta || 0) > 0 && (s.precioVenta || 0) < 10) { s.precioVenta = 10; }
+        if (Array.isArray(s.productos)) {
+          s.productos = s.productos.map(p => ({
+            ...p,
+            contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
+            despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
+            produccion:         Math.min(p.produccion         || 0, _capMax),
+          }));
+        }
+        return s;
+      }
+
       // Construir decisiones re-propagadas: tomar las decisiones originales
       // y reemplazar solo los campos financieros de continuidad con el estado real
       const decisionesOriginales = ronda.decisiones || {};
       const decisiones = [];
 
       for (const eq of equipos) {
-        const decOrig = decisionesOriginales[eq.id];
-        if (!decOrig) continue;
+        const decOrigRaw = decisionesOriginales[eq.id];
+        if (!decOrigRaw) continue;
+        const decOrig = sanitizarDecision(decOrigRaw);
 
         const estado = estadoEmpresa[eq.id] || {};
 
@@ -1355,7 +1420,8 @@ async function route(req, res, body) {
           pedidosPendientes:          estado.pedidosPendientesResta ?? [],
           resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
           saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
-          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar       ?? 0),  // IVA diferido
+          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),  // IVA diferido
+          ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),  // crédito fiscal acumulado
         };
 
         // Multiproducto: propagar campos financieros a cada producto[]
@@ -1364,10 +1430,12 @@ async function route(req, res, body) {
         if (Array.isArray(decRepropagada.productos)) {
           decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
             // Buscar el resultado previo específico de este producto
-            // Usar nuevoResObjAnterior (resultados recalculados de R(n-1)) para mayor precisión
+            // SOLO usar nuevoResObjAnterior (resultados recalculados de R(n-1)).
+            // NO usar resObj como fallback: resObj es la ronda ACTUAL, no la anterior.
+            // Para R1: nuevoResObjAnterior está vacío → invInicialProd = 0 (correcto).
             const prodId      = p.productoId || ('prod_' + (idx + 1));
             const keyPrevProd = eq.id + '__' + prodId;
-            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || resObj[keyPrevProd] || null;
+            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || null;
             // inventario específico por producto (no el total consolidado)
             const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
 
@@ -1474,6 +1542,7 @@ async function route(req, res, body) {
             pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
             saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),  // FASE 4
             ivaAPagar:            Math.max(0, p0.ivaAPagar       ?? 0),  // IVA diferido
+            ivaSaldoAFavor:       Math.max(0, p0.ivaSaldoAFavor  ?? 0),  // crédito fiscal acumulado
           };
           totalEmpresas++;
         }
@@ -1529,8 +1598,7 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
-    const resDataCheck = ronda && (ronda.resultados?.resultados || ronda.resultados) ? Object.keys(ronda.resultados?.resultados || ronda.resultados || {}).length : 0;
-    if (!ronda || !resDataCheck) return send(res, 404, { error: 'Sin resultados' });
+    if (!ronda || !['simulated','calculada'].includes(ronda.estado)) return send(res, 404, { error: 'Sin resultados' });
     const equipos = await storage.getEquipos(sim.id);
     const eqMap = {};
     equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
@@ -1549,29 +1617,48 @@ async function route(req, res, body) {
         // Campos ACUMULABLES por producto (variables — se suman)
         // cxcFinal e invFinalValorizado son campos DE EMPRESA — NO sumar
         // (representan saldo al cierre, no acumulables por producto)
-        const sumar = ['ventasBrutas','ventasNetas','ventasNetasReal','ventasReales','costoVentas',
-          'utilidadBruta','gastosOp','utilidadNeta','ebit',
+        const sumar = [
+          // Ventas
+          'totalFacturado',       // CRÍTICO: precio facturado consolidado
+          'ventasBrutas','ventasNetas','ventasNetasReal','ventasReales',
+          'comisiones','comisionesNeto',
+          // Costos y márgenes
+          'costoVentas','utilidadBruta',
+          // Gastos comerciales (líneas del ER)
+          'gastoPublicidad','gastoPromocion','gastoEventos','gastoMktRedes','gastoRRPP',
+          'gastoCostoVend','costoVendedores',
+          // Gastos administrativos y planta (0 en prod_2-5 con modelo mixto → suma = prod_1)
+          'gastoAdminFijo','gastoFijoPlanta','depreciacion',
+          'costoAlmacenamiento','gastoInnovacionNeto','gastoInvMktNeto',
+          // Operarios y producción
+          'costoOperarios','gastoOperarios','pagoOperarios',
+          'produccion',
+          // Totales P&L
+          'gastosOp','utilidadNeta','ebit',
           'impuestoIT','impuestoIUE','totalImpuestos',
-          'pagoProduccion','pagoMktTotal','totalPagos','cobrosContado',
-          'inventarioFinal','ingresoPrestamo',
-          'publicidad','comisiones','comisionesNeto',
-          'gastoCostoVend','gastoOperarios','gastoInvMktNeto',
+          // Caja
+          'pagoProduccion','pagoMP','pagoMktTotal','totalPagos','cobrosContado',
+          'ingresoPrestamo','publicidad',
+          // IVA
           'ivaDebito','ivaCredito',
-          'roiMarketing','demandaAsignada','demandaFormal'];
+          // Inventarios y otros
+          'inventarioFinal','invFinalValorizado',
+          'roiMarketing','demandaAsignada','demandaFormal',
+        ];
         // cxcFinal e invFinalValorizado: usar del primer producto (ya en ...r inicial)
         sumar.forEach(k => {
           porEmpresa[eqId][k] = (porEmpresa[eqId][k] || 0) + (r[k] || 0);
         });
-        // Campos de empresa — tomar del primer producto (pasivos únicos)
-        porEmpresa[eqId].ivaAPagar           = porEmpresa[eqId].ivaAPagar;           // ya en prod_1
+        // ivaAPagar: valor de empresa — viene de prod_1 (no sumar)
+        porEmpresa[eqId].ivaAPagar           = porEmpresa[eqId].ivaAPagar;
         porEmpresa[eqId].totalPasivos        = porEmpresa[eqId].totalPasivos;
         porEmpresa[eqId].resultadoAcumulado  = porEmpresa[eqId].resultadoAcumulado;
         porEmpresa[eqId].pagoIVAPeriodoAnterior = porEmpresa[eqId].pagoIVAPeriodoAnterior;
         porEmpresa[eqId].compensacionIT      = porEmpresa[eqId].compensacionIT;
         porEmpresa[eqId].ITefectivoCaja      = porEmpresa[eqId].ITefectivoCaja;
         porEmpresa[eqId].saldoIUEfinal       = porEmpresa[eqId].saldoIUEfinal;
-        porEmpresa[eqId].totalFacturado      = porEmpresa[eqId].totalFacturado
-          || Math.round(((porEmpresa[eqId].impuestoIT||0)/0.03));
+        // totalFacturado = ventasBrutas + ivaDebito (siempre consistente tras sumar)
+        porEmpresa[eqId].totalFacturado      = (porEmpresa[eqId].ventasBrutas||0) + (porEmpresa[eqId].ivaDebito||0);
         porEmpresa[eqId].productos.push(r);
       }
     });
@@ -1645,40 +1732,7 @@ async function route(req, res, body) {
     return send(res, 200, hist);
   }
 
-  // /admin/rondas — formato extendido para inventarios
-  if (url === '/admin/rondas' && method === 'GET') {
-    if (needAdmin()) return;
-    if (!sim) return send(res, 400, { error: 'Sin simulación' });
-    const rondas = [];
-    for (let i = 1; i <= sim.config.currentRound; i++) {
-      const r = await storage.getRonda(sim.id, i);
-      if (!r) continue;
-      rondas.push({
-        numero:      i,
-        estado:      r.estado,
-        ejecutadaAt: r.ejecutadaAt,
-        resultados:  r.resultados || null,
-      });
-    }
-    return send(res, 200, { rondas });
-  }
-
-  // /admin/resultados/:n — resultados de una ronda específica
-  if (url.match(/^\/admin\/resultados\/\d+$/) && method === 'GET') {
-    if (needAdmin()) return;
-    if (!sim) return send(res, 400, { error: 'Sin simulación' });
-    const n = parseInt(url.split('/')[3]);
-    const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda) return send(res, 404, { error: `Ronda ${n} no encontrada` });
-    const resObj  = ronda.resultados?.resultados || ronda.resultados || {};
-    const equipos = await storage.getEquipos(sim.id);
-    const resultados = Object.entries(resObj).map(([eqId, r]) => {
-      const eq = equipos.find(e => e.id === eqId);
-      return { ...r, equipo: eqId, equipoNombre: eq?.nombre || eqId,
-               isBot: eq?.isBot || r?.isBot || eqId.startsWith('bot_') };
-    });
-    return send(res, 200, { ronda: n, estado: ronda.estado, resultados, equipos });
-  }
+  // ─── ADMIN — Config ───────────────────────────────────────────
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
@@ -1689,6 +1743,7 @@ async function route(req, res, body) {
       segmentos: sim.segmentos,
       afinidadMatrix: sim.afinidad_matrix,
       competenciaExterna: sim.competencia_externa,
+      proveedores: sim.proveedores || [],
       mercadoSegmentos: calcularMercadoSegmentos(sim.parametros, sim.segmentos),
       codigoAcceso: sim.codigo_acceso,
       simId: sim.id,
@@ -1700,6 +1755,9 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const { parametros } = body;
     if (!parametros) return send(res, 400, { error: 'Datos requeridos' });
+    if (parametros.cajaInicial !== undefined && Number(parametros.cajaInicial) <= 0) {
+      return send(res, 400, { error: '[R2] cajaInicial debe ser mayor a 0. Con caja = 0, los equipos arrancan con sobregiro desde R1.' });
+    }
     const newParams = { ...sim.parametros, ...parametros };
     await storage.updateSimulacion(sim.id, { parametros: newParams });
     return send(res, 200, { ok: true });
@@ -1862,7 +1920,7 @@ async function route(req, res, body) {
           if (sim.proveedores?.length) return sim.proveedores;
           try {
             // Buscar el JSON de industria directamente (sin depender de plantillas.js)
-            const industria = (sim.config?.industria || 'jaboncillos_v1')
+            const industria = (sim.config?.industria || 'Calzados_COM540_1_2026_V1')
               .replace(/[^a-zA-Z0-9_-]/g, '');
             // Buscar en industrias/ relativo al directorio de server.js
             const posibles = [
