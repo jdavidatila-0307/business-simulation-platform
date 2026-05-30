@@ -750,16 +750,23 @@ async function loadAdminResultados(rondaVer) {
     const ronda = await api('GET', '/admin/ronda');
     let current = ronda?.currentRound || 0;
 
-    // Si la ronda actual está pending, la última simulada es current-1
-    const ultimaSimulada = (ronda?.roundState === 'pending') ? current - 1 : current;
+    // Buscar ultima ronda con datos reales (no asumir current-1)
+    const current2 = ronda?.currentRound || 0;
+    let ultimaSimulada = 0;
+    for (let i = current2; i >= 1; i--) {
+      try {
+        const chk = await api('GET', '/admin/resultados/' + i);
+        if (chk && chk.resultados && chk.resultados.length) { ultimaSimulada = i; break; }
+      } catch(eignore) {}
+    }
 
-    if (!ultimaSimulada || ultimaSimulada < 1) {
+    if (!ultimaSimulada) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
       return;
     }
 
-    // Ronda a visualizar (por selector o la última por defecto)
-    const n = (rondaVer && rondaVer >= 1 && rondaVer <= ultimaSimulada) ? rondaVer : ultimaSimulada;
+    // Ronda a visualizar (por selector o la ultima con datos)
+    const n = (rondaVer && rondaVer >= 1 && rondaVer <= current2) ? rondaVer : ultimaSimulada;
 
     const rd = await api('GET', '/admin/resultados/' + n);
     if (!rd?.resultados?.length) {
