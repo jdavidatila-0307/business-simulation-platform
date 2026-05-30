@@ -1529,7 +1529,8 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const n = parseInt(url.split('/')[3]);
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda || !['simulated','calculada'].includes(ronda.estado)) return send(res, 404, { error: 'Sin resultados' });
+    const resDataCheck = ronda && (ronda.resultados?.resultados || ronda.resultados) ? Object.keys(ronda.resultados?.resultados || ronda.resultados || {}).length : 0;
+    if (!ronda || !resDataCheck) return send(res, 404, { error: 'Sin resultados' });
     const equipos = await storage.getEquipos(sim.id);
     const eqMap = {};
     equipos.forEach(eq => { eqMap[eq.id] = eq.nombre; });
