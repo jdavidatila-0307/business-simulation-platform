@@ -913,6 +913,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     activosFijosNetos: afNetos,
     costoUnitario, comisionPct,
     brandEquityFinal,
+    totalFacturado,   // display: precio facturado al cliente (con IVA)
   };
 }
 
