@@ -31,5 +31,5 @@ if (faltantes.length <= 4) {
 } else {
   console.log(C.red(C.bold(`  ❌ FALLA — ${faltantes.length} ruta(s) faltantes`)));
   console.log(C.bold('══════════════════════════════════════════════════\n'));
-  process.exit(1);
+  process.exit(faltantes.length > 4 ? 1 : 0);
 }
