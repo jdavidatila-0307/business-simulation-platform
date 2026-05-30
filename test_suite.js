@@ -47,9 +47,10 @@ const failures = [];
 // ── Ejecutar un comando y capturar resultado ──────────────────────────────────
 function run(cmd, args_) {
   const r = spawnSync('node', [cmd, ...(args_ || [])], {
-    encoding: 'utf8', cwd: process.cwd()
+    encoding: 'utf8', cwd: process.cwd(),
+    env: Object.assign({}, process.env, { FORCE_COLOR: '0' }) // sin ANSI para captura limpia
   });
-  return { ok: r.status === 0, stdout: r.stdout || '', stderr: r.stderr || '' };
+  return { ok: r.status === 0, stdout: (r.stdout || '') + (r.stderr || ''), stderr: r.stderr || '' };
 }
 
 function test(name, fn) {
