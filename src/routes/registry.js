@@ -117,9 +117,23 @@ function verificarRegistro(serverContent) {
   const todas = Object.values(ROUTES).flat();
 
   todas.forEach(function(ruta) {
-    const pathEscapado = ruta.path.replace(/\//g, '\\/').replace(/:[\w]+/g, '[^/]+');
-    const patron = new RegExp("url.*" + pathEscapado.replace(/\[/g, '\\[').replace(/\]/g, '\\]'));
-    if (!patron.test(serverContent)) {
+    // Convertir path a patron de busqueda
+    // /admin/simulaciones/:id → busca url.match o url === con esa ruta base
+    const base = ruta.path.replace(/\/:[\w]+.*/g, ''); // /admin/simulaciones
+    const tieneDinamica = ruta.path.includes(':');
+
+    let encontrado = false;
+    if (tieneDinamica) {
+      // Buscar url.match con la ruta base
+      const escapado = base.replace(/\//g, '\\/');
+      encontrado = new RegExp(escapado).test(serverContent);
+    } else {
+      // Buscar coincidencia exacta
+      const escapado = ruta.path.replace(/\//g, '\\/');
+      encontrado = new RegExp("url\\s*===\\s*['\"]" + escapado + "['\"]").test(serverContent);
+    }
+
+    if (!encontrado) {
       faltantes.push(ruta.method + ' ' + ruta.path);
     }
   });
