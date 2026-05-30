@@ -181,7 +181,7 @@ window.mostrarFinanciero = (n) => {
           // Consolidados de ventas
           const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
           const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
-          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||((r.ventasBrutas||0)+(r.ivaDebito||0)));
+          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||0);
           const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
           const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
           // Costo de ventas detalle
@@ -209,8 +209,9 @@ window.mostrarFinanciero = (n) => {
             + secER('Costo de Ventas')
             + finRow('Costo materia prima neto', -totCVmp, false, 'neg')
             + finRow('Costo calidad / control', -totCVcalid, false, 'neg')
-            + finRowSub('= Total costo de ventas', -r.costoVentas, true)
-            + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
+            + finRow('Mano de obra directa (operarios)', -gOper, false, 'neg')
+            + finRowSub('= Total costo de ventas', -(r.costoVentas||0)-gOper, true)
+            + finRowSub('= Utilidad bruta', (r.utilidadBruta||0)-gOper, true)
             + '<div style="height:4px"></div>'
             // ── GASTOS COMERCIALES ──────────────────────────────
             + secER('(-) Gastos Comerciales')
@@ -223,7 +224,6 @@ window.mostrarFinanciero = (n) => {
             + (tieneInvMkt ? finRow('Investigación de mercado', -gInvMkt, false, 'neg') : '')
             // ── GASTOS ADMINISTRATIVOS ──────────────────────────
             + secER('(-) Gastos Administrativos')
-            + finRow('Sueldos operarios de producción', -gOper, false, 'neg')
             + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
             // ── GASTOS PLANTA ───────────────────────────────────
             + secER('(-) Gastos Operativos de Planta')
