@@ -1836,10 +1836,23 @@ async function route(req, res, body) {
       if (modo === 'nueva') {
         // Generar nuevo ID para no pisar la simulación existente
         simId = storage.genSimId();
+        const bsim = backup.simulacion;
         const simData = {
-          ...backup.simulacion,
-          id:     simId,
-          nombre: backup.simulacion.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')',
+          id:                 simId,
+          nombre:             bsim.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')',
+          descripcion:        bsim.descripcion        || '',
+          codigoAcceso:       storage.genCodigo(),
+          estado:             bsim.estado             || 'active',
+          creadaAt:           new Date().toISOString(),
+          config:             bsim.config             || {},
+          parametros:         bsim.parametros         || {},
+          tiposProducto:      bsim.tiposProducto      || bsim.tipos_producto      || {},
+          canales:            bsim.canales            || {},
+          segmentos:          bsim.segmentos          || [],
+          afinidadMatrix:     bsim.afinidadMatrix     || bsim.afinidad_matrix     || {},
+          competenciaExterna: bsim.competenciaExterna || bsim.competencia_externa || [],
+          rondas:             bsim.rondas             || {},
+          users:              [],
         };
         await storage.createSimulacion(ownerId, simData);
         console.log(`[restaurar] Nueva simulación creada: ${simId}`);
@@ -1847,10 +1860,28 @@ async function route(req, res, body) {
       } else {
         // Sobrescribir — usar el ID del backup pero eliminar rondas/decisiones previas
         simId = backup.simulacion.id;
+        const bsim = backup.simulacion;
         const existing = await storage.getSimulacion(simId, ownerId);
         if (!existing) {
           // Si no existe, crear con el ID original
-          await storage.createSimulacion(ownerId, backup.simulacion);
+          const simData = {
+            id:                 simId,
+            nombre:             bsim.nombre,
+            descripcion:        bsim.descripcion        || '',
+            codigoAcceso:       bsim.codigoAcceso       || bsim.codigo_acceso || storage.genCodigo(),
+            estado:             bsim.estado             || 'active',
+            creadaAt:           bsim.creadaAt           || bsim.creada_at || new Date().toISOString(),
+            config:             bsim.config             || {},
+            parametros:         bsim.parametros         || {},
+            tiposProducto:      bsim.tiposProducto      || bsim.tipos_producto      || {},
+            canales:            bsim.canales            || {},
+            segmentos:          bsim.segmentos          || [],
+            afinidadMatrix:     bsim.afinidadMatrix     || bsim.afinidad_matrix     || {},
+            competenciaExterna: bsim.competenciaExterna || bsim.competencia_externa || [],
+            rondas:             bsim.rondas             || {},
+            users:              [],
+          };
+          await storage.createSimulacion(ownerId, simData);
         } else {
           // Actualizar config y parámetros
           await storage.updateSimulacion(simId, {
