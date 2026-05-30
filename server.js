@@ -463,7 +463,19 @@ async function route(req, res, body) {
     } else {
       const user = await storage.findUserById(s.userId);
       if (!user) return send(res, 401, { error: 'Sesión inválida' });
-      return send(res, 200, { id: user.id, nombre: user.nombre, rol: user.rol, miembros: [] });
+      // Retornar simulacionId activa para que initAdmin restaure el estado
+      let simNombre = null;
+      if (s.simulacionId) {
+        try {
+          const simActiva = await storage.getSimulacion(s.simulacionId);
+          simNombre = simActiva?.nombre || null;
+        } catch {}
+      }
+      return send(res, 200, {
+        id: user.id, nombre: user.nombre, rol: user.rol, miembros: [],
+        simulacionId: s.simulacionId || null,
+        simNombre,
+      });
     }
   }
 
