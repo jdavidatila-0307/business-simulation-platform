@@ -123,8 +123,10 @@ if (!FAST) {
 
   test('verificar_routes.js — 48/52 rutas (4 regex documentadas)', () => {
     const r = run('verificar_routes.js');
-    const impl = r.stdout.match(/Implementadas:\s*(\d+)/)?.[1];
-    if (!impl || parseInt(impl) < 48) throw new Error(`Solo ${impl || '?'} implementadas`);
+    // Acepta 48+ implementadas — 4 rutas regex son falsos positivos documentados
+    const impl = (r.stdout.match(/Implementadas:\s*(\d+)/) || r.stdout.match(/(\d+)\/52/))?.[1];
+    const num = parseInt(impl || '0');
+    if (num < 48) throw new Error(`Solo ${num || '?'} implementadas (mín 48)`);
     return true;
   });
 }
