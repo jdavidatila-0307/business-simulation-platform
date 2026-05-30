@@ -4686,8 +4686,7 @@ window.mostrarFinanciero = (n) => {
           // Consolidados de ventas
           const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
           const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
-          const totTotalFact = /*fix_totalfact_v1*/ r.totalFacturado || (r.ivaDebito ? Math.round(r.ivaDebito / 0.13) : 0)
-                             + (prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0));
+          const totTotalFact = /*fix_totalfact_v3*/ r.totalFacturado || (r.ivaDebito ? Math.round(r.ivaDebito / 0.13) : 0);
           const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
           const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
           // Costo de ventas detalle
