@@ -210,11 +210,6 @@ window.toggleInputPw = (inputId, btn) => {
 };
 
 // ── Toast ──────────────────────────────────────────────────
-function toast(msg, type='success') {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = `toast show ${type}`;
-  setTimeout(() => el.className = 'toast', 3000);
-}
 
 // ── API ────────────────────────────────────────────────────
 async function api(method, url, body) {
@@ -5089,23 +5084,6 @@ window.mostrarFinanciero = (n) => {
   </div>`;
 };
 
-function finRow(label, value, bold=false, type='neutral') {
-  const col = type==='pos' ? 'var(--accent5)' : type==='neg' ? 'var(--accent4)' : 'var(--text)';
-  const w = bold ? 'font-weight:700' : '';
-  return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.83rem;${w}">
-    <span style="color:var(--text2)">${label}</span>
-    <span style="font-family:var(--font-mono);font-size:.8rem;color:${col}">${fmt.bs(value)}</span>
-  </div>`;
-}
-
-function finRowSub(label, value, bold=false) {
-  const col = value>=0 ? 'var(--accent5)' : 'var(--accent4)';
-  return `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;font-weight:700;margin-top:2px">
-    <span>${label}</span>
-    <span style="font-family:var(--font-mono);color:${col}">${fmt.bs(value)}</span>
-  </div>`;
-}
-
 window.showFinTab = (tab) => {
   ['pl','bg','fc','tr'].forEach(t => {
     const el = document.getElementById(`fin${t.toUpperCase()}`);
@@ -6495,16 +6473,6 @@ function formAgregarProfesor() {
       </p>
     </div>
   `;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
 }
 
 window.eliminarProfesor = async (id, nombre) => {
