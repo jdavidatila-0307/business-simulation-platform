@@ -275,7 +275,7 @@ function setupNav(screenId) {
         if (typeof loadAdminEquipos === 'function') loadAdminEquipos();
         else loadAdminSimulaciones(); // fallback
       }
-      if (btn.dataset.view === 'admin-inventarios') loadAdminInventarios();
+      if (btn.dataset.view === 'admin-rondas') loadAdminRondas();
       if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
       if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
       if (btn.dataset.view === 'admin-parametros') loadAdminParametros();
@@ -521,19 +521,7 @@ async function initAdmin() {
   showScreen('screen-admin');
   setupNav('screen-admin');
   document.getElementById('btnAdminLogout').addEventListener('click', doLogout);
-
-  // Restaurar sim activa desde la sesión del servidor
-  try {
-    const me = await api('GET', '/auth/me');
-    if (me?.simulacionId) {
-      state.currentSimId    = me.simulacionId;
-      state.currentSimNombre = me.simNombre || me.simulacionId;
-      state.ref = await api('GET', '/admin/config');
-      const badge = document.getElementById('simBadge');
-      if (badge && state.currentSimNombre) badge.textContent = `📊 ${state.currentSimNombre}`;
-    }
-  } catch {}
-
+  // Mostrar gestión de simulaciones como pantalla de inicio
   await loadAdminSimulaciones();
 }
 
@@ -587,12 +575,6 @@ async function loadAdminEquipos() {
         <td style="padding:14px 16px;text-align:center;font-family:var(--font-mono);font-size:.85rem">${nMiemb}</td>
         <td style="padding:14px 16px;text-align:center">${estadoBadge}</td>
         <td style="padding:14px 16px;font-size:.78rem;color:var(--text3)">${fecha}</td>
-        <td style="padding:14px 16px;text-align:right;white-space:nowrap">
-          <span style="font-family:var(--font-mono);font-size:.85rem">
-            ${eq.capitalInicial ? 'Bs ' + eq.capitalInicial.toLocaleString('es-BO') : '<span style="color:var(--text3)">global</span>'}
-          </span>
-          <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="editarCapital('${eq.id}','${eq.nombre}',${eq.capitalInicial||0})">✏</button>
-        </td>
         <td style="padding:14px 16px;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="cambiarClave('${eq.id}','${eq.nombre}')">🔑 Clave</button>
           <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="resetearEnvio('${eq.id}','${eq.nombre}')">↺ Resetear</button>
@@ -612,7 +594,6 @@ async function loadAdminEquipos() {
               <th style="padding:10px 16px;text-align:center">#</th>
               <th style="padding:10px 16px;text-align:center">Estado Ronda</th>
               <th style="padding:10px 16px;text-align:left">Registrado</th>
-              <th style="padding:10px 16px;text-align:right">Capital Inicial</th>
               <th style="padding:10px 16px;text-align:left">Acciones</th>
             </tr>
           </thead>
@@ -647,19 +628,6 @@ async function loadAdminEquipos() {
       try {
         await api('DELETE', '/admin/equipos/' + id);
         toast('✅ Equipo eliminado', 'success');
-        loadAdminEquipos();
-      } catch(e) { toast(e.message, 'error'); }
-    };
-    window.editarCapital = async (id, nombre, actual) => {
-      const globalCap = state.ref?.parametros?.capitalInicial || 680000;
-      const hint = actual ? `Actual: Bs ${actual.toLocaleString('es-BO')}` : `Sin definir (usa global: Bs ${globalCap.toLocaleString('es-BO')})`;
-      const valor = prompt(`Capital inicial para "${nombre}"\n${hint}\n\nIngresa el nuevo valor en Bs (entero).\nDeja vacío para usar el capital global de la simulación.`);
-      if (valor === null) return;
-      const num = valor.trim() === '' ? null : parseInt(valor.replace(/[.,\s]/g,''), 10);
-      if (num !== null && (isNaN(num) || num <= 0)) return toast('❌ Valor inválido — ingresa un número entero positivo', 'error');
-      try {
-        await api('PUT', '/admin/equipos/' + id + '/capital', { capitalInicial: num });
-        toast(num ? `✅ Capital de "${nombre}" → Bs ${num.toLocaleString('es-BO')}` : `✅ Capital de "${nombre}" restablecido al global`, 'success');
         loadAdminEquipos();
       } catch(e) { toast(e.message, 'error'); }
     };
@@ -748,27 +716,42 @@ async function loadAdminResultados(rondaVer) {
   try {
     el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando resultados...</p>';
     const ronda = await api('GET', '/admin/ronda');
-    let current = ronda?.currentRound || 0;
+    const current = ronda?.currentRound || 0;
 
-    // Si la ronda actual está pending, la última simulada es current-1
-    const ultimaSimulada = (ronda?.roundState === 'pending') ? current - 1 : current;
+    // Buscar la última ronda con resultados reales desde el historial
+    const rawHist = await api('GET', '/admin/historial');
+    const hist = Array.isArray(rawHist) ? rawHist : (rawHist?.rondas || rawHist?.historial || []);
 
-    if (!ultimaSimulada || ultimaSimulada < 1) {
+    // Intentar cada ronda desde la más reciente hasta encontrar una con datos
+    let ultimaSimulada = 0;
+    for (let i = current; i >= 1; i--) {
+      try {
+        const rd = await api('GET', '/admin/resultados/' + i);
+        if (rd?.resultados?.length) { ultimaSimulada = i; break; }
+      } catch {}
+    }
+
+    if (!ultimaSimulada) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
       return;
     }
 
-    // Ronda a visualizar (por selector o la última por defecto)
-    const n = (rondaVer && rondaVer >= 1 && rondaVer <= ultimaSimulada) ? rondaVer : ultimaSimulada;
-
+    const n = (rondaVer && rondaVer >= 1 && rondaVer <= current) ? rondaVer : ultimaSimulada;
     const rd = await api('GET', '/admin/resultados/' + n);
     if (!rd?.resultados?.length) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin resultados para el trimestre ' + n + '.</p>';
       return;
     }
 
-    // Selector de rondas
-    const opcionesRondas = Array.from({length: ultimaSimulada}, (_,i) => i+1)
+    // Selector de rondas con resultados
+    const rondasConDatos = [];
+    for (let i = 1; i <= current; i++) {
+      try {
+        const r = await api('GET', '/admin/resultados/' + i);
+        if (r?.resultados?.length) rondasConDatos.push(i);
+      } catch {}
+    }
+    const opcionesRondas = rondasConDatos
       .map(r => `<option value="${r}" ${r===n?'selected':''}>Ronda ${r}</option>`)
       .join('');
     const selector = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -777,7 +760,7 @@ async function loadAdminResultados(rondaVer) {
         onchange="loadAdminResultados(+this.value)">
         ${opcionesRondas}
       </select>
-      <span style="font-size:.78rem;color:var(--text3)">Última simulada: Ronda ${ultimaSimulada}</span>
+      <span style="font-size:.78rem;color:var(--text3)">Última con datos: Ronda ${ultimaSimulada}</span>
     </div>`;
 
     el.innerHTML = selector + buildAdminResultsHTML(rd);
@@ -797,13 +780,7 @@ async function loadAdminSimulaciones() {
   } catch {}
   const plantillasOpts = plantillasDisponibles
     .filter(p => p !== 'jaboncillos_v1')
-    .map(p => {
-      const lbl = p === 'Calzados_COM540_1_2026_V1'
-        ? 'Calzados Especializados — COM540 2026 V1'
-        : p.replace(/_v\d+$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const sel = p === 'Calzados_COM540_1_2026_V1' ? ' selected' : '';
-      return `<option value="${p}"${sel}>${lbl}</option>`;
-    })
+    .map(p => { const lbl = p.replace(/_v\d+$/, '').replace(/_/g, ' '); const cap = lbl.charAt(0).toUpperCase() + lbl.slice(1); return `<option value="${p}">${cap}</option>`; })
     .join('');
 
   const el = document.getElementById('adminSimulacionesContent');
@@ -884,7 +861,8 @@ async function loadAdminSimulaciones() {
             <div>
               <label class="form-label">Industria / Plantilla</label>
               <select class="form-input" id="newSimIndustria">
-                <option value="" disabled>— Seleccionar industria —</option>
+                <option value="" disabled selected>— Seleccionar industria —</option>
+                <option value="jaboncillos_v1">Jaboncillos</option>
                 ${plantillasOpts}
               </select>
               <div style="font-size:.72rem;color:var(--text3);margin-top:4px">
@@ -1106,7 +1084,7 @@ async function loadAdminDashboard() {
                   const nombre          = r.equipoNombre || r.nombre || r.equipo || '—';
                   const nProds          = r.productos?.length || 1;
                   return `<tr>
-                  <td><strong>${nombre}</strong>${nProds>1?` <span style="font-size:.7rem;color:var(--text3)">(${nProds} prod.)</span>`:''}${r.esBot?` <span style="font-size:.68rem;color:var(--accent3);background:rgba(158,216,48,0.1);padding:1px 5px;border-radius:4px">🤖 Bot IA</span>`:''}</td>
+                  <td><strong>${nombre}</strong>${nProds>1?` <span style="font-size:.7rem;color:var(--text3)">(${nProds} prod.)</span>`:''}</td>
                   <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.segmento||'—').join(', '):segmento}</td>
                   <td style="font-size:.78rem">${nProds>1?r.productos.map(p=>p.producto||'—').join('<br>'):producto}</td>
                   <td class="num">${fmt.num(demandaAsignada)}</td>
@@ -1122,13 +1100,7 @@ async function loadAdminDashboard() {
                       ? `<button class="btn btn-ghost btn-sm" onclick="forzarConfirmacion('${r.equipo}')">Forzar</button>`
                       : '—'}
                   </td>
-                </tr>
-                ${r.esBot && r._botRazonamiento ? `
-                <tr style="background:rgba(158,216,48,0.03)">
-                  <td colspan="8" style="padding:4px 14px 8px 28px;font-size:.73rem;color:var(--text3);font-style:italic">
-                    💭 <strong style="color:var(--accent3)">${r._botEstrategia||'IA'}</strong>: ${r._botRazonamiento}
-                  </td>
-                </tr>` : ''}`; }).join('')}
+                </tr>`; }).join('')}
             </tbody>
           </table>
         </div>`;
@@ -1722,25 +1694,13 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       }
       // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
-      const _vb   = r.ventasBrutas || 0;
-      const _tf   = r.totalFacturado || (_vb + (r.ivaDebito||0));
-      const _vn   = r.ventasNetasReal || r.ventasNetas || 0;
-      const _oper = r.pagoOperarios || r.costoOperarios || 0;
-      const _plt  = r.gastoFijoPlanta || 0;
-      const _dep  = r.depreciacion || 0;
-      const _cvTot = (r.costoVentas||0) + _oper + _plt + _dep;
-      const _ubReal = _vn - _cvTot;
-      html += finRow('Precio facturado al cliente (con IVA)', _tf, false,'neutral')
+      html += finRow('Precio facturado al cliente', r.totalFacturado||0, false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
-        + finRowSub('= Ventas brutas (sin IVA)', _vb, true)
+        + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
-        + finRowSub('= Ventas netas', _vn, true)
-        + finRow('(−) Costo de ventas (variable)', -(r.costoVentas||0), false,'neg')
-        + finRow('    MOD — Operarios producción', -_oper, false,'neg')
-        + finRow('    Overhead — Gasto fijo planta', -_plt, false,'neg')
-        + finRow('    Depreciación planta', -_dep, false,'neg')
-        + finRowSub('= Total costo de ventas', -_cvTot, true)
-        + finRowSub('= Utilidad bruta', _ubReal, true)
+        + finRowSub('= Ventas netas', r.ventasNetasReal||r.ventasNetas||0, true)
+        + finRow('(−) Costo de ventas', -(r.costoVentas||0), false,'neg')
+        + finRowSub('= Utilidad bruta', r.utilidadBruta||0, true)
         + sec('(-) Gastos Comerciales')
         + finRow('Publicidad',              -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),         false,'neg')
         + finRow('Promoción',               -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),          false,'neg')
@@ -1749,37 +1709,10 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('Relaciones públicas',     -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')
         + finRow('Fuerza de ventas',        -(r.costoVendedores||0),    false,'neg')
         + sec('(-) Gastos Administrativos')
-        + finRow('Gastos administrativos fijos', -(r.gastoAdminFijo||0), false,'neg')
-        + sec('(-) Gastos Operativos')
-        + finRow('Almacenamiento',          -(r.costoAlmacenamiento||0),false,'neg')
-        + ((r.gastoInnovacion||0)>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)),false,'neg') : '')
-        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
-        + finRowSub('= EBITDA', (r.ebit??0)+(r.depreciacion??0), true)
-        + finRow('(-) Depreciación', -(r.depreciacion||0), false,'neg')
-        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
-        + finRowSub('= EBIT / Utilidad Operativa', r.ebit??0, true)
-        + sec('(-) Gastos Financieros')
-        + finRow('Intereses préstamo', -(r.interesesPrestamo||0), false,'neg')
-        + ((r.comisionApertura||0)>0 ? finRow('Comisión apertura', -(r.comisionApertura||0), false,'neg') : '')
-        + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
-        + finRowSub('= Utilidad antes de impuestos', (r.ebit??0)-(r.gastoFinanciero??0), true)
-        + sec('(-) Impuestos')
-        + finRow('IT (3% precio facturado)', -(r.impuestoIT||0), false,'neg')
-        + ((r.impuestoIUE||0)>0 ? finRow('IUE (25% utilidad gravable)', -(r.impuestoIUE||0), false,'neg') : '')
-        + '<div style="margin:8px 0;padding:8px 10px;background:rgba(59,130,246,.07);border-radius:6px;border-left:3px solid #3B82F6;font-size:.73rem;color:var(--text3);line-height:1.6">'
-        + '<strong style="color:#3B82F6">ⓘ IVA — tributo neutro (Ley 843)</strong><br>'
-        + 'Débito: '+fmt.bs(r.ivaDebito||0)+' · Crédito: '+fmt.bs(r.ivaCredito||0)+' · <strong>Neto a pagar: '+fmt.bs(r.ivaAPagar||0)+'</strong></div>'
-        + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
-        + finRowSub('= Utilidad neta', r.utilidadNeta, true);
-        + finRow('Publicidad',              -(r.gastoPublicidad||Math.round((r.publicidad||0)*0.87)),         false,'neg')
-        + finRow('Promoción',               -(r.gastoPromocion||Math.round((r.promocion||0)*0.87)),          false,'neg')
-        + finRow('Eventos',                 -(r.gastoEventos||Math.round((r.eventos||0)*0.87)),            false,'neg')
-        + finRow('Marketing en redes',      -(r.gastoMktRedes||Math.round((r.marketingRedes||0)*0.87)),     false,'neg')
-        + finRow('Relaciones públicas',     -(r.gastoRRPP||Math.round((r.relacionesPublicas||0)*0.87)), false,'neg')
-        + finRow('Fuerza de ventas',        -(r.costoVendedores||0),    false,'neg')
-        + sec('(-) Gastos Administrativos')
-        + finRow('Gastos administrativos fijos', -(r.gastoAdminFijo||0), false,'neg')
-        + sec('(-) Gastos Operativos')
+        + finRow('Sueldos administrativos (operarios)', -(r.pagoOperarios||r.costoOperarios||0), false,'neg')
+        + finRow('Gastos administrativos fijos',        -(r.gastoAdminFijo||0), false,'neg')
+        + sec('(-) Gastos Operativos de Planta')
+        + finRow('Gasto fijo de planta',    -(r.gastoFijoPlanta||0),    false,'neg')
         + finRow('Almacenamiento',          -(r.costoAlmacenamiento||0),false,'neg')
         + ((r.gastoInnovacion||0)>0 ? finRow('Innovación / desarrollo',-(r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87)),false,'neg') : '')
         + '<div style="height:4px;border-top:1px dashed var(--border)"></div>'
@@ -2077,8 +2010,7 @@ function buildAdminResultsHTML(rd) {
     + row('Caja y equivalentes',          r => r.cajaFinal||0)
     + row('Cuentas por cobrar (CxC)',     r => r.cxcFinal||0)
     + row('Inventarios (valorizado)',     r => r.invFinalValorizado||0)
-    + ((eqs.some(r=>(r.ivaSaldoAFavor||0)>0)) ? row('IVA Crédito Fiscal acumulado', r => r.ivaSaldoAFavor||0) : '')
-    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.ivaSaldoAFavor||0))
+    + tot('Total activo corriente',       r => (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0))
     + sec('A · Activo No Corriente')
     + row('Activos fijos brutos',         r => (r.afNetos||0)+(r.depreciacion||0))
     + row('Depreciación acumulada',       r => r.depreciacion||0, true)
@@ -2094,7 +2026,7 @@ function buildAdminResultsHTML(rd) {
     + tot('TOTAL PATRIMONIO',             r => r.patrimonio||0)
     + (() => {
         const checks = eqs.map(r => {
-          const pp = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.patrimonio||0);
+          const pp = (r.deudaFinal||0)+(r.patrimonio||0);
           const ta = r.totalActivos||0;
           const ok = Math.abs(pp-ta) < 2;
           return '<td style="padding:6px 12px;text-align:right;font-family:var(--font-mono);font-size:.82rem;font-weight:700;background:'+(ok?'rgba(6,255,165,.07)':'rgba(239,68,68,.15)')+';color:'+(ok?'var(--accent5)':'var(--accent4)')+'">'+bsBO(pp)+(ok?'':' ⚠')+'</td>';
@@ -2333,30 +2265,9 @@ async function loadAdminMercado() {
 async function loadAdminParametros() {
   if (!requireSimSelected('adminParametrosContent')) return;
   const data = await api('GET', '/admin/config');
-  let p   = data.parametros  || {};
-  const tp  = data.tiposProducto || {};
-  const can = data.canales      || {};
-  const ref = data;
-
-  // Si la sim no tiene parámetros ni proveedores, cargar defaults desde V1
-  let proveedoresDefault = data.proveedores || [];
-  if (!Object.keys(p).length || !proveedoresDefault.length) {
-    try {
-      const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
-      if (v1?.params && !Object.keys(p).length) p = v1.params;
-      if (v1?.proveedores?.length && !proveedoresDefault.length) proveedoresDefault = v1.proveedores;
-    } catch {
-      // Endpoint no disponible — usar proveedores canónicos por defecto
-      if (!proveedoresDefault.length) {
-        proveedoresDefault = [
-          { id:'prov_1', nombre:'Cueros Bolivia S.A.',          factorCosto:1.10, calidad:8, leadTime:1 },
-          { id:'prov_2', nombre:'Importado Asia (vía Oruro)',    factorCosto:0.75, calidad:5, leadTime:2 },
-          { id:'prov_3', nombre:'Insumos Locales (Cochabamba)', factorCosto:0.90, calidad:6, leadTime:1 },
-        ];
-      }
-    }
-  }
-  ref.proveedores = proveedoresDefault;
+  const p  = data.parametros;
+  const tp = data.tiposProducto;
+  const can = data.canales;
 
   const pf = (label, key, hint='', step='any') => `
     <div class="param-row">
@@ -2369,14 +2280,10 @@ async function loadAdminParametros() {
     <div class="param-grid">
 
       <div class="param-card">
-        <div class="param-card-title">💼 Apertura Financiera por Equipo</div>
-        <div class="param-row">
-          <span class="param-hint" style="color:var(--accent3);font-size:.8rem">
-            ℹ Capital contable = Caja inicial + Activos fijos − Deuda inicial (calculado automáticamente)
-          </span>
-        </div>
-        ${pf('Caja inicial (Bs)','cajaInicial','Efectivo en cuenta al arrancar')}
-        ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales','Maquinaria y equipos')}
+        <div class="param-card-title">💼 Capital Inicial por Equipo</div>
+        ${pf('Capital inicial (Bs)','capitalInicial')}
+        ${pf('Caja inicial (Bs)','cajaInicial')}
+        ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales')}
         ${pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')}
         ${pf('CxC inicial (Bs)','cxcInicial')}
         ${pf('Deuda inicial (Bs)','deudaInicial')}
@@ -2417,22 +2324,11 @@ async function loadAdminParametros() {
       </div>
 
       <div class="param-card">
-        <div class="param-card-title">👷 Operarios y Producción</div>
-        ${pf('Operarios iniciales por equipo','operariosIniciales','Aplica desde la próxima ronda','1')}
-        ${pf('Productividad base (unid/operario)','productividadBase','Unidades por operario por trimestre')}
-        ${pf('Costo trimestral / operario (Bs)','costoOperario')}
-        ${pf('Costo contratación / operario (Bs)','costoContratacionOperario')}
-        ${pf('Costo despido / operario (Bs)','costoDespidoOperario')}
-        ${pf('Factor capacitación','factorCapacitacion','0.05 = +5% productividad por inversión en capacitación')}
-        ${pf('% Costo por punto de calidad sobre/bajo 5 (ej. 0.08 = 8% del costoBase)','pctCostoCalidad','0.08')}
-        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40% del costo base es MP)','pctMateriaPrima','0.40')}
-      </div>
-
-      <div class="param-card">
         <div class="param-card-title">🔍 Investigación de Mercado</div>
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
         ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
+        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40%)','pctMateriaPrima')}
       </div>
 
       <div class="param-card">
@@ -2449,25 +2345,6 @@ async function loadAdminParametros() {
         ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
         ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
         ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
-      </div>
-
-      <div class="param-card">
-        <div class="param-card-title">📈 Demanda y Marca</div>
-        ${pf('Factor canibalización','factorCanibalizacion','0.15 = penaliza 15% el atractivo al competir en varios segmentos · 0 = sin penalización')}
-        ${pf('Tasa de decaimiento de marca','tasaDecaimiento','0.05 = Brand Equity cae 5% por ronda sin ventas · 0 = sin decaimiento')}
-      </div>
-
-      <div class="param-card">
-        <div class="param-card-title">⚙ Modelo de Costos</div>
-        <div class="param-row">
-          <label class="param-label">Asignación de costos fijos</label>
-          <select class="param-input" data-pkey-str="modeloCostos" style="height:2.2rem;padding:0 8px">
-            <option value="mixto"     ${p.modeloCostos==='mixto'     ||!p.modeloCostos?'selected':''}>Mixto — fijos solo en prod_1 (recomendado COM540)</option>
-            <option value="absorcion" ${p.modeloCostos==='absorcion'?'selected':''}>Absorción — cada producto paga fijos completos</option>
-            <option value="directo"   ${p.modeloCostos==='directo'  ?'selected':''}>Directo — solo costos variables</option>
-          </select>
-          <span class="param-hint" style="color:#f59e0b">⚠ Cambiar afecta la asignación de costos fijos en rondas siguientes</span>
-        </div>
       </div>
 
       <div class="param-card">
@@ -2536,41 +2413,6 @@ async function loadAdminParametros() {
         </div>
       </div>
 
-      <div class="param-card" style="grid-column:span 2">
-        <div class="param-card-title">🏭 Proveedores de Materia Prima</div>
-        <p style="font-size:.78rem;color:var(--text3);margin:0 0 12px">
-          Factor = multiplicador sobre el costo estándar de MP (costoBase × pctMateriaPrima).
-          Factor 1.10 = 10% más caro · Factor 0.75 = 25% más barato.
-        </p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Proveedor</th>
-              <th>Factor costo</th>
-              <th>Calidad (1-10)</th>
-              <th>Lead time (trim.)</th>
-            </tr></thead>
-            <tbody>
-              ${(ref.proveedores || []).map((pv,i) => `
-                <tr>
-                  <td><strong>${pv.nombre}</strong></td>
-                  <td><input class="param-input" type="number" step="0.01" min="0.1" max="3"
-                    data-prov-idx="${i}" data-prov-field="factorCosto"
-                    value="${pv.factorCosto ?? 1.0}" style="width:90px"/>
-                    <span style="font-size:.7rem;color:var(--text3)"> (1.0 = estándar)</span>
-                  </td>
-                  <td><input class="param-input" type="number" step="1" min="1" max="10"
-                    data-prov-idx="${i}" data-prov-field="calidad"
-                    value="${pv.calidad ?? 5}" style="width:70px"/></td>
-                  <td><input class="param-input" type="number" step="1" min="1" max="4"
-                    data-prov-idx="${i}" data-prov-field="leadTime"
-                    value="${pv.leadTime ?? 1}" style="width:70px"/></td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
     </div>
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
@@ -2615,7 +2457,6 @@ async function cambiarCodigoAcceso() {
 async function saveParametros() {
   const parametros = {};
   document.querySelectorAll('[data-pkey]').forEach(el => { parametros[el.dataset.pkey] = +el.value; });
-  document.querySelectorAll('[data-pkey-str]').forEach(el => { parametros[el.dataset.pkeyStr] = el.value; });
 
   // Guardar estado de módulos como params booleanos (1=activo, 0=inactivo)
   document.querySelectorAll('[data-modulo]').forEach(el => {
@@ -2631,23 +2472,10 @@ async function saveParametros() {
     canales[el.dataset.canal][el.dataset.canalField] = +el.value;
   });
 
-  // Guardar proveedores (factorCosto, calidad, leadTime)
-  const proveedoresActual = state.ref?.proveedores || [];
-  const proveedoresNuevos = [...proveedoresActual];
-  document.querySelectorAll('[data-prov-idx]').forEach(el => {
-    const idx   = +el.dataset.provIdx;
-    const field = el.dataset.provField;
-    if (!proveedoresNuevos[idx]) return;
-    proveedoresNuevos[idx] = { ...proveedoresNuevos[idx], [field]: +el.value };
-  });
-
   try {
     await api('PUT','/admin/parametros',    { parametros });
     await api('PUT','/admin/tiposproducto', { tiposProducto });
     await api('PUT','/admin/canales',       { canales });
-    if (proveedoresNuevos.length) {
-      await api('PUT','/admin/proveedores', { proveedores: proveedoresNuevos });
-    }
     toast('✓ Parámetros guardados','success');
     state.ref = await api('GET','/admin/config');
   } catch(e) { toast(e.message,'error'); }
@@ -2765,26 +2593,8 @@ async function loadAdminAfinidad() {
 }
 
 function renderAfinidadEditor() {
-  // ── Inicializar matriz si está vacía ──────────────────────────────────────
-  // Si la sim es nueva, afinidadLocal puede ser {} — inicializar con todos los productos
+  const productos = Object.keys(afinidadLocal);
   const segNombres = segmentosForAfinidad.map(s => s.nombre);
-  let productos = Object.keys(afinidadLocal);
-
-  // Si no hay productos en la matriz, intentar obtenerlos del state
-  if (!productos.length) {
-    const tiposProducto = state.ref?.tipos_producto || state.ref?.tiposProducto || {};
-    productos = Object.keys(tiposProducto);
-    // Inicializar cada producto con array de ceros
-    productos.forEach(p => { afinidadLocal[p] = Array(segNombres.length).fill(0); });
-  }
-
-  // Asegurar que cada producto tiene el array correcto de longitud
-  productos.forEach(p => {
-    if (!Array.isArray(afinidadLocal[p]) || afinidadLocal[p].length < segNombres.length) {
-      const prev = Array.isArray(afinidadLocal[p]) ? afinidadLocal[p] : [];
-      afinidadLocal[p] = segNombres.map((_, i) => prev[i] ?? 0);
-    }
-  });
 
   const colorCell = v => {
     if (v >= 3)  return 'background:rgba(6,255,165,.15);color:var(--accent5)';
@@ -2793,13 +2603,7 @@ function renderAfinidadEditor() {
     return 'background:rgba(255,107,107,.12);color:var(--accent4)';
   };
 
-  // Cabeceras con texto vertical y tooltip completo
-  const headerCols = segNombres.map(n => `
-    <th title="${n}" style="padding:6px 4px;font-size:.62rem;text-align:center;min-width:80px;max-width:110px">
-      <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;
-                  line-height:1.3;max-height:130px;overflow:hidden;cursor:help;
-                  font-weight:600;letter-spacing:.01em">${n}</div>
-    </th>`).join('');
+  const headerCols = segNombres.map(n=>`<th style="padding:8px 6px;font-size:.68rem;text-align:center;white-space:nowrap;max-width:90px;overflow:hidden">${n}</th>`).join('');
 
   const rows = productos.map(prod => {
     const vals = afinidadLocal[prod] || [];
@@ -2812,32 +2616,19 @@ function renderAfinidadEditor() {
           style="width:52px;text-align:center;padding:4px;border-radius:4px;border:1px solid var(--border2);${colorCell(v)};font-family:var(--font-mono);font-size:.82rem;outline:none"/>
       </td>`;
     }).join('');
-    return `<tr>
-      <td style="padding:8px 12px;font-weight:600;white-space:nowrap;font-size:.8rem">${prod}</td>
-      ${cells}
-    </tr>`;
+    return `<tr><td style="padding:8px 12px;font-weight:600;white-space:nowrap">${prod}</td>${cells}</tr>`;
   }).join('');
 
-  const sinProductos = !productos.length;
-
   document.getElementById('adminAfinidadContent').innerHTML = `
-    <div style="overflow-x:auto">
-      <table style="border-collapse:collapse;width:100%;min-width:${80 + segNombres.length * 90}px">
+    <div class="table-wrap">
+      <table style="border-collapse:collapse;width:100%">
         <thead>
-          <tr style="background:var(--bg3)">
-            <th style="padding:8px 12px;text-align:left;white-space:nowrap;font-size:.8rem;min-width:180px">
-              Producto \\ Segmento
-            </th>
+          <tr>
+            <th style="padding:8px 12px;text-align:left;background:var(--bg3)">Producto \\ Segmento</th>
             ${headerCols}
           </tr>
         </thead>
-        <tbody>
-          ${sinProductos
-            ? `<tr><td colspan="${segNombres.length+1}" style="padding:20px;text-align:center;color:var(--text3)">
-                Sin productos configurados. Verifica los tipos de producto en Parámetros.
-               </td></tr>`
-            : rows}
-        </tbody>
+        <tbody>${rows}</tbody>
       </table>
     </div>
     <div style="margin-top:12px;font-size:.78rem;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
@@ -2845,7 +2636,6 @@ function renderAfinidadEditor() {
       <span style="color:var(--accent2)">■ +1 Aceptable</span>
       <span style="color:var(--text3)">■ 0 Neutro</span>
       <span style="color:var(--accent4)">■ -2 Mal ajuste</span>
-      <span style="color:var(--text3);font-style:italic">Hover sobre cabecera para ver nombre completo del segmento</span>
     </div>
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveAfinidad">💾 Guardar Matriz</button>
@@ -2895,27 +2685,15 @@ function renderCompetenciaEditor() {
     ? state.segNombresIndustria
     : ['Masivo popular','Masivo aspiracional','Funcional familiar','Cosmético','Dermatológico','Natural','Institucional'];
 
-  // ── Auto-inicializar: un competidor por segmento si la lista está vacía ──
-  if (!competenciaLocal.length && segNombres.length) {
-    competenciaLocal = segNombres.map(seg => ({
-      segmento:        seg,
-      nombre:          `Competidor ${seg.split(' ')[0]}`,
-      precio:          150,
-      calidad:         5,
-      marketing:       3000,
-      participacionRef: 0.10,
-    }));
-  }
-
   const rows = competenciaLocal.map((c,i) => `
     <tr>
       <td>
-        <select class="param-input" data-comp="${i}" data-comp-field="segmento" style="min-width:180px">
+        <select class="param-input" data-comp="${i}" data-comp-field="segmento" style="min-width:160px">
           ${segNombres.map(s=>`<option ${s===c.segmento?'selected':''}>${s}</option>`).join('')}
         </select>
       </td>
       <td><input class="param-input" type="text"   data-comp="${i}" data-comp-field="nombre"           value="${c.nombre}"           style="min-width:160px"/></td>
-      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="precio"           value="${c.precio}"           step="0.1"  style="width:80px"/></td>
+      <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="precio"           value="${c.precio}"           step="0.1" style="width:80px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="calidad"          value="${c.calidad}"          step="0.5" min="1" max="10" style="width:70px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="marketing"        value="${c.marketing}"        step="500"  style="width:90px"/></td>
       <td><input class="param-input" type="number" data-comp="${i}" data-comp-field="participacionRef" value="${c.participacionRef}" step="0.01" min="0" max="1" style="width:80px"/></td>
@@ -2923,16 +2701,12 @@ function renderCompetenciaEditor() {
     </tr>`).join('');
 
   document.getElementById('adminCompetenciaContent').innerHTML = `
-    <div style="overflow-x:auto">
-      <table style="border-collapse:collapse;width:100%">
-        <thead><tr style="background:var(--bg3)">
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap">Segmento dominante</th>
-          <th style="padding:8px 10px;text-align:left;white-space:nowrap">Nombre del competidor</th>
-          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Precio (Bs)</th>
-          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Calidad (1-10)</th>
-          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Marketing (Bs)</th>
-          <th style="padding:8px 10px;text-align:right;white-space:nowrap">Participación ref.</th>
-          <th></th>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Segmento dominante</th><th>Nombre del competidor</th>
+          <th>Precio (Bs)</th><th>Calidad (1-10)</th>
+          <th>Marketing (Bs)</th><th>Participación ref.</th><th></th>
         </tr></thead>
         <tbody id="compRows">${rows}</tbody>
       </table>
@@ -2942,8 +2716,7 @@ function renderCompetenciaEditor() {
       <button class="btn btn-primary" id="btnSaveComp">💾 Guardar</button>
     </div>
     <p class="param-hint" style="margin-top:8px">
-      Un competidor por segmento. Precio y calidad afectan el índice externo de atractivo en el modelo Logit.
-      Participación ref. = fracción del mercado que representa (0.10 = 10%).
+      Estos actores externos influyen en el índice externo de cada segmento y aparecen en reportes de investigación de mercado.
     </p>`;
 
   document.querySelectorAll('[data-comp][data-comp-field]').forEach(el => {
@@ -3179,7 +2952,7 @@ async function loadDecisionForm() {
         <div class="form-grid">
           <div class="form-group"><label class="form-label">🎯 Segmento objetivo</label>${sel('segmentoObjetivo',segOpts)}</div>
           <div class="form-group"><label class="form-label">🧪 Tipo de producto</label>${sel('tipoProducto',prodOpts)}</div>
-          <div class="form-group"><label class="form-label">⭐ Calidad (1–10)</label>${inp('calidad',d.calidad,'type="number" min="1" max="10" step="1"')}<span class="form-hint">5 = estándar · Cada punto extra sube costo unitario +0.20 Bs y mejora atractivo</span></div>
+          <div class="form-group"><label class="form-label">⭐ Calidad (1–10)</label>${inp('calidad',d.calidad,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+4% costo/punto sobre 5</span></div>
           <div class="form-group"><label class="form-label">💡 Diferenciación (1–10)</label>${inp('diferenciacion',d.diferenciacion,'type="number" min="1" max="10" step="1"')}<span class="form-hint">+3% costo/punto sobre 5</span></div>
         </div>
       </div>
@@ -3307,12 +3080,6 @@ async function guardarDecision() {
 }
 
 async function enviarDecision() {
-  // Validar rangos críticos antes de enviar
-  const _dec = state.decisiones || {};
-  const contratar = Number(_dec.contratarOperarios ?? 0);
-  const despedir  = Number(_dec.despedirOperarios  ?? 0);
-  if (contratar > 50) return toast('❌ "Contratar operarios" no puede exceder 50 por ronda. Valor ingresado: ' + contratar, 'error');
-  if (despedir  > 50) return toast('❌ "Despedir operarios" no puede exceder 50 por ronda. Valor ingresado: ' + despedir,  'error');
   if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
   try {
     const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));
@@ -3408,7 +3175,7 @@ function crearProductoDefault(idx) {
     innovacion: false,
     tipoInnovacion: 'Producto',
     montoInnovacion: 0,
-    vendedoresIniciales: state?.ref?.parametros?.vendedoresIniciales ?? 0,
+    vendedoresIniciales: 2,
     contratarVendedores: 0,
     despedirVendedores: 0,
     // Etapa 3.2: Operarios
@@ -3552,13 +3319,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             </p>
           </div>
 
-        <div style="background:rgba(158,216,48,0.06);border:1px solid rgba(158,216,48,0.2);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-size:.8rem;color:var(--text2)">
-          <strong style="color:var(--accent3)">📌 Cómo leer esta tabla:</strong><br>
-          <span style="color:var(--text3)">Demanda total segmento</span> = todos los compradores potenciales del segmento este trimestre (incluye competidores externos como contrabando).<br>
-          <span style="color:var(--text3)">Tu market share</span> = la fracción que tu empresa captura frente a <strong>todos</strong> los competidores (otros equipos + competidor externo).<br>
-          <strong style="color:var(--accent5)">Tu demanda asignada</strong> = unidades que puedes vender = Demanda total × Tu share. <strong>Este es el número importante.</strong><br>
-          <span style="color:var(--text3)">El admin ve directamente tu demanda asignada — por eso el número que ves y el que ve el profesor son distintos pero correctos.</span>
-        </div>
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
             <div style="background:var(--bg3);padding:8px 16px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">
               Resultados del cálculo de mercado
             </div>
@@ -3569,9 +3330,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">#</th>
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producto</th>
                     <th style="padding:8px 14px;text-align:left;font-size:.68rem;color:var(--text3);text-transform:uppercase">Segmento</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase" title="Total de compradores potenciales en el segmento este trimestre">Demanda total segmento</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase" title="Fracción del mercado que tu empresa capta frente a todos los competidores">Tu market share</th>
-                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase" title="Unidades que puedes vender = Demanda total × Tu share">Tu demanda asignada</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Demanda formal</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Market share</th>
+                    <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Demanda asignada</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Producción</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--accent5);text-transform:uppercase">Ventas estimadas</th>
                     <th style="padding:8px 14px;text-align:right;font-size:.68rem;color:var(--text3);text-transform:uppercase">Inv. final est.</th>
@@ -3774,12 +3535,16 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td></td></tr>
           <tr><td class="hoja-label">⭐ Calidad (1–10)</td>
               <td>${inp('calidad',productoActivo.calidad,'number','min="1" max="10" step="1"')}</td>
-              <td class="hoja-ref">5 = estándar de mercado. Cada punto sobre/bajo 5 sube/baja el costo unitario un ${((p.pctCostoCalidad??0.08)*100).toFixed(0)}% del costo base. Máx 10.</td>
+              <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
               <td></td></tr>
           <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
               <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
               <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
+          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
+              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
+              <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||20000)} unid</td>
+              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
       </table>
     </div>
@@ -3836,9 +3601,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr>
             <td class="hoja-label">🏭 Operarios actuales</td>
-            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 1}</span></td>
+            <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td>
-            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 1) * (p.productividadBase ?? 440))} unid/trim</td>
+            <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
           </tr>
           ${hojaProductoActivo === 0 ? `
           <tr>
@@ -3865,20 +3630,6 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             Valor actual: ➕ ${decision.contratarOperarios??0} operarios · ➖ ${decision.despedirOperarios??0} · Capacitación Bs ${fmt.num(decision.montoCapacitacion??0)}
           </td></tr>
           `}
-          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
-              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
-              <td class="hoja-ref">
-                Máx planta: ${fmt.num(p.capacidadMaxProduccion||1500)} u
-                ${(() => {
-                  const opIni      = decision.operariosIniciales ?? p.operariosIniciales ?? 0;
-                  const opContratar = decision.contratarOperarios || 0;
-                  const opFinales   = Math.max(0, opIni + opContratar - (decision.despedirOperarios||0));
-                  const capEf       = opFinales * (p.productividadBase||500);
-                  if (opFinales === 0) return `<br><span style="color:var(--accent4);font-size:.75rem">⚠ Sin operarios. Contrata operarios primero.</span>`;
-                  return `<br><span style="color:var(--accent3);font-size:.75rem">Cap. efectiva: ${opFinales} op × ${fmt.num(p.productividadBase||500)} = <strong>${fmt.num(capEf)}</strong> u</span>`;
-                })()}
-              </td>
-              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
         </tbody>
       </table>
     </div>
@@ -3942,14 +3693,10 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td>${ta('finanzas','¿Necesitas financiamiento? ¿Por qué?')}</td></tr>
           <tr><td class="hoja-label">💵 Monto (Bs)</td>
               <td>${inp('montoPrestamo',decision.montoPrestamo,'number','min="0" step="1000"')}</td>
-              <td class="hoja-ref">Escribe el monto en Bs que necesitas. Comisión apertura ${fmt.pct(p.comisionAperturaPrestamo||0.01)} se descuenta automáticamente.</td><td></td></tr>
+              <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
           <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
-              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number',`min="1" max="${
-                decision.tipoPrestamo === 'Operativo' ? (p.plazoPrestamoOperativo||20) :
-                decision.tipoPrestamo === 'Inversión' ? (p.plazoPrestamoInversion||40) :
-                Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)
-              }" step="1"`)}</td>
-              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim. <span style="color:var(--accent3);font-size:.75rem">⚠ cambia según tipo</span></td><td></td></tr>
+              <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number','min="1" max="8" step="1"')}</td>
+              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||2} trim. · Inv: ${p.plazoPrestamoInversion||4} trim.</td><td></td></tr>
           <tr><td class="hoja-label">📉 Amortización (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
@@ -4030,108 +3777,15 @@ if (isEditable) {
   cont.querySelectorAll('[data-hoja-field]').forEach(el => {
 
     el.addEventListener(
-      (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input',
+      el.type === 'checkbox' ? 'change' : 'input',
       () => {
 
-        const field = el.dataset.hojaField;   // ← DECLARAR PRIMERO
-
-        const v_raw =
+        const v =
           el.type === 'checkbox' ? el.checked
           : el.type === 'number' ? +el.value
           : el.tagName === 'SELECT'
             ? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/, '').trim()
             : el.value;
-
-        // ── Validación de rangos (Meyer, Design by Contract) ──────────────
-        // Los límites HTML max/min son evadibles — se aplica clamp en JS también
-
-        // Plazo máximo dinámico según tipo de préstamo
-        const tipoPrestamoActual = cont.querySelector('[data-hoja-field="tipoPrestamo"]')?.value || 'Ninguno';
-        const plazoMaxDinamico = tipoPrestamoActual === 'Operativo'
-          ? (p?.plazoPrestamoOperativo || 20)
-          : tipoPrestamoActual === 'Inversión'
-            ? (p?.plazoPrestamoInversion || 40)
-            : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
-
-        const LIMITES_CAMPO = {
-          calidad:             { min:1,  max:10  },
-          contratarOperarios:  { min:0,  max:50  },
-          despedirOperarios:   { min:0,  max:50  },
-          contratarVendedores: { min:0,  max:10  },
-          despedirVendedores:  { min:0,  max:10  },
-          plazoPrestamo:       { min:1,  max: plazoMaxDinamico },
-          precioVenta:         { min:0,  max:9999 },
-          produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
-          montoCapacitacion:   { min:0,  max:50000 },
-          publicidad:          { min:0,  max:200000 },
-          promocion:           { min:0,  max:100000 },
-          eventos:             { min:0,  max:100000 },
-          marketingRedes:      { min:0,  max:100000 },
-          relacionesPublicas:  { min:0,  max:100000 },
-        };
-
-        // Actualizar max del input de plazo cuando cambia el tipo de préstamo
-        if (field === 'tipoPrestamo') {
-          const plazoInput = cont.querySelector('[data-hoja-field="plazoPrestamo"]');
-          if (plazoInput) {
-            const nuevoMax = v_raw === 'Operativo'
-              ? (p?.plazoPrestamoOperativo || 20)
-              : v_raw === 'Inversión'
-                ? (p?.plazoPrestamoInversion || 40)
-                : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
-            plazoInput.max = nuevoMax;
-            // Mostrar aviso con el límite correcto
-            const refCell = plazoInput.closest('tr')?.querySelector('.hoja-ref');
-            if (refCell) {
-              const esOp = v_raw === 'Operativo';
-              const esInv = v_raw === 'Inversión';
-              refCell.innerHTML = esOp
-                ? `<span style="color:var(--accent3)">⚠ Máx. ${p?.plazoPrestamoOperativo||20} trim. (operativo)</span>`
-                : esInv
-                  ? `<span style="color:var(--accent3)">⚠ Máx. ${p?.plazoPrestamoInversion||40} trim. (inversión)</span>`
-                  : `Op: ${p?.plazoPrestamoOperativo||20} trim. · Inv: ${p?.plazoPrestamoInversion||40} trim.`;
-            }
-          }
-        }
-
-        // Aviso de capacidad de producción cuando ingresa producción
-        if (field === 'produccion') {
-          const opIni       = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
-          const opContratar = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value || 0);
-          const opDespedir  = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value || 0);
-          const opFinales   = Math.max(0, opIni + opContratar - opDespedir);
-          const capEf       = opFinales * (p?.productividadBase ?? 500);
-          const refCell     = el.closest('tr')?.querySelector('.hoja-ref');
-          if (refCell) {
-            if (opFinales === 0) {
-              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Sin operarios — debes contratar al menos 1 antes de producir. Cap. efectiva = 0 u.</span>`;
-            } else if (v_raw > capEf) {
-              refCell.innerHTML = `<span style="color:var(--accent4)">⚠ Supera cap. efectiva (${opFinales} op. × ${p?.productividadBase||500} = ${capEf} u). El motor ajustará automáticamente.</span>`;
-            } else {
-              const pct = Math.round(v_raw / capEf * 100);
-              refCell.innerHTML = `<span style="color:var(--accent5)">✓ ${pct}% de la cap. efectiva (${capEf} u con ${opFinales} operarios)</span>`;
-            }
-          }
-        }
-
-        // Aviso cuando contrata operarios
-        if (field === 'contratarOperarios' && v_raw > 0) {
-          const refCell = el.closest('tr')?.querySelector('.hoja-ref');
-          if (refCell) {
-            const opActuales = productoActivo?.operariosIniciales ?? p?.operariosIniciales ?? 1;
-            const nuevaCap   = (opActuales + v_raw) * (p?.productividadBase ?? 500);
-            refCell.innerHTML = `<span style="color:var(--accent5)">→ Nueva cap. efectiva: ${nuevaCap} u/trim</span>`;
-          }
-        }
-        let v = v_raw;
-        if (el.type === 'number' && LIMITES_CAMPO[field]) {
-          const lim = LIMITES_CAMPO[field];
-          const clamped = Math.min(lim.max, Math.max(lim.min, v));
-          if (clamped !== v) {
-            el.value = clamped;
-            v = clamped;
-          }
-        }
 
         const productFields = [
           'producto',
@@ -4157,6 +3811,8 @@ if (isEditable) {
           'cantidadMPpedida',
           'proveedorElegido',
         ];
+
+        const field = el.dataset.hojaField;
 
         if (productFields.includes(field)) {
 
@@ -4225,13 +3881,7 @@ if (isEditable) {
       });
     });
     document.getElementById('btnHojaGuardar')?.addEventListener('click', async () => {
-      try {
-        // Sincronizar state.decisiones con la variable local decision
-        state.decisiones = decision;
-        const _d = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
-        await api('POST','/api/decisiones/guardar',{decision: _d});
-        toast('💾 Guardado','success');
-      }
+      try { await api('POST','/api/decisiones/guardar',{decision}); toast('💾 Guardado','success'); }
       catch(e) { toast(e.message,'error'); }
     });
     document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
@@ -4690,17 +4340,15 @@ window.mostrarFinanciero = (n) => {
                                  : (r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87));
           const tieneInnov = prods ? prods.some(p=>p.gastoInnovacion>0) : r.gastoInnovacion>0;
 
-          // Consolidados de ventas — SIEMPRE desde r raíz (motor agrega ahí)
-          const totVentasBrutas = r.ventasBrutas || (prods ? sumP(p=>p.ventasBrutas||0) : 0);
-          const totIvaDebito    = r.ivaDebito    || (prods ? sumP(p=>p.ivaDebito||0)    : 0);
-          const totTotalFact    = r.totalFacturado || (totVentasBrutas + totIvaDebito);
-          const totComisNeto    = r.comisionesNeto || r.comisiones || (prods ? sumP(p=>p.comisionesNeto||p.comisiones||0) : 0);
-          const totVentasNetas  = r.ventasNetasReal || r.ventasNetas || (prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : 0);
+          // Consolidados de ventas
+          const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
+          const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
+          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||0);
+          const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
+          const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
           // Costo de ventas detalle
-          const totCVmp    = r.cvMP    || (prods ? sumP(p=>p.cvMP||0) : 0);
-          const totCVcalid = r.pagoCalidad || (prods ? sumP(p=>p.pagoCalidad||0) : 0);
-          // Total costo ventas = variable + MOD + overhead fijo + depreciación (NIC 2)
-          const totCostoVentas = (r.costoVentas||0) + gOper + gPlanta + (r.depreciacion||0);
+          const totCVmp    = prods ? sumP(p=>p.cvMP||(p.costoVentas-(p.pagoCalidad||0))||0) : (r.cvMP||(r.costoVentas-(r.pagoCalidad||0))||0);
+          const totCVcalid = prods ? sumP(p=>p.pagoCalidad||0) : (r.pagoCalidad||0);
           // Gastos operativos adicionales
           const gCostoVend = prods ? sumP(p=>p.gastoCostoVend||p.costoVendedores||0) : (r.gastoCostoVend||r.costoVendedores||0);
           // gastoInvMkt es decisión de empresa (no por producto) — usar consolidado r
@@ -4723,11 +4371,8 @@ window.mostrarFinanciero = (n) => {
             + secER('Costo de Ventas')
             + finRow('Costo materia prima neto', -totCVmp, false, 'neg')
             + finRow('Costo calidad / control', -totCVcalid, false, 'neg')
-            + finRow('    MOD — Operarios producción', -gOper, false, 'neg')
-            + finRow('    Overhead — Gasto fijo planta', -gPlanta, false, 'neg')
-            + finRow('    Depreciación planta', -(r.depreciacion||0), false, 'neg')
-            + finRowSub('= Total costo de ventas', -totCostoVentas, true)
-            + finRowSub('= Utilidad bruta', totVentasNetas - totCostoVentas, true)
+            + finRowSub('= Total costo de ventas', -r.costoVentas, true)
+            + finRowSub('= Utilidad bruta', r.utilidadBruta, true)
             + '<div style="height:4px"></div>'
             // ── GASTOS COMERCIALES ──────────────────────────────
             + secER('(-) Gastos Comerciales')
@@ -4740,9 +4385,11 @@ window.mostrarFinanciero = (n) => {
             + (tieneInvMkt ? finRow('Investigación de mercado', -gInvMkt, false, 'neg') : '')
             // ── GASTOS ADMINISTRATIVOS ──────────────────────────
             + secER('(-) Gastos Administrativos')
+            + finRow('Sueldos operarios de producción', -gOper, false, 'neg')
             + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
-            // ── GASTOS OPERATIVOS ───────────────────────────────
-            + secER('(-) Gastos Operativos')
+            // ── GASTOS PLANTA ───────────────────────────────────
+            + secER('(-) Gastos Operativos de Planta')
+            + finRow('Gasto fijo de planta', -gPlanta, false, 'neg')
             + finRow('Almacenamiento de inventario', -gAlmac, false, 'neg')
             + (tieneInnov ? finRow('Innovación y desarrollo', -gInnov, false, 'neg') : '');
         })()}
@@ -4932,10 +4579,7 @@ window.mostrarFinanciero = (n) => {
                        +(r.pagoGastosPlanta||r.pagoPlanta||r.gastoFijoPlanta||0)
                        +(r.pagoAlmacenamiento||r.pagoAlmacen||0)
                        +(r.pagoIVAPeriodoAnterior||0)+(r.pagoIT??r.impuestoIT??0)+(r.pagoIUE||0);
-          // IVA crédito acumulado como activo — ajuste indirecto en flujo
-          const ivaCredAcum = r.ivaCreditoAcumulado || r.ivaFavorAcumulado || 0;
-          return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false)
-            + (ivaCredAcum > 0 ? finRow('ⓘ IVA crédito acumulado (activo corriente, no sale de caja)', ivaCredAcum, false, 'neutral') : '');
+          return finRowSub('= Flujo Neto de Actividades de Operación', entOp - salOp, false);
         })()}
         <div style="height:12px"></div>
 
@@ -5966,123 +5610,6 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
 }
 
 // ── Créditos Admin ─────────────────────────────────────────
-// ── Inventarios (vista profesor — igual que estudiante pero para todos los equipos) ──
-async function loadAdminInventarios() {
-  const el = document.getElementById('adminInventariosContent');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:20px;color:var(--text3)">Cargando inventarios…</div>';
-  try {
-    const [rondasData, simData] = await Promise.all([
-      api('GET', '/admin/rondas'),
-      api('GET', '/admin/config'),
-    ]);
-    const equipos = (simData?.users || []).filter(u => u.rol === 'equipo');
-    const rondas  = (rondasData?.rondas || rondasData || [])
-      .filter(r => r.resultados)
-      .sort((a,b) => a.numero - b.numero);
-
-    if (!rondas.length) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><p>Sin rondas simuladas aún.</p></div>';
-      return;
-    }
-
-    // Selector de equipo
-    const eqOpts = equipos.map(e =>
-      `<option value="${e.id}">${e.nombre}</option>`
-    ).join('');
-
-    el.innerHTML = `
-      <div style="padding:16px 20px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-          <label style="font-size:.82rem;color:var(--text2)">Ver inventario de:</label>
-          <select id="invEqSelector" class="form-input" style="width:200px">${eqOpts}</select>
-        </div>
-        <div id="invEqContent"></div>
-      </div>`;
-
-    const renderInvEquipo = (eqId) => {
-      const eqNombre = equipos.find(e => e.id === eqId)?.nombre || eqId;
-      const productoMap = {};
-      rondas.forEach(ronda => {
-        const resObj = ronda.resultados?.resultados || ronda.resultados || {};
-        // buscar resultados de este equipo (puede ser eq__prod_1, etc.)
-        const keys = Object.keys(resObj).filter(k => k.startsWith(eqId));
-        if (!keys.length) return;
-        keys.forEach(key => {
-          const r   = resObj[key];
-          const pid = r.productoId || 'prod_1';
-          const pnom= r.producto   || 'Producto Principal';
-          if (!productoMap[pid]) productoMap[pid] = { nombre: pnom, rondas: [] };
-          productoMap[pid].rondas.push({
-            ronda:      ronda.numero,
-            invInicial: r.inventarioInicial ?? 0,
-            produccion: r.produccion        ?? 0,
-            ventas:     r.ventasReales      ?? 0,
-            invFinal:   r.inventarioFinal   ?? 0,
-            invValor:   r.invFinalValorizado ?? 0,
-            costoAlmac: r.costoAlmacenamiento ?? 0,
-          });
-        });
-      });
-
-      const secH = t => `<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:16px 0 8px">${t}</div>`;
-      let html = `<div style="font-weight:700;font-size:.9rem;margin-bottom:12px;color:var(--accent3)">📦 ${eqNombre}</div>`;
-
-      if (!Object.keys(productoMap).length) {
-        html += '<p style="color:var(--text3);font-size:.8rem">Sin datos de inventario para este equipo.</p>';
-        document.getElementById('invEqContent').innerHTML = html;
-        return;
-      }
-
-      html += secH('Kardex — Inventario de Productos Terminados');
-      Object.entries(productoMap).forEach(([pid, prod]) => {
-        const ult = prod.rondas[prod.rondas.length - 1];
-        const cob = (ult?.ventas||0) > 0 ? (ult.invFinal / ult.ventas).toFixed(1) : '—';
-        const rot = (ult?.invFinal||0) > 0 ? ((ult.ventas || 0) / (((ult.invFinal||0) + (ult.invInicial||0)) / 2)).toFixed(2) : '—';
-        const alerta = parseFloat(cob) > 3 ? '🔴 Crítico' : parseFloat(cob) > 1 ? '⚠ Alto' : '✅ Óptimo';
-        html += `<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-            <span style="font-weight:700;font-size:.82rem">${prod.nombre}</span>
-            <span style="font-size:.74rem;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,.06)">${alerta}</span>
-          </div>
-          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">
-          <thead><tr style="background:rgba(255,255,255,.04)">${
-            ['Ronda','Inv.Ini','Prod.','Ventas','Inv.Final','Valor Bs','Almac. Bs'].map(h =>
-              `<th style="padding:5px 8px;text-align:right;font-size:.62rem;color:var(--text3);text-transform:uppercase">${h}</th>`
-            ).join('')
-          }</tr></thead><tbody>${
-            prod.rondas.map(rr => {
-              const col = rr.invFinal > rr.ventas * 2 ? 'var(--accent4)' : 'var(--text1)';
-              return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">R${rr.ronda}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${rr.invInicial.toLocaleString('es')}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent2)">${rr.produccion.toLocaleString('es')}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${rr.ventas.toLocaleString('es')}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-weight:700;color:${col}">${rr.invFinal.toLocaleString('es')}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">${Math.round(rr.invValor).toLocaleString('es')}</td>
-                <td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent4)">${Math.round(rr.costoAlmac).toLocaleString('es')}</td>
-              </tr>`;
-            }).join('')
-          }</tbody></table></div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:.75rem">
-            <span style="color:var(--text3)">Rotación: <b>${rot}</b></span>
-            <span style="color:var(--text3)">Cobertura: <b>${cob} rondas</b></span>
-            <span style="color:var(--text3)">Stock actual: <b>${(ult?.invFinal||0).toLocaleString('es')} u.</b></span>
-            <span style="color:var(--text3)">Valor: <b>Bs ${Math.round(ult?.invValor||0).toLocaleString('es')}</b></span>
-          </div></div>`;
-      });
-      document.getElementById('invEqContent').innerHTML = html;
-    };
-
-    // Render primero equipo
-    if (equipos.length) renderInvEquipo(equipos[0].id);
-    document.getElementById('invEqSelector')?.addEventListener('change', e => renderInvEquipo(e.target.value));
-
-  } catch(e) {
-    el.innerHTML = `<div class="empty-state"><p style="color:var(--accent4)">${e.message}</p></div>`;
-  }
-}
-
 async function loadAdminCreditos() {
   if (!requireSimSelected('adminCreditosContent')) return;
   const el = document.getElementById('adminCreditosContent');
