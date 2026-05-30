@@ -1699,6 +1699,42 @@ async function route(req, res, body) {
     return send(res, 200, hist);
   }
 
+  // /admin/rondas — alias de historial con formato extendido para inventarios
+  if (url === '/admin/rondas' && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const rondas = [];
+    for (let i = 1; i <= sim.config.currentRound; i++) {
+      const r = await storage.getRonda(sim.id, i);
+      if (!r) continue;
+      rondas.push({
+        numero:      i,
+        estado:      r.estado,
+        ejecutadaAt: r.ejecutadaAt,
+        resultados:  r.resultados ? true : false,
+        decisiones:  r.decisiones || {},
+      });
+    }
+    return send(res, 200, { rondas });
+  }
+
+  // /admin/resultados/:n — resultados de una ronda específica
+  if (url.match(/^\/admin\/resultados\/\d+$/) && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const n = parseInt(url.split('/')[3]);
+    const ronda = await storage.getRonda(sim.id, n);
+    if (!ronda) return send(res, 404, { error: `Ronda ${n} no encontrada` });
+    const resObj = ronda.resultados?.resultados || ronda.resultados || {};
+    const equipos = await storage.getEquipos(sim.id);
+    // Enriquecer resultados con nombre del equipo
+    const resultados = Object.entries(resObj).map(([eqId, r]) => {
+      const eq = equipos.find(e => e.id === eqId);
+      return { ...r, equipo: eqId, equipoNombre: eq?.nombre || eqId, isBot: eq?.isBot || r.isBot || eqId.startsWith('bot_') };
+    });
+    return send(res, 200, { ronda: n, estado: ronda.estado, resultados, equipos });
+  }
+
   // ─── ADMIN — Config ───────────────────────────────────────────
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
