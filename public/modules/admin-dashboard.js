@@ -714,7 +714,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       }
       // ── ER consolidado ──
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:4px">'+lbl+'</div>';
-      html += finRow('Precio facturado al cliente', r.totalFacturado||0, false,'neutral')
+      html += finRow('Precio facturado al cliente', r.totalFacturado||((r.ventasBrutas||0)+(r.ivaDebito||0)), false,'neutral')
         + finRow('(−) IVA débito fiscal (13%)', -(r.ivaDebito||0), false,'neg')
         + finRowSub('= Ventas brutas (sin IVA)', r.ventasBrutas||0, true)
         + finRow('(−) Comisiones canal (neto)', -(r.comisionesNeto||Math.round((r.comisiones||0)*0.87)), false,'neg')
