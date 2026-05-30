@@ -1783,6 +1783,143 @@ async function route(req, res, body) {
   }
   }
 
+  // ─── ADMIN — Backup ───────────────────────────────────────────
+  if (url === '/admin/backup' && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación activa' });
+    try {
+      const equipos  = await storage.getEquipos(sim.id);
+      const usuarios = await storage.listUsers();
+      const rondas = [], decisiones = [], resultados = [];
+      for (let i = 1; i <= (sim.config?.currentRound ?? 1); i++) {
+        const r = await storage.getRonda(sim.id, i);
+        if (!r) continue;
+        rondas.push({ numero: i, estado: r.estado, ejecutadaAt: r.ejecutadaAt });
+        if (r.decisiones) Object.entries(r.decisiones).forEach(([key, dec]) => {
+          decisiones.push({ ronda_numero: i, equipo_key: key, decisiones: dec });
+        });
+        if (r.resultados) Object.entries(r.resultados).forEach(([equipoId, res]) => {
+          resultados.push({ ronda_numero: i, equipo_id: equipoId, resultados: res });
+        });
+      }
+      const backup = {
+        _meta: {
+          version: 'SimNego v3.2', simulacion: sim.nombre || sim.id,
+          sim_id: sim.id, fecha: new Date().toISOString(),
+          ronda_actual: sim.config?.currentRound ?? 1, equipos_count: equipos.length,
+        },
+        simulacion: {
+          id: sim.id, nombre: sim.nombre, descripcion: sim.descripcion || '',
+          codigoAcceso: sim.codigo_acceso || '', estado: sim.estado || 'active',
+          creadaAt: sim.creada_at || new Date().toISOString(),
+          config: sim.config || {}, parametros: sim.parametros || {},
+          tiposProducto: sim.tipos_producto || {}, canales: sim.canales || {},
+          segmentos: sim.segmentos || [], afinidadMatrix: sim.afinidad_matrix || {},
+          competenciaExterna: sim.competencia_externa || [],
+        },
+        equipos, rondas, decisiones, resultados,
+        usuarios: usuarios.map(u => ({ id: u.id, username: u.username, role: u.role, sim_id: u.sim_id })),
+      };
+      const json = JSON.stringify(backup, null, 2);
+      const filename = `backup_simnego_${new Date().toISOString().slice(0,10)}_R${sim.config?.currentRound ?? 1}.json`;
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': Buffer.byteLength(json),
+      });
+      res.end(json);
+      console.log(`[backup] ${filename} — ${(json.length/1024).toFixed(1)} KB`);
+    } catch(e) {
+      console.error('[backup] ERROR:', e.message);
+      return send(res, 500, { error: 'Error generando backup: ' + e.message });
+    }
+  }
+
+  // ─── ADMIN — Restaurar backup ─────────────────────────────────
+  if (url === '/admin/restaurar' && method === 'POST') {
+    if (needAdmin()) return;
+    try {
+      const { backup, modo, confirmar } = body;
+      if (!backup?._meta || !backup?.simulacion) return send(res, 400, { error: 'Backup inválido' });
+      if (!backup._meta.version?.includes('SimNego')) return send(res, 400, { error: 'Versión no reconocida' });
+      if (!['nueva', 'sobrescribir'].includes(modo)) return send(res, 400, { error: 'Modo inválido' });
+      if (modo === 'sobrescribir' && !confirmar) return send(res, 400, { error: 'Requiere confirmar: true' });
+      const ownerId = session.userId;
+      let simId;
+      let reporte = { equipos: 0, rondas: 0, decisiones: 0, resultados: 0 };
+      const bsim = backup.simulacion;
+      const buildSimData = (id, nombre) => ({
+        id, nombre,
+        descripcion:        bsim.descripcion        || '',
+        codigoAcceso:       storage.genCodigo(),
+        estado:             bsim.estado             || 'active',
+        creadaAt:           new Date().toISOString(),
+        config:             bsim.config             || {},
+        parametros:         bsim.parametros         || {},
+        tiposProducto:      bsim.tiposProducto      || bsim.tipos_producto      || {},
+        canales:            bsim.canales            || {},
+        segmentos:          bsim.segmentos          || [],
+        afinidadMatrix:     bsim.afinidadMatrix     || bsim.afinidad_matrix     || {},
+        competenciaExterna: bsim.competenciaExterna || bsim.competencia_externa || [],
+        rondas: {}, users: [],
+      });
+      if (modo === 'nueva') {
+        simId = storage.genSimId();
+        await storage.createSimulacion(ownerId, buildSimData(simId, bsim.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')'));
+      } else {
+        simId = bsim.id;
+        const existing = await storage.getSimulacion(simId, ownerId);
+        if (!existing) {
+          await storage.createSimulacion(ownerId, buildSimData(simId, bsim.nombre));
+        } else {
+          await storage.updateSimulacion(simId, { nombre: bsim.nombre, config: bsim.config, parametros: bsim.parametros, users: [] }, ownerId);
+        }
+        await pool.query('DELETE FROM sim_rondas     WHERE simulacion_id = $1', [simId]);
+        await pool.query('DELETE FROM sim_decisiones WHERE simulacion_id = $1', [simId]);
+      }
+      if (Array.isArray(backup.equipos)) {
+        for (const eq of backup.equipos) {
+          try {
+            const equipo = { ...eq, id: modo === 'nueva' ? eq.id.replace(bsim.id, simId) : eq.id };
+            await storage.addEquipo(simId, equipo, ownerId); reporte.equipos++;
+          } catch(e) { console.warn(`[restaurar] Equipo ${eq.nombre}: ${e.message}`); }
+        }
+      }
+      if (Array.isArray(backup.rondas)) {
+        for (const r of backup.rondas) {
+          try {
+            await storage.ensureRonda(simId, r.numero, ownerId);
+            const resultadosRonda = {};
+            (backup.resultados || []).filter(res => res.ronda_numero === r.numero).forEach(res => {
+              const eqId = modo === 'nueva' ? res.equipo_id.replace(bsim.id, simId) : res.equipo_id;
+              resultadosRonda[eqId] = res.resultados;
+            });
+            await storage.updateRonda(simId, r.numero, { estado: r.estado, ejecutadaAt: r.ejecutadaAt, resultados: resultadosRonda }, ownerId);
+            reporte.rondas++;
+          } catch(e) { console.warn(`[restaurar] Ronda ${r.numero}: ${e.message}`); }
+        }
+      }
+      if (Array.isArray(backup.decisiones)) {
+        for (const dec of backup.decisiones) {
+          try {
+            const equipoId = modo === 'nueva' ? dec.equipo_key.replace(bsim.id, simId) : dec.equipo_key;
+            await storage.saveDecision(simId, dec.ronda_numero, equipoId, 'prod_1', dec.decisiones);
+            reporte.decisiones++;
+          } catch(e) { console.warn(`[restaurar] Decision ${dec.equipo_key}: ${e.message}`); }
+        }
+      }
+      console.log(`[restaurar] ✅ modo=${modo} sim=${simId}`, reporte);
+      return send(res, 200, {
+        ok: true, modo, simId,
+        nombre: modo === 'nueva' ? bsim.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')' : bsim.nombre,
+        reporte,
+      });
+    } catch(e) {
+      console.error('[restaurar] ERROR:', e.message);
+      return send(res, 500, { error: 'Error al restaurar: ' + e.message });
+    }
+  }
+
   // ─── ADMIN — Config ───────────────────────────────────────────
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
