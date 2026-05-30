@@ -347,7 +347,9 @@ function construirDecisionBot(botId, botNombre, decIA, params) {
 
 // ── Función principal exportada ───────────────────────────────────────────────
 /**
- * Genera bots para todos los segmentos sin equipo humano.
+ * Genera 1 bot por CADA segmento — con o sin equipo humano.
+ * Segmentos con humano: bot compite directamente contra él.
+ * Segmentos sin humano: bot ocupa el segmento solo.
  *
  * @param {Array}  decisionesHumanas - Decisiones de equipos humanos ya guardadas
  * @param {Object} cfg               - { params, tiposProducto, canales, segmentos, afinidadMatrix, competenciaExterna, proveedores }
@@ -357,21 +359,22 @@ function construirDecisionBot(botId, botNombre, decIA, params) {
 async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
   const segmentos = cfg.segmentos || [];
 
-  // 1. Detectar segmentos sin equipo humano
-  const segmentosSinEquipo = detectarSegmentosSinEquipo(decisionesHumanas, segmentos);
-
-  if (!segmentosSinEquipo.length) {
-    console.log('[bot_service] Todos los segmentos tienen al menos un equipo humano. Sin bots necesarios.');
+  if (!segmentos.length) {
+    console.log('[bot_service] Sin segmentos definidos — no se generan bots.');
     return [];
   }
 
-  console.log(`[bot_service] ${segmentosSinEquipo.length} segmento(s) sin equipo humano: ${segmentosSinEquipo.map(s => s.nombre).join(', ')}`);
+  // Resetear contador de nombres para consistencia por ronda
+  _nombreIdx = (rondaNum - 1) * segmentos.length % NOMBRES_EMPRESAS.length;
 
-  // 2. Generar un bot por segmento vacío en paralelo
+  console.log(`[bot_service] Generando 1 bot para cada uno de los ${segmentos.length} segmentos (R${rondaNum})...`);
+
+  // Generar 1 bot por segmento en paralelo
   const bots = await Promise.all(
-    segmentosSinEquipo.map(async (segmento, idx) => {
-      const botId     = `bot_${segmento.nombre.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_r${rondaNum}`;
-      const botNombre = siguienteNombreEmpresa();
+    segmentos.map(async (segmento) => {
+      const empresa = siguienteNombreEmpresa();
+      // ID interno limpio — no expone nombre del segmento
+      const botId   = `bot_${empresa.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_r${rondaNum}`;
 
       const decIA = await generarDecisionBotIA(
         segmento,
@@ -380,11 +383,11 @@ async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
         rondaNum
       );
 
-      return construirDecisionBot(botId, botNombre, decIA, cfg.params || {});
+      return construirDecisionBot(botId, empresa, decIA, cfg.params || {});
     })
   );
 
-  console.log(`[bot_service] ✅ ${bots.length} bot(s) generados para R${rondaNum}`);
+  console.log(`[bot_service] ✅ ${bots.length} bot(s) generados para R${rondaNum}: ${bots.map(b => b.equipoNombre).join(', ')}`);
   return bots;
 }
 
