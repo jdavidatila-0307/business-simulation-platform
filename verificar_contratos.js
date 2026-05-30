@@ -69,7 +69,7 @@ const CAMPOS_MOTOR_REQUERIDOS = [
   // Caja y balance
   { campo: 'cajaFinal',         desc: 'Caja al cierre — propagada a R+1' },
   { campo: 'totalActivos',      desc: 'Invariante A=P+Pat' },
-  { campo: 'patrimonio',        desc: 'Derivado A-P — nunca hardcodeado (campo: patrimonio)' },
+  { campo: 'patrimonioTotal',   desc: 'Derivado A-P — nunca editable' },
   // Costos fijos NIC2
   { campo: 'pagoOperarios',     desc: 'MOD en CdV (NIC2)' },
   { campo: 'gastoFijoPlanta',   desc: 'Overhead en CdV (NIC2)' },
@@ -234,15 +234,15 @@ if (!appJs) {
 sec('Contrato 6 · Invariantes contables (engine.js)');
 
 const INVARIANTES = [
-  { patron: /patrimonio\s*=\s*roundBs\(capitalContable|totalActivos.*totalPasivos|patrimonio.*capital.*resultado/,
-    desc: 'Patrimonio derivado = capitalContable + resultadoAcumulado (nunca hardcodeado)' },
-  { patron: /capitalContable\s*=\s*roundBs\(params|params\.capitalContable|params\.capitalInicial/,
+  { patron: /patrimonioTotal\s*=.*totalActivos.*totalPasivos|A\s*-\s*P/,
+    desc: 'Patrimonio derivado = Activos - Pasivos (nunca hardcodeado)' },
+  { patron: /capitalContable\s*=\s*(?:params|sim|cfg)/,
     desc: 'capitalContable se lee desde params (no hardcodeado)' },
-  { patron: /ivaCreditoAcumulado|ivaCredito.*acum|acum.*ivaCredito|ivaFavor/i,
+  { patron: /ivaCreditoAcumulado|ivaFavorAcumulado|ivaCredito.*acum/i,
     desc: 'IVA crédito se arrastra como activo corriente' },
-  { patron: /costoVentas.*cuVar|cuVar.*costoVentas|costoVentas\s*=\s*roundBs/,
-    desc: 'costoVentas calculado desde costo unitario variable (NIC2)' },
-  { patron: /pagoOperarios.*costoVentas|costoVentas.*pagoOperarios|MOD|pagoOperarios/,
+  { patron: /depreciacion.*costoVentas|costoVentas.*depreciacion|NIC.?2/i,
+    desc: 'Depreciación incluida en Costo de Ventas (NIC2)' },
+  { patron: /pagoOperarios.*costoVentas|costoVentas.*pagoOperarios|MOD/,
     desc: 'MOD incluido en Costo de Ventas (NIC2)' },
   { patron: /sinDecision|sin_decision/i,
     desc: 'sinDecision implementado para equipos inactivos' },
