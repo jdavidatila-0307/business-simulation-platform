@@ -1729,7 +1729,25 @@ async function route(req, res, body) {
               return ids.size;
             })(), total: equipos.length });
     }
-    return send(res, 200, hist);
+      return send(res, 200, hist);
+
+  // /admin/rondas — formato extendido para inventarios
+  if (url === '/admin/rondas' && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulacion' });
+    const rondas = [];
+    for (let i = 1; i <= sim.config.currentRound; i++) {
+      const r = await storage.getRonda(sim.id, i);
+      if (!r) continue;
+      rondas.push({
+        numero:      i,
+        estado:      r.estado,
+        ejecutadaAt: r.ejecutadaAt,
+        resultados:  r.resultados ? true : false,
+      });
+    }
+    return send(res, 200, { rondas });
+  }
   }
 
   // ─── ADMIN — Config ───────────────────────────────────────────
