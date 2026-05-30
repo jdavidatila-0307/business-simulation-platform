@@ -697,8 +697,48 @@ async function doRecalcularBalance() {
   }
 }
 
+async function loadAdminRondasDirect() {
+  const el = document.getElementById('rondasContent');
+  if (!el) return;
+  try {
+    el.innerHTML = '<p style="color:var(--text3);padding:20px">Cargando historial de rondas...</p>';
+    const raw  = await api('GET', '/admin/historial');
+    const hist = Array.isArray(raw) ? raw : (raw?.rondas || raw?.historial || []);
+    if (!hist?.length) {
+      el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
+      return;
+    }
+    const rows = hist.map(h => `
+      <tr>
+        <td style="text-align:center;font-weight:700;color:var(--accent3)">T${h.ronda}</td>
+        <td style="text-align:center">
+          <span class="badge ${h.estado==='calculada'||h.estado==='simulated'?'badge-ok':'badge-warn'}">${h.estado}</span>
+        </td>
+        <td style="text-align:center">${h.enviados||'—'} / ${h.total||'—'}</td>
+        <td style="text-align:center;font-size:.78rem;color:var(--text3)">${h.ejecutadaAt ? new Date(h.ejecutadaAt).toLocaleString('es-BO') : '—'}</td>
+      </tr>`).join('');
+    el.innerHTML = '<div class="table-wrap"><table>'
+      + '<thead><tr>'
+      + '<th style="text-align:center">Trimestre</th>'
+      + '<th style="text-align:center">Estado</th>'
+      + '<th style="text-align:center">Decisiones enviadas</th>'
+      + '<th style="text-align:center">Ejecutada</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    el.innerHTML += '<div style="margin-top:20px;padding:12px 16px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2)">'
+      + '<div style="font-size:.75rem;color:var(--text3);margin-bottom:10px">🔧 Herramientas de mantenimiento</div>'
+      + '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">🔄 Recalcular EF + Desglose CU — todas las rondas</button>'
+      + '</div>';
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error: ' + e.message + '</p>';
+  }
+}
+
 async function loadAdminRondas() {
-  if (!requireSimSelected('rondasContent')) return;
+  if (!requireSimSelected('rondasContent')) {
+    // Intentar carga directa si hay sesión activa
+    await loadAdminRondasDirect();
+    return;
+  }
   const el = document.getElementById('rondasContent');
   if (!el) return;
   try {
@@ -750,16 +790,22 @@ async function loadAdminResultados(rondaVer) {
     const ronda = await api('GET', '/admin/ronda');
     let current = ronda?.currentRound || 0;
 
-    // Si la ronda actual está pending, la última simulada es current-1
-    const ultimaSimulada = (ronda?.roundState === 'pending') ? current - 1 : current;
+    // Buscar ultima ronda con resultados reales
+    const current2 = ronda?.currentRound || 0;
+    let ultimaSimulada = 0;
+    for (let i = current2; i >= 1; i--) {
+      try {
+        const chk = await api('GET', '/admin/resultados/' + i);
+        if (chk && chk.resultados && chk.resultados.length) { ultimaSimulada = i; break; }
+      } catch(eignore) {}
+    }
 
-    if (!ultimaSimulada || ultimaSimulada < 1) {
+    if (!ultimaSimulada) {
       el.innerHTML = '<p style="color:var(--text3);padding:20px">Sin rondas ejecutadas aún.</p>';
       return;
     }
 
-    // Ronda a visualizar (por selector o la última por defecto)
-    const n = (rondaVer && rondaVer >= 1 && rondaVer <= ultimaSimulada) ? rondaVer : ultimaSimulada;
+    const n = (rondaVer && rondaVer >= 1 && rondaVer <= current2) ? rondaVer : ultimaSimulada;
 
     const rd = await api('GET', '/admin/resultados/' + n);
     if (!rd?.resultados?.length) {
