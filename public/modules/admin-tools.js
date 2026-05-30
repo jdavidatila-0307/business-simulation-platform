@@ -72,6 +72,9 @@ async function loadAdminRondas() {
       + '<div style="font-size:.75rem;color:var(--text3);margin-bottom:10px">🔧 Herramientas de mantenimiento</div>'
       + '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">'
       + '🔄 Recalcular EF + Desglose CU — todas las rondas</button>'
+      + '&nbsp;&nbsp;'
+      + '<button class="btn btn-ghost" onclick="doBackupSimulacion()" style="margin-top:8px">'
+      + '💾 Backup simulación</button>'
       + '</div>';
 
   } catch(e) {
@@ -254,3 +257,43 @@ _waitForApi(function() {
 
   console.log('[admin-tools] ✅ Módulo cargado — Recalcular, Rondas, Resultados activos');
 });
+
+// ── doBackupSimulacion — Descarga JSON completo de la simulación ──────────────
+window.doBackupSimulacion = async function() {
+  const btn = document.querySelector('[onclick="doBackupSimulacion()"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando backup...'; }
+
+    const resp = await fetch('/admin/backup', {
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      throw new Error(err.error || resp.statusText);
+    }
+
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match       = disposition.match(/filename="([^"]+)"/);
+    const filename    = match ? match[1] : 'backup_simnego_' + new Date().toISOString().slice(0,10) + '.json';
+
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Backup descargado'; }
+    setTimeout(() => { if (btn) btn.textContent = '💾 Backup simulación'; }, 3000);
+    console.log('[backup] Descargado:', filename);
+
+  } catch(e) {
+    alert('Error en backup: ' + e.message);
+    console.error('[backup]', e);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Backup simulación'; }
+  }
+};
