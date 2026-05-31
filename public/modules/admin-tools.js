@@ -171,8 +171,8 @@ async function loadAdminRecalcular() {
     + '<div id="recalcularReporte" style="margin-top:24px"></div>'
     + '</div>';
 
-  // Ejecutar automáticamente al entrar al panel
-  setTimeout(function() { doRecalcularBalance(); }, 300);
+
+
 }
 
 /**
