@@ -18,111 +18,259 @@
 
 // ── Parámetros ────────────────────────────────────────────────────────────────
 async function loadAdminParametros() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminParametrosContent')) return;
-  var data = await api('GET', '/admin/config');
-  var p  = data.parametros;
-  var tp = data.tiposProducto;
-  var can = data.canales;
+  if (!requireSimSelected('adminParametrosContent')) return;
+  const data = await api('GET', '/admin/config');
+  let p   = data.parametros  || {};
+  const tp  = data.tiposProducto || {};
+  const can = data.canales      || {};
+  const ref = data;
 
-  var pf = function(label, key, hint, step) {
-    hint = hint || '';
-    step = step || 'any';
-    return '<div class="param-row">'
-      + '<label class="param-label">' + label + '</label>'
-      + '<input class="param-input" type="number" step="' + step + '" data-pkey="' + key + '" value="' + (p[key] != null ? p[key] : '') + '"/>'
-      + (hint ? '<span class="param-hint">' + hint + '</span>' : '')
-      + '</div>';
-  };
+  // Si la sim no tiene parámetros ni proveedores, cargar defaults desde V1
+  let proveedoresDefault = data.proveedores || [];
+  if (!Object.keys(p).length || !proveedoresDefault.length) {
+    try {
+      const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
+      if (v1?.params && !Object.keys(p).length) p = v1.params;
+      if (v1?.proveedores?.length && !proveedoresDefault.length) proveedoresDefault = v1.proveedores;
+    } catch {}
+  }
+  ref.proveedores = proveedoresDefault;
 
-  var modulosHTML = [
-    { id:'modMateriaPrima',   label:'🏭 Materia Prima',         desc:'Compra de MP, proveedores, lead time, restricción de producción', etapa:'3.1' },
-    { id:'modOperarios',      label:'👷 Operarios',             desc:'Contratación, despido, capacitación y capacidad efectiva',        etapa:'3.2' },
-    { id:'modIVA',            label:'🧾 IVA (13%)',             desc:'Débito, crédito fiscal y pago neto de IVA en el P&L',            etapa:'3.3' },
-    { id:'modImpuestos',      label:'📊 IT + IUE',             desc:'Impuesto a las Transacciones (3%) e IUE (25%) anual',           etapa:'3.4' },
-    { id:'modBrandEquity',    label:'⭐ Brand Equity',          desc:'Acumulación de reputación de marca entre rondas',               etapa:'2.1' },
-    { id:'modCanibalizacion', label:'🔀 Canibalización',        desc:'Penalización al atractivo cuando la empresa compite en N segmentos', etapa:'2.3' },
-    { id:'modDemandaDin',     label:'📈 Demanda Dinámica',      desc:'Crecimiento/decrecimiento de mercado por tendencia de segmento', etapa:'2.2' },
-    { id:'modInnovacion',     label:'💡 Innovación',            desc:'Inversión en producto, proceso o canal para mejorar posición',  etapa:'base' },
-    { id:'modInvestigacion',  label:'🔍 Investigación Mercado', desc:'Compra de reportes básicos y premium de inteligencia',         etapa:'base' },
-  ].map(function(mod) {
-    var checked = p['modulos_' + mod.id] !== 0 ? 'checked' : '';
-    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2);cursor:pointer">'
-      + '<input type="checkbox" data-modulo="' + mod.id + '" ' + checked + ' style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent);flex-shrink:0"/>'
-      + '<div><div style="font-weight:600;font-size:.85rem;color:var(--text1)">' + mod.label
-      + '<span style="font-size:.7rem;color:var(--text3);font-weight:400;margin-left:4px">Etapa ' + mod.etapa + '</span></div>'
-      + '<div style="font-size:.75rem;color:var(--text3);margin-top:2px">' + mod.desc + '</div></div>'
-      + '</label>';
-  }).join('');
+  const pf = (label, key, hint='', step='any') => `
+    <div class="param-row">
+      <label class="param-label">${label}</label>
+      <input class="param-input" type="number" step="${step}" data-pkey="${key}" value="${p[key]??''}"/>
+      ${hint?`<span class="param-hint">${hint}</span>`:''}
+    </div>`;
 
-  var canalesRows = Object.entries(can).map(function(entry) {
-    var n = entry[0]; var v = entry[1];
-    return '<tr><td><strong>' + n + '</strong></td>'
-      + '<td><input class="param-input" type="number" step="0.01" data-canal="' + n + '" data-canal-field="costoAdicionalUnitario" value="' + v.costoAdicionalUnitario + '" style="width:90px"/></td>'
-      + '<td><input class="param-input" type="number" step="0.01" data-canal="' + n + '" data-canal-field="comisionPct" value="' + v.comisionPct + '" style="width:90px"/></td>'
-      + '<td><input class="param-input" type="number" step="0.01" data-canal="' + n + '" data-canal-field="factorImpactoVendedores" value="' + v.factorImpactoVendedores + '" style="width:90px"/></td>'
-      + '<td><input class="param-input" type="number" step="0.1"  data-canal="' + n + '" data-canal-field="bonoAtractivo" value="' + v.bonoAtractivo + '" style="width:90px"/></td>'
-      + '</tr>';
-  }).join('');
+  document.getElementById('adminParametrosContent').innerHTML = `
+    <div class="param-grid">
 
-  var productosRows = Object.entries(tp).map(function(entry) {
-    var n = entry[0]; var v = entry[1];
-    return '<div class="param-row"><label class="param-label">' + n + '</label>'
-      + '<input class="param-input" type="number" step="0.01" data-tp="' + n + '" value="' + v.costoBase + '"/></div>';
-  }).join('');
+      <div class="param-card">
+        <div class="param-card-title">💼 Apertura Financiera por Equipo</div>
+        <div class="param-row">
+          <span class="param-hint" style="color:var(--accent3);font-size:.8rem">
+            ℹ Capital contable = Caja inicial + Activos fijos − Deuda inicial (calculado automáticamente)
+          </span>
+        </div>
+        ${pf('Caja inicial (Bs)','cajaInicial','Efectivo en cuenta al arrancar')}
+        ${pf('Activos fijos iniciales (Bs)','activosFijosIniciales','Maquinaria y equipos')}
+        ${pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')}
+        ${pf('CxC inicial (Bs)','cxcInicial')}
+        ${pf('Deuda inicial (Bs)','deudaInicial')}
+        ${pf('Capacidad máx producción (unid)','capacidadMaxProduccion')}
+      </div>
 
-  document.getElementById('adminParametrosContent').innerHTML =
-    '<div class="param-grid">'
-    + '<div class="param-card"><div class="param-card-title">💼 Capital Inicial por Equipo</div>'
-    + pf('Capital inicial (Bs)','capitalInicial') + pf('Caja inicial (Bs)','cajaInicial')
-    + pf('Activos fijos iniciales (Bs)','activosFijosIniciales') + pf('Inventario inicial (unid)','inventarioInicialUnid','0 = sin stock')
-    + pf('CxC inicial (Bs)','cxcInicial') + pf('Deuda inicial (Bs)','deudaInicial')
-    + pf('Capacidad máx producción (unid)','capacidadMaxProduccion') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">🏭 Costos Fijos Operativos</div>
+        ${pf('Gasto administrativo fijo (Bs)','gastoAdminFijo','Por trimestre')}
+        ${pf('Gasto fijo de planta (Bs)','gastoFijoPlanta','Por trimestre')}
+        ${pf('Depreciación trimestral (Bs)','depreciacionTrimestral')}
+        ${pf('Costo almacenamiento / unid (Bs)','costoAlmacenamientoUnidad','Bs/unid final')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">🏭 Costos Fijos Operativos</div>'
-    + pf('Gasto administrativo fijo (Bs)','gastoAdminFijo','Por trimestre') + pf('Gasto fijo de planta (Bs)','gastoFijoPlanta','Por trimestre')
-    + pf('Depreciación trimestral (Bs)','depreciacionTrimestral') + pf('Costo almacenamiento / unid (Bs)','costoAlmacenamientoUnidad','Bs/unid final') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">💳 Ventas y Cobranzas</div>
+        ${pf('% Ventas al contado','pctVentasContado','0.70 = 70%')}
+        ${pf('% Ventas a crédito','pctVentasCredito','0.30 = 30%')}
+        ${pf('Plazo cobro (trimestres)','plazoCobro','1 = siguiente trimestre','1')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">💳 Ventas y Cobranzas</div>'
-    + pf('% Ventas al contado','pctVentasContado','0.70 = 70%') + pf('% Ventas a crédito','pctVentasCredito','0.30 = 30%')
-    + pf('Plazo cobro (trimestres)','plazoCobro','1 = siguiente trimestre','1') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">🏦 Financiamiento</div>
+        ${pf('Tasa préstamo operativo (trim.)','tasaPrestamoOperativo','0.04 = 4%')}
+        ${pf('Tasa préstamo inversión (trim.)','tasaPrestamoInversion','0.03 = 3%')}
+        ${pf('Tasa sobregiro (trim.)','tasaSobregiro','0.06 = 6%')}
+        ${pf('Comisión apertura préstamo','comisionAperturaPrestamo','0.01 = 1%')}
+        ${pf('Plazo préstamo operativo (trim.)','plazoPrestamoOperativo','','1')}
+        ${pf('Plazo préstamo inversión (trim.)','plazoPrestamoInversion','','1')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">🏦 Financiamiento</div>'
-    + pf('Tasa préstamo operativo (trim.)','tasaPrestamoOperativo','0.04 = 4%') + pf('Tasa préstamo inversión (trim.)','tasaPrestamoInversion','0.03 = 3%')
-    + pf('Tasa sobregiro (trim.)','tasaSobregiro','0.06 = 6%') + pf('Comisión apertura préstamo','comisionAperturaPrestamo','0.01 = 1%')
-    + pf('Plazo préstamo operativo (trim.)','plazoPrestamoOperativo','','1') + pf('Plazo préstamo inversión (trim.)','plazoPrestamoInversion','','1') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">👥 Fuerza de Ventas</div>
+        ${pf('Vendedores iniciales por equipo','vendedoresIniciales','','1')}
+        ${pf('Sueldo trimestral / vendedor (Bs)','sueldoTrimestralVendedor')}
+        ${pf('Costo contratación / vendedor (Bs)','costoContratacionVendedor')}
+        ${pf('Costo despido / vendedor (Bs)','costoDespidoVendedor')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">👥 Fuerza de Ventas</div>'
-    + pf('Vendedores iniciales por equipo','vendedoresIniciales','','1') + pf('Sueldo trimestral / vendedor (Bs)','sueldoTrimestralVendedor')
-    + pf('Costo contratación / vendedor (Bs)','costoContratacionVendedor') + pf('Costo despido / vendedor (Bs)','costoDespidoVendedor') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">👷 Operarios y Producción</div>
+        ${pf('Operarios iniciales por equipo','operariosIniciales','Aplica desde la próxima ronda','1')}
+        ${pf('Productividad base (unid/operario)','productividadBase','Unidades por operario por trimestre')}
+        ${pf('Costo trimestral / operario (Bs)','costoOperario')}
+        ${pf('Costo contratación / operario (Bs)','costoContratacionOperario')}
+        ${pf('Costo despido / operario (Bs)','costoDespidoOperario')}
+        ${pf('Factor capacitación','factorCapacitacion','0.05 = +5% productividad por inversión en capacitación')}
+        ${pf('% Costo por punto de calidad sobre/bajo 5 (ej. 0.08 = 8% del costoBase)','pctCostoCalidad','0.08')}
+        ${pf('% Materia Prima del costoBase (ej. 0.40 = 40% del costo base es MP)','pctMateriaPrima','0.40')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">🔍 Investigación de Mercado</div>'
-    + pf('Reporte Básico (Bs)','costoInvestigacionBasica') + pf('Reporte Premium (Bs)','costoInvestigacionPremium')
-    + pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico') + pf('% Materia Prima del costoBase (ej. 0.40 = 40%)','pctMateriaPrima') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">🔍 Investigación de Mercado</div>
+        ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
+        ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}
+        ${pf('Reporte Estratégico (Bs)','costoInvestigacionEstrategico')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">💡 Innovación</div>'
-    + pf('Factor innovación Producto','factorInnovacionProducto','0.333 = 1/3 del monto/unid') + pf('Factor innovación Proceso','factorInnovacionProceso','0.333 = reducción de CU') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">💡 Innovación</div>
+        ${pf('Factor innovación Producto','factorInnovacionProducto','0.333 = 1/3 del monto/unid')}
+        ${pf('Factor innovación Proceso','factorInnovacionProceso','0.333 = reducción de CU')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">🧾 Sistema Tributario Bolivia</div>'
-    + pf('IVA (tasa)','tasaIVA','0.13 = 13%') + pf('IT — Impuesto a las Transacciones (tasa)','tasaIT','0.03 = 3% sobre ventas brutas')
-    + pf('IUE — Impuesto s/Utilidades (tasa)','tasaIUE','0.25 = 25% sobre utilidad gravable') + pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')
-    + pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro') + pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.005 = calzados') + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">🧾 Sistema Tributario Bolivia — Etapa 3.5</div>
+        ${pf('IVA (tasa)','tasaIVA','0.13 = 13%')}
+        ${pf('IT — Impuesto a las Transacciones (tasa)','tasaIT','0.03 = 3% sobre ventas brutas')}
+        ${pf('IUE — Impuesto s/Utilidades (tasa)','tasaIUE','0.25 = 25% sobre utilidad gravable')}
+        ${pf('Períodos para pago IUE (trimestres)','periodosIUE','4 = pago anual')}
+        ${pf('λ Logit — Sensibilidad competitiva','lambdaLogit','1.0 = neutro · >1 más diferenciado · <1 más aleatorio')}
+        ${pf('Coef. Precio (sensibilidad al precio en Logit)','coefPrecio','-0.7 = jaboncillos (Bs 2-10) · -0.005 = calzados (Bs 90-310) · valor negativo')}
+      </div>
 
-    + '<div class="param-card"><div class="param-card-title">🧪 Costo Base por Producto (Bs/unid)</div>' + productosRows + '</div>'
+      <div class="param-card">
+        <div class="param-card-title">📈 Demanda y Marca</div>
+        ${pf('Factor canibalización','factorCanibalizacion','0.15 = penaliza 15% el atractivo al competir en varios segmentos · 0 = sin penalización')}
+        ${pf('Tasa de decaimiento de marca','tasaDecaimiento','0.05 = Brand Equity cae 5% por ronda sin ventas · 0 = sin decaimiento')}
+      </div>
 
-    + '<div class="param-card" style="grid-column:span 2"><div class="param-card-title">⚙️ Módulos Activos</div>'
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">' + modulosHTML + '</div></div>'
+      <div class="param-card">
+        <div class="param-card-title">⚙ Modelo de Costos</div>
+        <div class="param-row">
+          <label class="param-label">Asignación de costos fijos</label>
+          <select class="param-input" data-pkey-str="modeloCostos" style="height:2.2rem;padding:0 8px">
+            <option value="mixto"     ${p.modeloCostos==='mixto'     ||!p.modeloCostos?'selected':''}>Mixto — fijos solo en prod_1 (recomendado COM540)</option>
+            <option value="absorcion" ${p.modeloCostos==='absorcion'?'selected':''}>Absorción — cada producto paga fijos completos</option>
+            <option value="directo"   ${p.modeloCostos==='directo'  ?'selected':''}>Directo — solo costos variables</option>
+          </select>
+          <span class="param-hint" style="color:#f59e0b">⚠ Cambiar afecta la asignación de costos fijos en rondas siguientes</span>
+        </div>
+      </div>
 
-    + '<div class="param-card" style="grid-column:span 2"><div class="param-card-title">📦 Canales</div>'
-    + '<div class="table-wrap"><table><thead><tr><th>Canal</th><th>Costo adicional/unid</th><th>Comisión</th><th>Factor vendedores</th><th>Bono atractivo</th></tr></thead>'
-    + '<tbody>' + canalesRows + '</tbody></table></div></div>'
-    + '</div>'
-    + '<div class="param-actions"><button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>'
-    + '<span class="param-warning">⚠ Los cambios aplican desde la próxima simulación</span></div>'
-    + '<div class="param-card" style="margin-top:16px;max-width:480px"><div class="param-card-title">🔑 Código de Acceso</div>'
-    + '<div style="display:flex;gap:10px;align-items:center">'
-    + '<input id="inputCodigoAcceso" class="param-input" type="text" style="flex:1;font-family:var(--font-mono);letter-spacing:2px;font-size:1rem;text-transform:uppercase" placeholder="Ej: TIGRES2026" value="' + (data.codigoAcceso || '') + '"/>'
-    + '<button class="btn btn-primary btn-sm" onclick="cambiarCodigoAcceso()">🔄 Cambiar</button></div>'
-    + '<div id="codigoAccesoStatus" style="font-size:.75rem;margin-top:8px;color:var(--text3)">Código actual: <span style="font-family:var(--font-mono);color:var(--accent3);font-weight:700">' + (data.codigoAcceso || '—') + '</span></div></div>';
+      <div class="param-card">
+        <div class="param-card-title">🧪 Costo Base por Producto (Bs/unid)</div>
+        ${Object.entries(tp).map(([n,v])=>`
+          <div class="param-row">
+            <label class="param-label">${n}</label>
+            <input class="param-input" type="number" step="0.01" data-tp="${n}" value="${v.costoBase}"/>
+          </div>`).join('')}
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">⚙️ Módulos Activos — Control de Funcionalidades</div>
+        <div style="font-size:.78rem;color:var(--text3);margin-bottom:12px">
+          Activa o desactiva módulos para adaptar la complejidad del simulador a tu curso.
+          Los módulos desactivados no aparecen en la hoja de decisión de los equipos.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+          ${[
+            { id:'modMateriaPrima',  label:'🏭 Materia Prima',          desc:'Compra de MP, proveedores, lead time, restricción de producción',  etapa:'3.1' },
+            { id:'modOperarios',     label:'👷 Operarios',              desc:'Contratación, despido, capacitación y capacidad efectiva',          etapa:'3.2' },
+            { id:'modIVA',           label:'🧾 IVA (13%)',              desc:'Débito, crédito fiscal y pago neto de IVA en el P&L',              etapa:'3.3' },
+            { id:'modImpuestos',     label:'📊 IT + IUE',              desc:'Impuesto a las Transacciones (3%) e IUE (25%) anual',             etapa:'3.4' },
+            { id:'modBrandEquity',   label:'⭐ Brand Equity',           desc:'Acumulación de reputación de marca entre rondas',                  etapa:'2.1' },
+            { id:'modCanibalizacion',label:'🔀 Canibalización',         desc:'Penalización al atractivo cuando la empresa compite en N segmentos',etapa:'2.3' },
+            { id:'modDemandaDin',    label:'📈 Demanda Dinámica',       desc:'Crecimiento/decrecimiento de mercado por tendencia de segmento',   etapa:'2.2' },
+            { id:'modInnovacion',    label:'💡 Innovación',             desc:'Inversión en producto, proceso o canal para mejorar posición',     etapa:'base' },
+            { id:'modInvestigacion', label:'🔍 Investigación Mercado',  desc:'Compra de reportes básicos y premium de inteligencia',            etapa:'base' },
+          ].map(mod => `
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2);cursor:pointer">
+              <input type="checkbox" data-modulo="${mod.id}"
+                ${(p['modulos_'+mod.id] !== 0) ? 'checked' : ''}
+                style="width:16px;height:16px;margin-top:2px;accent-color:var(--accent);flex-shrink:0"/>
+              <div>
+                <div style="font-weight:600;font-size:.85rem;color:var(--text1)">${mod.label}
+                  <span style="font-size:.7rem;color:var(--text3);font-weight:400;margin-left:4px">Etapa ${mod.etapa}</span>
+                </div>
+                <div style="font-size:.75rem;color:var(--text3);margin-top:2px">${mod.desc}</div>
+              </div>
+            </label>`).join('')}
+        </div>
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">📦 Canales — Costos y Comisiones</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Canal</th>
+              <th>Costo adicional/unid (Bs)</th>
+              <th>Comisión sobre ventas</th>
+              <th>Factor impacto vendedores</th>
+              <th>Bono atractivo</th>
+            </tr></thead>
+            <tbody>
+              ${Object.entries(can).map(([n,v])=>`
+                <tr>
+                  <td><strong>${n}</strong></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="costoAdicionalUnitario" value="${v.costoAdicionalUnitario}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="comisionPct" value="${v.comisionPct}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.01" data-canal="${n}" data-canal-field="factorImpactoVendedores" value="${v.factorImpactoVendedores}" style="width:90px"/></td>
+                  <td><input class="param-input" type="number" step="0.1"  data-canal="${n}" data-canal-field="bonoAtractivo" value="${v.bonoAtractivo}" style="width:90px"/></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="param-card" style="grid-column:span 2">
+        <div class="param-card-title">🏭 Proveedores de Materia Prima</div>
+        <p style="font-size:.78rem;color:var(--text3);margin:0 0 12px">
+          Factor = multiplicador sobre el costo estándar de MP (costoBase × pctMateriaPrima).
+          Factor 1.10 = 10% más caro · Factor 0.75 = 25% más barato.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Proveedor</th>
+              <th>Factor costo</th>
+              <th>Calidad (1-10)</th>
+              <th>Lead time (trim.)</th>
+            </tr></thead>
+            <tbody>
+              ${(ref.proveedores || []).map((pv,i) => `
+                <tr>
+                  <td><strong>${pv.nombre}</strong></td>
+                  <td><input class="param-input" type="number" step="0.01" min="0.1" max="3"
+                    data-prov-idx="${i}" data-prov-field="factorCosto"
+                    value="${pv.factorCosto ?? 1.0}" style="width:90px"/>
+                    <span style="font-size:.7rem;color:var(--text3)"> (1.0 = estándar)</span>
+                  </td>
+                  <td><input class="param-input" type="number" step="1" min="1" max="10"
+                    data-prov-idx="${i}" data-prov-field="calidad"
+                    value="${pv.calidad ?? 5}" style="width:70px"/></td>
+                  <td><input class="param-input" type="number" step="1" min="1" max="4"
+                    data-prov-idx="${i}" data-prov-field="leadTime"
+                    value="${pv.leadTime ?? 1}" style="width:70px"/></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <div class="param-actions">
+      <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
+      <span class="param-warning">⚠ Los cambios aplican desde la próxima simulación</span>
+    </div>
+
+    <div class="param-card" style="margin-top:16px;max-width:480px">
+      <div class="param-card-title">🔑 Código de Acceso al Simulador</div>
+      <div style="font-size:.8rem;color:var(--text3);margin-bottom:12px">
+        Los estudiantes usan este código para ingresar. Cámbialo cuando necesites.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="inputCodigoAcceso" class="param-input" type="text"
+          style="flex:1;font-family:var(--font-mono);letter-spacing:2px;font-size:1rem;text-transform:uppercase"
+          placeholder="Ej: TIGRES2026"
+          value="${data.codigoAcceso || ''}"/>
+        <button class="btn btn-primary btn-sm" onclick="cambiarCodigoAcceso()">🔄 Cambiar</button>
+      </div>
+      <div id="codigoAccesoStatus" style="font-size:.75rem;margin-top:8px;color:var(--text3)">
+        Código actual: <span style="font-family:var(--font-mono);color:var(--accent3);font-weight:700">${data.codigoAcceso || '—'}</span>
+      </div>
+    </div>`;
 
   document.getElementById('btnSaveParams').addEventListener('click', saveParametros);
 }
@@ -166,7 +314,7 @@ async function saveParametros() {
 var segmentosLocal = [];
 
 async function loadAdminSegmentos() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminSegmentosContent')) return;
+  if (!requireSimSelected('segmentosContent')) return;
   segmentosLocal = await api('GET', '/admin/segmentos');
   renderSegmentosEditor();
 }
@@ -240,10 +388,13 @@ var afinidadLocal = null;
 var segmentosForAfinidad = [];
 
 async function loadAdminAfinidad() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminAfinidadContent')) return;
-  var results = await Promise.all([api('GET', '/admin/afinidad'), api('GET', '/admin/segmentos')]);
-  afinidadLocal = results[0];
-  segmentosForAfinidad = results[1];
+  if (!requireSimSelected('afinidadContent')) return;
+  const [afData, segData] = await Promise.all([
+    api('GET','/admin/afinidad'),
+    api('GET','/admin/segmentos'),
+  ]);
+  afinidadLocal = afData;
+  segmentosForAfinidad = segData;
   renderAfinidadEditor();
 }
 
@@ -294,12 +445,14 @@ function renderAfinidadEditor() {
 var competenciaLocal = [];
 
 async function loadAdminCompetencia() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminCompetenciaContent')) return;
-  competenciaLocal = await api('GET', '/admin/competencia');
+  if (!requireSimSelected('competenciaContent')) return;
+  competenciaLocal = await api('GET','/admin/competencia');
+  // Leer segmentos reales de la industria activa
   try {
-    var cfg = (typeof state !== 'undefined' && state.ref) ? state.ref : await api('GET', '/admin/config');
-    if (typeof state !== 'undefined') { state.ref = cfg; state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(function(s) { return s.nombre; }); }
-  } catch(e) { if (typeof state !== 'undefined') state.segNombresIndustria = []; }
+    const cfg = state.ref || await api('GET','/admin/config');
+    state.ref = cfg;
+    state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(s => s.nombre);
+  } catch { state.segNombresIndustria = []; }
   renderCompetenciaEditor();
 }
 
