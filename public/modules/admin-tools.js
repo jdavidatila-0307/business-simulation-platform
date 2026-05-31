@@ -67,12 +67,12 @@ async function loadAdminRondas() {
       + '<th style="text-align:center">Ejecutada</th>'
       + '</tr></thead>'
       + '<tbody>' + rows + '</tbody>'
-      + '</table></div>'
-      + '<div style="margin-top:20px;padding:12px 16px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border2)">'
-      + '<div style="font-size:.75rem;color:var(--text3);margin-bottom:10px">🔧 Herramientas de mantenimiento</div>'
-      + '<button class="btn btn-ghost" id="btnRecalcularBalance" onclick="doRecalcularBalance()">'
-      + '🔄 Recalcular EF + Desglose CU — todas las rondas</button>'
-      + '</div>';
+      + '</table></div>';
+
+
+
+
+
 
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:20px">Error al cargar rondas: ' + e.message + '</p>';
