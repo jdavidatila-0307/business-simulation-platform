@@ -242,8 +242,8 @@ _waitForApi(function() {
     const btn = e.target.closest('[data-view]');
     if (!btn) return;
     if (btn.dataset.view === 'admin-recalcular') {
-      e.stopImmediatePropagation();
-      loadAdminRecalcular();
+      // vista se activa via setupNav
+      setTimeout(loadAdminRecalcular, 100);
     }
     if (btn.dataset.view === 'admin-rondas') {
       // No stopPropagation — dejamos que app.js también maneje
