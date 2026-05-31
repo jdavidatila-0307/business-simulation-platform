@@ -365,6 +365,12 @@ window._ejecutarRestaurar = async function(modo) {
       + '✅ <strong style="color:#9ED830">Restauración completada</strong><br>'
       + 'Modo: ' + (modo==='nueva'?'🆕 Nueva':'⚠️ Sobrescrita') + ' · Nombre: ' + data.nombre + '<br>'
       + 'Equipos: ' + r.equipos + ' · Rondas: ' + r.rondas + ' · Decisiones: ' + r.decisiones + '</div>';
+    // Cerrar modal y refrescar tras 1.5s
+    setTimeout(function() {
+      var modal = document.getElementById('restaurarModal');
+      if (modal) modal.remove();
+      if (typeof loadAdminSimulaciones === 'function') loadAdminSimulaciones();
+    }, 1500);
   } catch(e) {
     if (reporte) reporte.innerHTML = '<span style="color:#EF5350">❌ ' + e.message + '</span>';
     modal.querySelectorAll('button').forEach(function(b){b.disabled=false;});

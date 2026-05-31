@@ -1865,7 +1865,7 @@ async function route(req, res, body) {
       });
       if (modo === 'nueva') {
         simId = storage.genSimId();
-        await storage.createSimulacion(ownerId, buildSimData(simId, bsim.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')'));
+        await storage.createSimulacion(ownerId, buildSimData(simId, bsim.nombre.replace(/\s*\(restaurado[^)]*\)/g, '').trim() + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')'));
       } else {
         simId = bsim.id;
         const existing = await storage.getSimulacion(simId, ownerId);
@@ -1911,7 +1911,7 @@ async function route(req, res, body) {
       console.log(`[restaurar] ✅ modo=${modo} sim=${simId}`, reporte);
       return send(res, 200, {
         ok: true, modo, simId,
-        nombre: modo === 'nueva' ? bsim.nombre + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')' : bsim.nombre,
+        nombre: modo === 'nueva' ? bsim.nombre.replace(/\s*\(restaurado[^)]*\)/g, '').trim() + ' (restaurado ' + new Date().toLocaleDateString('es-BO') + ')' : bsim.nombre,
         reporte,
       });
     } catch(e) {
