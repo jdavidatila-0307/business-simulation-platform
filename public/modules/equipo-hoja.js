@@ -75,7 +75,7 @@ async function enviarDecision() {
 
 // hojaRondaActual declarada en app.js — no redeclarar aquí
 
-let hojaProductoActivo = 0;
+// hojaProductoActivo declarada en app.js
 
 function normalizarDecisionMultiproducto(decision) {
   decision = decision || {};

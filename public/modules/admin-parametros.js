@@ -311,7 +311,7 @@ async function saveParametros() {
 }
 
 // ── Segmentos ─────────────────────────────────────────────────────────────────
-var segmentosLocal = [];
+// segmentosLocal declarada en app.js
 
 async function loadAdminSegmentos() {
   if (!requireSimSelected('adminSegmentosContent')) return;
@@ -384,8 +384,8 @@ async function saveSegmentos() {
 }
 
 // ── Matriz Afinidad ───────────────────────────────────────────────────────────
-var afinidadLocal = null;
-var segmentosForAfinidad = [];
+// afinidadLocal declarada en app.js
+// segmentosForAfinidad declarada en app.js
 
 async function loadAdminAfinidad() {
   if (!requireSimSelected('adminAfinidadContent')) return;
@@ -442,7 +442,7 @@ function renderAfinidadEditor() {
 }
 
 // ── Competencia Externa ───────────────────────────────────────────────────────
-var competenciaLocal = [];
+// competenciaLocal declarada en app.js
 
 async function loadAdminCompetencia() {
   if (!requireSimSelected('adminCompetenciaContent')) return;
