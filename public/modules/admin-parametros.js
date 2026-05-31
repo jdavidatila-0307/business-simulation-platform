@@ -459,8 +459,8 @@ async function loadAdminCompetencia() {
     state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(s => s.nombre);
   } catch { state.segNombresIndustria = []; }
   const nivelCfg = state.ref || {};
-  loadAdminNivelIA(nivelCfg);
   renderCompetenciaEditor();
+  loadAdminNivelIA(nivelCfg);
 }
 
 // ── Nivel Competidores IA ───────────────────────────────────────────────────
