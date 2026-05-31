@@ -373,3 +373,4 @@ window._ejecutarRestaurar = async function(modo) {
 
 console.log('[admin-tools] ✅ Módulo cargado — Recalcular, Rondas, Resultados activos');
 });
+
