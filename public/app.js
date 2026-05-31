@@ -255,26 +255,26 @@ function setupNav(screenId) {
       if (tt) tt.textContent = titles[btn.dataset.view] || '';
       if (btn.dataset.view === 'admin-simulaciones') loadAdminSimulaciones();
       if (btn.dataset.view === 'eq-hoja') loadHojaDecision();
-      if (btn.dataset.view === 'eq-financiero') loadEquipoFinanciero();
-      if (btn.dataset.view === 'eq-resultados') loadEquipoResultados();
+      if (btn.dataset.view === 'eq-financiero') window.loadEquipoFinanciero?.();
+      if (btn.dataset.view === 'eq-resultados') window.loadEquipoResultados?.();
       if (btn.dataset.view === 'eq-inventarios') loadEquipoInventarios();
       if (btn.dataset.view === 'eq-creditos') loadEquipoCreditos();
-      if (btn.dataset.view === 'eq-reportes') loadEquipoReportes();
-      if (btn.dataset.view === 'eq-noticias') loadEquipoNoticias();
+      if (btn.dataset.view === 'eq-reportes') window.loadEquipoReportes?.();
+      if (btn.dataset.view === 'eq-noticias') window.loadEquipoNoticias?.();
       if (btn.dataset.view === 'eq-dashboard') loadEquipoDashboard();
-      if (btn.dataset.view === 'admin-afinidad') loadAdminAfinidad();
-      if (btn.dataset.view === 'admin-competencia') loadAdminCompetencia();
-      if (btn.dataset.view === 'admin-creditos') loadAdminCreditos();
-      if (btn.dataset.view === 'admin-dashboard') loadAdminDashboard();
+      if (btn.dataset.view === 'admin-afinidad') window.loadAdminAfinidad?.();
+      if (btn.dataset.view === 'admin-competencia') window.loadAdminCompetencia?.();
+      if (btn.dataset.view === 'admin-creditos') window.loadAdminCreditos?.();
+      if (btn.dataset.view === 'admin-dashboard') window.loadAdminDashboard?.();
       if (btn.dataset.view === 'admin-equipos') {
         if (typeof loadAdminEquipos === 'function') loadAdminEquipos();
         else loadAdminSimulaciones(); // fallback
       }
       if (btn.dataset.view === 'admin-inventarios') loadAdminInventarios();
-      if (btn.dataset.view === 'admin-resultados') loadAdminResultados();
-      if (btn.dataset.view === 'admin-mercado') loadAdminMercado();
-      if (btn.dataset.view === 'admin-parametros') loadAdminParametros();
-      if (btn.dataset.view === 'admin-segmentos') loadAdminSegmentos();
+      if (btn.dataset.view === 'admin-resultados') window.loadAdminResultados?.();
+      if (btn.dataset.view === 'admin-mercado') window.loadAdminMercado?.();
+      if (btn.dataset.view === 'admin-parametros') window.loadAdminParametros?.();
+      if (btn.dataset.view === 'admin-segmentos') window.loadAdminSegmentos?.();
       if (btn.dataset.view === 'admin-profesores') loadAdminProfesores();
       if (btn.dataset.view === 'eq-manual') { buildManual(); }
     });
