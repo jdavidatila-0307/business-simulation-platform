@@ -348,4 +348,12 @@ window.eliminarCompetidor = function(i) {
   renderCompetenciaEditor();
 };
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadAdminParametros = loadAdminParametros;
+window.loadAdminSegmentos = loadAdminSegmentos;
+window.loadAdminAfinidad = loadAdminAfinidad;
+window.loadAdminCompetencia = loadAdminCompetencia;
+window.cambiarCodigoAcceso = cambiarCodigoAcceso;
+window.saveParametros = saveParametros;
 console.log('[admin-parametros] ✅ Módulo cargado — Parámetros, Segmentos, Afinidad, Competencia activos');

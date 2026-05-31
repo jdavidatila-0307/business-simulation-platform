@@ -1272,4 +1272,11 @@ function renderAdminCharts() {
 
 // ── Admin Mercado ──────────────────────────────────────────
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadAdminDashboard = loadAdminDashboard;
+window.buildAdminKPIHTML = buildAdminKPIHTML;
+window.buildAdminResultsHTML = buildAdminResultsHTML;
+window.buildAdminChartsHTML = buildAdminChartsHTML;
+window.renderAdminCharts = renderAdminCharts;
 console.log('[admin-dashboard] ✅ Módulo cargado — Dashboard activo');

@@ -521,4 +521,8 @@ window.mostrarReporteRonda = async (n, historialCache) => {
 // ── Créditos del Equipo ────────────────────────────────────
 // ─── Mis Inventarios ─────────────────────────────────────────
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadEquipoNoticias = loadEquipoNoticias;
+window.loadEquipoReportes = loadEquipoReportes;
 console.log('[equipo-reportes] ✅ Módulo cargado — Noticias + Reportes activos');

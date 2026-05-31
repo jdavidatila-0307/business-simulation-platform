@@ -160,4 +160,7 @@ window.eliminarEquipo = async function(id, nombre) {
   } catch(e) { toast(e.message, 'error'); }
 };
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadAdminEquipos = loadAdminEquipos;
 console.log('[admin-equipos] ✅ Módulo cargado — loadAdminEquipos activo');

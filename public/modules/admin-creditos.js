@@ -132,4 +132,7 @@ window.showAdminCreditoEquipo = function(id) {
   });
 };
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadAdminCreditos = loadAdminCreditos;
 console.log('[admin-creditos] ✅ Módulo cargado — loadAdminCreditos activo');

@@ -62,4 +62,7 @@ async function loadAdminMercado() {
   }
 }
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadAdminMercado = loadAdminMercado;
 console.log('[admin-mercado] ✅ Módulo cargado — loadAdminMercado activo');

@@ -242,4 +242,7 @@ window.mostrarKpiRonda = (n, historial) => {
 
 // ─── Estados Financieros Completos ───────────────────────────
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadEquipoResultados = loadEquipoResultados;
 console.log('[equipo-resultados] ✅ Módulo cargado — KPIs activos');

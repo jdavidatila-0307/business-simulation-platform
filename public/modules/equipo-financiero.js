@@ -686,4 +686,7 @@ function renderEvoCharts(historial) {
 
 // ── Equipo Reportes ────────────────────────────────────────
 
+
+// ── Exponer como window.* para setupNav ──────────────────
+window.loadEquipoFinanciero = loadEquipoFinanciero;
 console.log('[equipo-financiero] ✅ Módulo cargado — Estados Financieros activos');
