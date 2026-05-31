@@ -7,6 +7,25 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 const app = fs.readFileSync('public/app.js', 'utf8');
+
+// Cargar módulos — buscar funciones en módulos independientes si no están en app.js
+const MODULOS = [
+  'admin-dashboard', 'admin-equipos', 'admin-mercado', 'admin-creditos',
+  'admin-parametros', 'admin-tools', 'equipo-hoja', 'equipo-financiero',
+  'equipo-resultados', 'equipo-reportes', 'ui-components',
+];
+const mods = {};
+MODULOS.forEach(m => {
+  const p = 'public/modules/' + m + '.js';
+  mods[m] = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+});
+
+// Busca fn en app.js + todos los módulos
+function enSistema(fn) {
+  if (app.includes(fn)) return true;
+  return Object.values(mods).some(c => c.includes(fn));
+}
+
 let errores = 0;
 let ok = 0;
 
@@ -16,7 +35,7 @@ function check(desc, condition) {
 }
 
 console.log('\n══════════════════════════════════════════');
-console.log('  VERIFICADOR SimNego — app.js');
+console.log('  VERIFICADOR SimNego — app.js + módulos');
 console.log('══════════════════════════════════════════\n');
 
 // Sintaxis
@@ -53,7 +72,7 @@ const fns = [
   'window.adminEFTab',
   'window.adminKPITab',
 ];
-fns.forEach(fn => check(fn, app.includes(fn)));
+fns.forEach(fn => check(fn, enSistema(fn)));
 
 console.log('\n── Funciones referenciadas pero que deben existir ──');
 const refs = [
@@ -65,8 +84,8 @@ const refs = [
   ['buildAdminKPIHTML', 'function buildAdminKPIHTML'],
 ];
 refs.forEach(([ref, def]) => {
-  const usado = app.includes("'" + ref + "'") || app.includes(ref + '(') || app.includes(ref + ';');
-  const definido = app.includes(def);
+  const usado    = app.includes("'" + ref + "'") || app.includes(ref + '(') || app.includes(ref + ';');
+  const definido = enSistema(def);
   if (usado && !definido) { check(ref + ' usada Y definida', false); }
   else if (definido)      { check(ref + ' definida', true); }
 });
