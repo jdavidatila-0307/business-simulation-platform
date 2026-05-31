@@ -751,6 +751,8 @@ async function loadAdminSimulaciones() {
               ? `<button class="btn btn-success btn-sm" onclick="seleccionarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')">▶ Acceder a esta simulación</button>
                  <button class="btn btn-ghost btn-sm" onclick="copiarCodigo('${sim.codigoAcceso||''}')">📋 Copiar código</button>
                  <button class="btn btn-ghost btn-sm" onclick="archivarSim('${sim.id}')">📦 Archivar</button>
+                 <button class="btn btn-ghost btn-sm" onclick="doBackupSimulacion('${sim.id}')">💾 Backup</button>
+                 <button class="btn btn-ghost btn-sm" onclick="doRestaurarSimulacion('${sim.id}')" style="color:#FFC107;border-color:rgba(255,193,7,0.4)">📂 Restaurar</button>
                  <button class="btn btn-ghost btn-sm" onclick="eliminarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')" style="color:var(--accent4)">✕ Eliminar</button>`
               : `<button class="btn btn-ghost btn-sm" onclick="activarSim('${sim.id}')">♻ Reactivar</button>
                  <button class="btn btn-ghost btn-sm" onclick="eliminarSim('${sim.id}','${sim.nombre.replace(/'/g,"\\'")}')" style="color:var(--accent4)">✕ Eliminar</button>`}

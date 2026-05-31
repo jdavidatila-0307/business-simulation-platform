@@ -255,5 +255,103 @@ _waitForApi(function() {
     }
   }, true); // useCapture=true para interceptar antes que app.js
 
-  console.log('[admin-tools] ✅ Módulo cargado — Recalcular, Rondas, Resultados activos');
+  
+// ── doBackupSimulacion ────────────────────────────────────────────────────────
+window.doBackupSimulacion = async function(simIdParam) {
+  var btn = event && event.target ? event.target : document.querySelector('[onclick*="doBackupSimulacion"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+    var resp = await fetch('/admin/backup', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') } });
+    if (!resp.ok) { var e = await resp.json().catch(function(){return{};}); throw new Error(e.error || resp.statusText); }
+    var disposition = resp.headers.get('Content-Disposition') || '';
+    var match = disposition.match(/filename="([^"]+)"/);
+    var filename = match ? match[1] : 'backup_simnego_' + new Date().toISOString().slice(0,10) + '.json';
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Descargado'; }
+    setTimeout(function() { if (btn) btn.textContent = '💾 Backup'; }, 3000);
+  } catch(e) {
+    alert('Error en backup: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Backup'; }
+  }
+};
+
+
+// ── doRestaurarSimulacion ─────────────────────────────────────────────────────
+window.doRestaurarSimulacion = function(simIdParam) {
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = function(e) {
+    var file = e.target.files[0]; if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var backup = JSON.parse(ev.target.result);
+        _mostrarModalRestaurar(backup, file.name);
+      } catch(err) { alert('❌ Archivo inválido'); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+};
+
+function _mostrarModalRestaurar(backup, filename) {
+  if (!backup._meta || !backup.simulacion) { alert('❌ Backup inválido'); return; }
+  var meta = backup._meta;
+  var equipos = (backup.equipos||[]).length, rondas = (backup.rondas||[]).length, decs = (backup.decisiones||[]).length;
+  var contenedor = document.getElementById('restaurarModal') || document.createElement('div');
+  if (!contenedor.id) { contenedor.id = 'restaurarModal'; document.body.appendChild(contenedor); }
+  contenedor.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:var(--bg2);border:1px solid rgba(255,193,7,0.3);border-radius:10px;padding:20px;min-width:400px;max-width:90vw';
+  contenedor.innerHTML = '<div style="font-size:.85rem;font-weight:700;color:#FFC107;margin-bottom:12px">📂 Restaurar backup</div>'
+    + '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px;line-height:1.6">'
+    + '<strong style="color:var(--white)">Archivo:</strong> ' + filename + '<br>'
+    + '<strong style="color:var(--white)">Simulación:</strong> ' + meta.simulacion + '<br>'
+    + '<strong style="color:var(--white)">Fecha:</strong> ' + new Date(meta.fecha).toLocaleString("es-BO") + '<br>'
+    + 'Ronda T' + meta.ronda_actual + ' · ' + equipos + ' equipos · ' + rondas + ' rondas</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar('nueva')" style="border-color:rgba(158,216,48,0.4);color:#9ED830">🆕 Nueva simulación</button>'
+    + '<button class="btn btn-ghost" onclick="_pedirConfirmacionSobrescribir()" style="border-color:rgba(239,83,80,0.4);color:#EF5350">⚠️ Sobrescribir activa</button>'
+    + '<button class="btn btn-ghost" onclick="this.closest('[id=restaurarModal]').remove()">✕ Cancelar</button>'
+    + '</div>'
+    + '<div id="confirmSobrescribir" style="display:none;padding:10px;background:rgba(239,83,80,0.08);border:1px solid rgba(239,83,80,0.3);border-radius:6px;font-size:.78rem;color:#EF5350;margin-bottom:8px">'
+    + '⚠️ <strong>Eliminará TODAS las rondas y decisiones actuales.</strong><br>'
+    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar('sobrescribir')" style="margin-top:8px;border-color:rgba(239,83,80,0.5);color:#EF5350">Sí, sobrescribir</button></div>'
+    + '<div id="restaurarReporte"></div>';
+  contenedor._backup = backup;
+}
+
+window._pedirConfirmacionSobrescribir = function() {
+  var c = document.getElementById('confirmSobrescribir'); if (c) c.style.display = 'block';
+};
+
+window._ejecutarRestaurar = async function(modo) {
+  var modal = document.getElementById('restaurarModal');
+  var reporte = document.getElementById('restaurarReporte');
+  var backup = modal && modal._backup;
+  if (!backup) { alert('Error: backup no encontrado'); return; }
+  if (reporte) reporte.innerHTML = '<span style="color:var(--text3)">⏳ Restaurando...</span>';
+  modal.querySelectorAll('button').forEach(function(b){b.disabled=true;});
+  try {
+    var resp = await fetch('/admin/restaurar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token')||'') },
+      body: JSON.stringify({ backup: backup, modo: modo, confirmar: true })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    var r = data.reporte || {};
+    if (reporte) reporte.innerHTML = '<div style="padding:10px;background:rgba(158,216,48,0.08);border:1px solid rgba(158,216,48,0.2);border-radius:6px;font-size:.78rem">'
+      + '✅ <strong style="color:#9ED830">Restauración completada</strong><br>'
+      + 'Modo: ' + (modo==='nueva'?'🆕 Nueva':'⚠️ Sobrescrita') + ' · Nombre: ' + data.nombre + '<br>'
+      + 'Equipos: ' + r.equipos + ' · Rondas: ' + r.rondas + ' · Decisiones: ' + r.decisiones + '</div>';
+  } catch(e) {
+    if (reporte) reporte.innerHTML = '<span style="color:#EF5350">❌ ' + e.message + '</span>';
+    modal.querySelectorAll('button').forEach(function(b){b.disabled=false;});
+  }
+};
+
+console.log('[admin-tools] ✅ Módulo cargado — Recalcular, Rondas, Resultados activos');
 });
