@@ -166,7 +166,7 @@ async function saveParametros() {
 var segmentosLocal = [];
 
 async function loadAdminSegmentos() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('segmentosContent')) return;
+  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminSegmentosContent')) return;
   segmentosLocal = await api('GET', '/admin/segmentos');
   renderSegmentosEditor();
 }
@@ -240,7 +240,7 @@ var afinidadLocal = null;
 var segmentosForAfinidad = [];
 
 async function loadAdminAfinidad() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('afinidadContent')) return;
+  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminAfinidadContent')) return;
   var results = await Promise.all([api('GET', '/admin/afinidad'), api('GET', '/admin/segmentos')]);
   afinidadLocal = results[0];
   segmentosForAfinidad = results[1];
@@ -294,7 +294,7 @@ function renderAfinidadEditor() {
 var competenciaLocal = [];
 
 async function loadAdminCompetencia() {
-  if (typeof requireSimSelected === 'function' && !requireSimSelected('competenciaContent')) return;
+  if (typeof requireSimSelected === 'function' && !requireSimSelected('adminCompetenciaContent')) return;
   competenciaLocal = await api('GET', '/admin/competencia');
   try {
     var cfg = (typeof state !== 'undefined' && state.ref) ? state.ref : await api('GET', '/admin/config');
