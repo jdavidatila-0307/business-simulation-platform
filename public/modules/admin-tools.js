@@ -301,27 +301,45 @@ window.doRestaurarSimulacion = function(simIdParam) {
 
 function _mostrarModalRestaurar(backup, filename) {
   if (!backup._meta || !backup.simulacion) { alert('❌ Backup inválido'); return; }
-  var meta = backup._meta;
-  var equipos = (backup.equipos||[]).length, rondas = (backup.rondas||[]).length, decs = (backup.decisiones||[]).length;
+  var meta    = backup._meta;
+  var equipos = (backup.equipos    || []).length;
+  var rondas  = (backup.rondas     || []).length;
+  var decs    = (backup.decisiones || []).length;
+
   var contenedor = document.getElementById('restaurarModal') || document.createElement('div');
-  if (!contenedor.id) { contenedor.id = 'restaurarModal'; document.body.appendChild(contenedor); }
-  contenedor.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:var(--bg2);border:1px solid rgba(255,193,7,0.3);border-radius:10px;padding:20px;min-width:400px;max-width:90vw';
-  contenedor.innerHTML = '<div style="font-size:.85rem;font-weight:700;color:#FFC107;margin-bottom:12px">📂 Restaurar backup</div>'
+  if (!contenedor.id) {
+    contenedor.id = 'restaurarModal';
+    document.body.appendChild(contenedor);
+  }
+  contenedor.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:var(--bg2);border:1px solid rgba(255,193,7,0.3);border-radius:10px;padding:20px;min-width:400px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+
+  contenedor.innerHTML =
+    '<div style="font-size:.85rem;font-weight:700;color:#FFC107;margin-bottom:12px">📂 Restaurar backup</div>'
     + '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px;line-height:1.6">'
     + '<strong style="color:var(--white)">Archivo:</strong> ' + filename + '<br>'
     + '<strong style="color:var(--white)">Simulación:</strong> ' + meta.simulacion + '<br>'
-    + '<strong style="color:var(--white)">Fecha:</strong> ' + new Date(meta.fecha).toLocaleString("es-BO") + '<br>'
-    + 'Ronda T' + meta.ronda_actual + ' · ' + equipos + ' equipos · ' + rondas + ' rondas</div>'
+    + '<strong style="color:var(--white)">Fecha:</strong> ' + new Date(meta.fecha).toLocaleString('es-BO') + '<br>'
+    + 'Ronda T' + meta.ronda_actual + ' &nbsp;·&nbsp; ' + equipos + ' equipos &nbsp;·&nbsp; ' + rondas + ' rondas &nbsp;·&nbsp; ' + decs + ' decisiones'
+    + '</div>'
     + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar(\'nueva\')" style="border-color:rgba(158,216,48,0.4);color:#9ED830">🆕 Nueva simulación</button>'
-    + '<button class="btn btn-ghost" onclick="_pedirConfirmacionSobrescribir()" style="border-color:rgba(239,83,80,0.4);color:#EF5350">⚠️ Sobrescribir activa</button>'
-    + '<button class="btn btn-ghost" onclick="this.closest('[id=restaurarModal]').remove()">✕ Cancelar</button>'
+    + '<button class="btn btn-ghost" id="btnRestNueva" style="border-color:rgba(158,216,48,0.4);color:#9ED830">🆕 Nueva simulación</button>'
+    + '<button class="btn btn-ghost" id="btnRestSobrescribir" style="border-color:rgba(239,83,80,0.4);color:#EF5350">⚠️ Sobrescribir activa</button>'
+    + '<button class="btn btn-ghost" id="btnRestCancelar">✕ Cancelar</button>'
     + '</div>'
     + '<div id="confirmSobrescribir" style="display:none;padding:10px;background:rgba(239,83,80,0.08);border:1px solid rgba(239,83,80,0.3);border-radius:6px;font-size:.78rem;color:#EF5350;margin-bottom:8px">'
     + '⚠️ <strong>Eliminará TODAS las rondas y decisiones actuales.</strong><br>'
-    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar(\'sobrescribir\')" style="margin-top:8px;border-color:rgba(239,83,80,0.5);color:#EF5350">Sí, sobrescribir</button></div>'
+    + '<button class="btn btn-ghost" id="btnConfirmarSobrescribir" style="margin-top:8px;border-color:rgba(239,83,80,0.5);color:#EF5350">Sí, sobrescribir</button>'
+    + '</div>'
     + '<div id="restaurarReporte"></div>';
+
   contenedor._backup = backup;
+
+  // Event listeners — sin comillas problemáticas en onclick
+  document.getElementById('btnRestNueva').onclick        = function() { window._ejecutarRestaurar('nueva'); };
+  document.getElementById('btnRestSobrescribir').onclick = function() { window._pedirConfirmacionSobrescribir(); };
+  document.getElementById('btnRestCancelar').onclick     = function() { contenedor.remove(); };
+  var btnConf = document.getElementById('btnConfirmarSobrescribir');
+  if (btnConf) btnConf.onclick = function() { window._ejecutarRestaurar('sobrescribir'); };
 }
 
 window._pedirConfirmacionSobrescribir = function() {
