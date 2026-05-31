@@ -314,7 +314,7 @@ async function saveParametros() {
 var segmentosLocal = [];
 
 async function loadAdminSegmentos() {
-  if (!requireSimSelected('segmentosContent')) return;
+  if (!requireSimSelected('adminSegmentosContent')) return;
   segmentosLocal = await api('GET', '/admin/segmentos');
   renderSegmentosEditor();
 }
@@ -388,7 +388,7 @@ var afinidadLocal = null;
 var segmentosForAfinidad = [];
 
 async function loadAdminAfinidad() {
-  if (!requireSimSelected('afinidadContent')) return;
+  if (!requireSimSelected('adminAfinidadContent')) return;
   const [afData, segData] = await Promise.all([
     api('GET','/admin/afinidad'),
     api('GET','/admin/segmentos'),
@@ -445,7 +445,7 @@ function renderAfinidadEditor() {
 var competenciaLocal = [];
 
 async function loadAdminCompetencia() {
-  if (!requireSimSelected('competenciaContent')) return;
+  if (!requireSimSelected('adminCompetenciaContent')) return;
   competenciaLocal = await api('GET','/admin/competencia');
   // Leer segmentos reales de la industria activa
   try {
