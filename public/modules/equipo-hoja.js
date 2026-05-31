@@ -760,6 +760,85 @@ if (isEditable) {
             ? el.value.replace(/\s*\(Bs[\s\d.]+\)\s*$/, '').trim()
             : el.value;
 
+        const field = el.dataset.hojaField;
+        const v_orig = v;
+
+        // ── Plazo máximo dinámico según tipo de préstamo ──────────────────
+        const tipoPrestamoActual = cont.querySelector('[data-hoja-field="tipoPrestamo"]')?.value || 'Ninguno';
+        const plazoMaxDinamico = tipoPrestamoActual === 'Operativo'
+          ? (p?.plazoPrestamoOperativo || 20)
+          : tipoPrestamoActual === 'Inversión'
+            ? (p?.plazoPrestamoInversion || 40)
+            : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
+
+        // ── Límites por campo ─────────────────────────────────────────────
+        const LIMITES_CAMPO = {
+          calidad:             { min:1,  max:10 },
+          contratarOperarios:  { min:0,  max:50 },
+          despedirOperarios:   { min:0,  max:50 },
+          contratarVendedores: { min:0,  max:10 },
+          despedirVendedores:  { min:0,  max:10 },
+          plazoPrestamo:       { min:1,  max:plazoMaxDinamico },
+          precioVenta:         { min:0,  max:9999 },
+          produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
+          montoCapacitacion:   { min:0,  max:50000 },
+          publicidad:          { min:0,  max:200000 },
+          promocion:           { min:0,  max:100000 },
+          eventos:             { min:0,  max:100000 },
+          marketingRedes:      { min:0,  max:100000 },
+          relacionesPublicas:  { min:0,  max:100000 },
+        };
+
+        // ── Actualizar max del input plazo cuando cambia tipoPrestamo ─────
+        if (field === 'tipoPrestamo') {
+          const plazoInput = cont.querySelector('[data-hoja-field="plazoPrestamo"]');
+          if (plazoInput) {
+            const nuevoMax = v_orig === 'Operativo'
+              ? (p?.plazoPrestamoOperativo || 20)
+              : v_orig === 'Inversión'
+                ? (p?.plazoPrestamoInversion || 40)
+                : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
+            plazoInput.max = nuevoMax;
+            const refCell = plazoInput.closest('tr')?.querySelector('.hoja-ref');
+            if (refCell) {
+              const esOp  = v_orig === 'Operativo';
+              const esInv = v_orig === 'Inversión';
+              refCell.innerHTML = esOp
+                ? '<span style="color:var(--accent3)">⚠ Máx. ' + (p?.plazoPrestamoOperativo||20) + ' trim. (operativo)</span>'
+                : esInv
+                  ? '<span style="color:var(--accent3)">⚠ Máx. ' + (p?.plazoPrestamoInversion||40) + ' trim. (inversión)</span>'
+                  : 'Op: ' + (p?.plazoPrestamoOperativo||20) + ' trim. · Inv: ' + (p?.plazoPrestamoInversion||40) + ' trim.';
+            }
+          }
+        }
+
+        // ── Aviso capacidad de producción según operarios ─────────────────
+        if (field === 'produccion') {
+          const opIni       = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
+          const opContratar = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value || 0);
+          const opDespedir  = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value || 0);
+          const opFinales   = Math.max(0, opIni + opContratar - opDespedir);
+          const capEf       = opFinales * (p?.productividadBase ?? 500);
+          const refCell     = el.closest('tr')?.querySelector('.hoja-ref');
+          if (refCell) {
+            if (opFinales === 0) {
+              refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Sin operarios — debes contratar al menos 1. Cap. efectiva = 0 u.</span>';
+            } else if (v_orig > capEf) {
+              refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Supera cap. efectiva (' + opFinales + ' op. × ' + (p?.productividadBase||500) + ' = ' + capEf + ' u).</span>';
+            } else {
+              const pct = Math.round(v_orig / capEf * 100);
+              refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% de cap. efectiva (' + capEf + ' u con ' + opFinales + ' op.)</span>';
+            }
+          }
+        }
+
+        // ── Clamp valores fuera de límites ────────────────────────────────
+        if (el.type === 'number' && LIMITES_CAMPO[field]) {
+          const lim = LIMITES_CAMPO[field];
+          const clamped = Math.min(lim.max, Math.max(lim.min, v));
+          if (clamped !== v) { el.value = clamped; }
+        }
+
         const productFields = [
           'producto',
           'segmentoObjetivo',
@@ -785,7 +864,6 @@ if (isEditable) {
           'proveedorElegido',
         ];
 
-        const field = el.dataset.hojaField;
 
         if (productFields.includes(field)) {
 
