@@ -458,12 +458,13 @@ async function loadAdminCompetencia() {
     state.ref = cfg;
     state.segNombresIndustria = (cfg.mercadoSegmentos || []).map(s => s.nombre);
   } catch { state.segNombresIndustria = []; }
+  const nivelCfg = state.ref || {};
+  loadAdminNivelIA(nivelCfg);
   renderCompetenciaEditor();
 }
 
 // ── Nivel Competidores IA ───────────────────────────────────────────────────
 async function loadAdminNivelIA(data) {
-  const sim = window._simActual || {};
   const nivel = data?.nivelCompetidoresIA || 'ninguno';
   const cont = document.getElementById('adminNivelIAContent');
   if (!cont) return;
