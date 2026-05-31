@@ -514,10 +514,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
               <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
               <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
-          <tr><td class="hoja-label">🏭 Producción (unidades)</td>
-              <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||20000}" step="100"`)}</td>
-              <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||20000)} unid</td>
-              <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td></tr>
+
         </tbody>
       </table>
     </div>
@@ -577,6 +574,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
             <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
             <td class="hoja-ref">Propagado de ronda anterior</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">🏭 Producción (unidades)</td>
+            <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
+            <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||1500)} unid</td>
+            <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td>
           </tr>
           ${hojaProductoActivo === 0 ? `
           <tr>
@@ -882,6 +885,7 @@ if (isEditable) {
             'contratarOperarios','despedirOperarios','montoCapacitacion',
             'tipoPrestamo','montoPrestamo','plazoPrestamo','amortizacion',
             'tipoInvestigacion',
+            'proveedorElegido','cantidadMPpedida',
           ];
 
           if (camposEmpresa.includes(field)) {
