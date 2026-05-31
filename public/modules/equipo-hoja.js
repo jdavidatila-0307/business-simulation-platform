@@ -73,7 +73,7 @@ async function enviarDecision() {
 // Carga siempre fresco desde el servidor al abrir la vista
 // ══════════════════════════════════════════════════════════
 
-let hojaRondaActual = 1;   // ronda que está mostrando el selector
+// hojaRondaActual declarada en app.js — no redeclarar aquí
 
 let hojaProductoActivo = 0;
 
