@@ -505,6 +505,7 @@ function renderCompetenciaEditor() {
   }).join('');
 
   document.getElementById('adminCompetenciaContent').innerHTML =
+    '<div id="adminNivelIAContent"></div>' +
     '<div class="table-wrap"><table><thead><tr><th>Segmento</th><th>Nombre</th><th>Precio (Bs)</th><th>Calidad</th><th>Marketing (Bs)</th><th>Part. ref.</th><th></th></tr></thead><tbody id="compRows">' + rows + '</tbody></table></div>'
     + '<div class="param-actions"><button class="btn btn-ghost" id="btnAddComp">+ Agregar competidor</button><button class="btn btn-primary" id="btnSaveComp">💾 Guardar</button></div>'
     + '<p class="param-hint" style="margin-top:8px">Estos actores externos influyen en el índice externo de cada segmento.</p>';
