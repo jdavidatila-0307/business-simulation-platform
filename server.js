@@ -13,7 +13,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { hashPassword, verifyPassword } = require('./src/auth');
 
 const { cargarPlantilla, listarPlantillas, inicializarPlantillaDefault } = require('./src/plantillas');
-const { generarDecisionBot, PERFILES_BOT } = require('./src/bot_service');
+const { generarDecisionBot, generarBotsParaSegmentos, PERFILES_BOT } = require('./src/bot_service');
 const { initWebSocket, broadcast, clientesConectados } = require('./src/ws_service');
 
 inicializarPlantillaDefault();
@@ -1242,6 +1242,22 @@ async function route(req, res, body) {
         })
       );
     }
+    // ── Bots dinámicos por segmento (nivelCompetidoresIA) ─────────────────
+    const nivelIA = sim.config?.nivelCompetidoresIA;
+    if (nivelIA && nivelIA !== 'ninguno') {
+      try {
+        const decisionesHumanas = Object.values(decsCombinadas || {});
+        const simCfgConNivel = { ...simCfg, nivelCompetidoresIA: nivelIA };
+        const botsIA = await generarBotsParaSegmentos(decisionesHumanas, simCfgConNivel, n);
+        botsIA.forEach(b => {
+          if (!rondaActualizada.decisiones) rondaActualizada.decisiones = {};
+          rondaActualizada.decisiones[b.equipo] = b;
+        });
+        console.log(`[server] ${botsIA.length} bot(s) IA dinámicos agregados para R${n} (nivel: ${nivelIA})`);
+      } catch (errIA) {
+        console.error('[server] Error generando bots IA dinámicos:', errIA.message);
+      }
+    }
 
     // ── Ejecutar el motor con todas las decisiones (humanos + bots) ────────
     // Recargar la ronda para incluir las decisiones de bots recién guardadas
@@ -1921,6 +1937,19 @@ async function route(req, res, body) {
   }
 
   // ─── ADMIN — Config ───────────────────────────────────────────
+  // ── ADMIN — Nivel Competidores IA ──────────────────────────────────────
+  if (url === '/admin/config/nivel-ia' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const { nivelCompetidoresIA } = body;
+    if (!['ninguno','bajo','medio','alto'].includes(nivelCompetidoresIA)) {
+      return send(res, 400, { error: 'Nivel inválido' });
+    }
+    const config = { ...sim.config, nivelCompetidoresIA };
+    await storage.updateSimulacion(sim.id, { config }, session.userId);
+    console.log(`[admin] nivelCompetidoresIA=${nivelCompetidoresIA} sim=${sim.id}`);
+    return send(res, 200, { ok: true, nivelCompetidoresIA });
+  }
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });

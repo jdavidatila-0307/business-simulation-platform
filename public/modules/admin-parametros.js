@@ -456,6 +456,32 @@ async function loadAdminCompetencia() {
   renderCompetenciaEditor();
 }
 
+// ── Nivel Competidores IA ───────────────────────────────────────────────────
+async function loadAdminNivelIA() {
+  const sim = window._simActual || {};
+  const nivel = sim?.config?.nivelCompetidoresIA || 'ninguno';
+  const cont = document.getElementById('adminNivelIAContent');
+  if (!cont) return;
+  cont.innerHTML = `
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      ${['ninguno','bajo','medio','alto'].map(n => `
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem">
+          <input type="radio" name="nivelIA" value="${n}" ${nivel===n?'checked':''}>
+          ${n==='ninguno'?'❌ Ninguno':n==='bajo'?'🟢 Bajo — precio agresivo':n==='medio'?'🟡 Medio — espejo mercado':'🔴 Alto — premium diferenciado'}
+        </label>`).join('')}
+    </div>
+    <p style="font-size:.75rem;color:var(--text3);margin-bottom:10px">Los competidores IA compiten en todos los segmentos junto a los equipos humanos y son visibles en investigación de mercados.</p>
+    <button class="btn btn-primary btn-sm" onclick="saveNivelIA()">💾 Guardar nivel IA</button>`;
+}
+
+window.saveNivelIA = async () => {
+  const nivel = document.querySelector('input[name="nivelIA"]:checked')?.value || 'ninguno';
+  try {
+    await api('POST', '/admin/config/nivel-ia', { nivelCompetidoresIA: nivel });
+    toast('✅ Nivel IA guardado: ' + nivel, 'ok');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
 function renderCompetenciaEditor() {
   var segNombres = (typeof state !== 'undefined' && state.segNombresIndustria && state.segNombresIndustria.length)
     ? state.segNombresIndustria

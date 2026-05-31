@@ -51,7 +51,7 @@ function detectarSegmentosSinEquipo(decisiones, segmentos) {
 }
 
 // ── Generar decisión bot via Claude API ───────────────────────────────────────
-async function generarDecisionBotIA(segmento, equiposHumanosSim, cfg, rondaNum) {
+async function generarDecisionBotIA(segmento, equiposHumanosSim, cfg, rondaNum, perfil = 'medio') {
   const params   = cfg.params   || {};
   const tipos    = Object.keys(cfg.tiposProducto || {});
   const canales  = Object.keys(cfg.canales       || {});
@@ -114,6 +114,13 @@ PROVEEDORES MP:
 - Cueros Bolivia S.A.: factorCosto=×1.10, calidad 8/10, leadTime 1 trim
 - Insumos Locales Cochabamba: factorCosto=×0.90, calidad 6/10, leadTime 1 trim  
 - Importado Asia vía Oruro: factorCosto=×0.75, calidad 5/10, leadTime 2 trim ⚠
+
+NIVEL DE COMPETENCIA: ${perfil === 'bajo'
+  ? 'BÁSICO — prioriza precio bajo (Bs 80-150), calidad 3-5, publicidad mínima (Bs 0-2.000). Estrategia de supervivencia.'
+  : perfil === 'alto'
+    ? 'PREMIUM — prioriza diferenciación: calidad 7-9, precio alto (Bs 300-600), publicidad alta (Bs 8.000-20.000). Estrategia agresiva.'
+    : 'ESTÁNDAR — precio y calidad equilibrados (calidad 5-7, precio Bs 150-350, publicidad Bs 2.000-8.000). Espeja el mercado.'
+}
 
 INSTRUCCIÓN:
 Adopta UNA estrategia competitiva de Porter (1980): liderazgo en costos, diferenciación o enfoque de nicho.
@@ -380,7 +387,8 @@ async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
         segmento,
         decisionesHumanas,
         cfg,
-        rondaNum
+        rondaNum,
+        cfg.nivelCompetidoresIA || 'medio'
       );
 
       return construirDecisionBot(botId, empresa, decIA, cfg.params || {});
@@ -407,5 +415,9 @@ module.exports = {
   generarDecisionBot,          // compatibilidad legacy
   generarBotsParaSegmentos,    // nueva función principal
   detectarSegmentosSinEquipo,  // exportada para tests
-  PERFILES_BOT: {},            // compatibilidad legacy (vacío — ya no se usan perfiles fijos)
+  PERFILES_BOT: {
+    bajo:  { nombre: 'Competidor Básico',   descripcion: 'Precio bajo, calidad mínima. Estrategia de supervivencia.' },
+    medio: { nombre: 'Competidor Estándar', descripcion: 'Precio y calidad equilibrados. Espeja el mercado.' },
+    alto:  { nombre: 'Competidor Premium',  descripcion: 'Alta calidad y precio premium. Estrategia agresiva.' },
+  },
 };
