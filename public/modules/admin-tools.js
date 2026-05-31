@@ -313,13 +313,13 @@ function _mostrarModalRestaurar(backup, filename) {
     + '<strong style="color:var(--white)">Fecha:</strong> ' + new Date(meta.fecha).toLocaleString("es-BO") + '<br>'
     + 'Ronda T' + meta.ronda_actual + ' · ' + equipos + ' equipos · ' + rondas + ' rondas</div>'
     + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar('nueva')" style="border-color:rgba(158,216,48,0.4);color:#9ED830">🆕 Nueva simulación</button>'
+    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar(\'nueva\')" style="border-color:rgba(158,216,48,0.4);color:#9ED830">🆕 Nueva simulación</button>'
     + '<button class="btn btn-ghost" onclick="_pedirConfirmacionSobrescribir()" style="border-color:rgba(239,83,80,0.4);color:#EF5350">⚠️ Sobrescribir activa</button>'
     + '<button class="btn btn-ghost" onclick="this.closest('[id=restaurarModal]').remove()">✕ Cancelar</button>'
     + '</div>'
     + '<div id="confirmSobrescribir" style="display:none;padding:10px;background:rgba(239,83,80,0.08);border:1px solid rgba(239,83,80,0.3);border-radius:6px;font-size:.78rem;color:#EF5350;margin-bottom:8px">'
     + '⚠️ <strong>Eliminará TODAS las rondas y decisiones actuales.</strong><br>'
-    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar('sobrescribir')" style="margin-top:8px;border-color:rgba(239,83,80,0.5);color:#EF5350">Sí, sobrescribir</button></div>'
+    + '<button class="btn btn-ghost" onclick="_ejecutarRestaurar(\'sobrescribir\')" style="margin-top:8px;border-color:rgba(239,83,80,0.5);color:#EF5350">Sí, sobrescribir</button></div>'
     + '<div id="restaurarReporte"></div>';
   contenedor._backup = backup;
 }
