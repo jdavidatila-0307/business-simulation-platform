@@ -166,20 +166,20 @@ async function loadAdminRecalcular() {
     + '✅ Conserva las decisiones originales de los equipos.<br>'
     + '✅ Corrige descuadres causados por cambios en parámetros.<br>'
     + '✅ Actualiza: ER, Balance, Flujo de Caja en todas las rondas.</p>'
-    + '<button class="btn btn-primary" id="btnRecalcAction" onclick="doRecalcularEjecutar()">'
+    + '<button class="btn btn-primary" id="btnRecalcAction" onclick="doRecalcularBalance()">'
     + '🔄 Ejecutar Recálculo de Todas las Rondas</button>'
     + '<div id="recalcularReporte" style="margin-top:24px"></div>'
     + '</div>';
 
   // Ejecutar automáticamente al entrar al panel
-  doRecalcularEjecutar();
+  doRecalcularBalance();
 }
 
 /**
  * Ejecuta el recálculo y muestra el reporte
  * Separado de loadAdminRecalcular para poder reusar
  */
-window.doRecalcularEjecutar = async function() {
+window.doRecalcularBalance = async function() {
   const btn = document.getElementById('btnRecalcAction');
   const rep = document.getElementById('recalcularReporte');
 
@@ -222,7 +222,7 @@ window.doRecalcularEjecutar = async function() {
   } catch(e) {
     if (rep) rep.innerHTML = '<div style="color:var(--accent4);padding:12px;background:rgba(255,59,48,0.08);'
       + 'border-radius:var(--r)">Error: ' + e.message + '</div>';
-    console.error('[admin-tools] doRecalcularEjecutar:', e);
+    console.error('[admin-tools] doRecalcularBalance:', e);
   } finally {
     if (btn) {
       btn.disabled = false;
