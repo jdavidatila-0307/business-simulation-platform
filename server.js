@@ -1964,6 +1964,7 @@ async function route(req, res, body) {
       mercadoSegmentos: calcularMercadoSegmentos(sim.parametros, sim.segmentos),
       codigoAcceso: sim.codigo_acceso,
       simId: sim.id,
+      nivelCompetidoresIA: sim.config?.nivelCompetidoresIA || 'ninguno',
     });
   }
 
