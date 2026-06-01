@@ -280,7 +280,7 @@ function getSessionToken(req) {
 // P2 FIX: resolución robusta de nombre de equipo considerando IDs expandidos
 function resolveNombre(r, eqMap) {
   return eqMap[r.equipoOriginal] ?? eqMap[r.equipo]
-      ?? r.equipoOriginal ?? r.equipo ?? '—';
+      ?? r.equipoNombre ?? r.equipoOriginal ?? r.equipo ?? '—';
 }
 
 // ── Función auxiliar para obtener la simulación actual ────────
