@@ -1248,9 +1248,11 @@ async function route(req, res, body) {
     const rondaActualizada = await storage.getRonda(sim.id, n);
     // Combinar decisiones de ronda original + rondaActualizada (bots pueden estar en cualquiera)
     const decsCombinadas = { ...(ronda.decisiones||{}), ...(rondaActualizada.decisiones||{}) };
+    const prevRondaReal = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
+    const resObjReal = prevRondaReal?.resultados?.resultados || prevRondaReal?.resultados || {};
     let decisiones = equipos
       .filter(eq => decsCombinadas[eq.id])
-      .map(eq => ({ ...decsCombinadas[eq.id] }));
+      .map(eq => { const dec={...decsCombinadas[eq.id]}; const rp=Object.values(resObjReal).find(r=>r.equipoOriginal===eq.id||r.equipo===eq.id||(r.equipo||String()).startsWith(eq.id)); return rp?propagarEstado(dec,rp,sim.parametros):dec; });
 
     // Si aún no hay decisiones, generar defaultDecision para todos
     if (!decisiones.length) {
