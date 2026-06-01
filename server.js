@@ -1275,6 +1275,8 @@ async function route(req, res, body) {
       try {
         const botsIA = await generarBotsParaSegmentos(decisiones, { ...simCfg, nivelCompetidoresIA: nivelIA2 }, n);
         botsIA.forEach(b => decisiones.push(b));
+        await Promise.all(botsIA.map(b => storage.saveDecision(sim.id, n, b.equipo, 'prod_1', b)));
+        console.log('[server] bots IA persistidos en sim_decisiones');
         console.log('[server] ' + botsIA.length + ' bot(s) IA agregados R' + n + ' nivel:' + nivelIA2);
       } catch(e) { console.error('[server] Error bots IA:', e.message); }
     }
@@ -1503,6 +1505,12 @@ async function route(req, res, body) {
         }
 
         decisiones.push(decRepropagada);
+      }
+      // ── Agregar bots IA dinámicos desde ronda.decisiones ─────────────
+      for (const [botId, botDec] of Object.entries(decisionesOriginales)) {
+        if (botId.startsWith('bot_') && botDec) {
+          decisiones.push(sanitizarDecision({ ...botDec }));
+        }
       }
 
       if (!decisiones.length) continue;
