@@ -1242,22 +1242,6 @@ async function route(req, res, body) {
         })
       );
     }
-    // ── Bots dinámicos por segmento (nivelCompetidoresIA) ─────────────────
-    const nivelIA = sim.config?.nivelCompetidoresIA;
-    if (nivelIA && nivelIA !== 'ninguno') {
-      try {
-        const decisionesHumanas = Object.values(decsCombinadas || {});
-        const simCfgConNivel = { ...simCfg, nivelCompetidoresIA: nivelIA };
-        const botsIA = await generarBotsParaSegmentos(decisionesHumanas, simCfgConNivel, n);
-        botsIA.forEach(b => {
-          if (!rondaActualizada.decisiones) rondaActualizada.decisiones = {};
-          rondaActualizada.decisiones[b.equipo] = b;
-        });
-        console.log(`[server] ${botsIA.length} bot(s) IA dinámicos agregados para R${n} (nivel: ${nivelIA})`);
-      } catch (errIA) {
-        console.error('[server] Error generando bots IA dinámicos:', errIA.message);
-      }
-    }
 
     // ── Ejecutar el motor con todas las decisiones (humanos + bots) ────────
     // Recargar la ronda para incluir las decisiones de bots recién guardadas
@@ -1283,6 +1267,15 @@ async function route(req, res, body) {
     }
 
     if (!decisiones.length) return send(res, 400, { error: 'Sin equipos registrados' });
+    // ── Bots IA dinámicos — se agregan a decisiones[] ya construido ─────
+    const nivelIA2 = sim.config?.nivelCompetidoresIA;
+    if (nivelIA2 && nivelIA2 !== 'ninguno') {
+      try {
+        const botsIA = await generarBotsParaSegmentos(decisiones, { ...simCfg, nivelCompetidoresIA: nivelIA2 }, n);
+        botsIA.forEach(b => decisiones.push(b));
+        console.log('[server] ' + botsIA.length + ' bot(s) IA agregados R' + n + ' nivel:' + nivelIA2);
+      } catch(e) { console.error('[server] Error bots IA:', e.message); }
+    }
     console.log(`[server] Ejecutando simulación R${n} con ${decisiones.length} equipos`);
 
     try {
