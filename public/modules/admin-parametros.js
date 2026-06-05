@@ -267,17 +267,12 @@ async function loadAdminParametros() {
           value="${data.codigoAcceso || ''}"/>
         <button class="btn btn-primary btn-sm" onclick="cambiarCodigoAcceso()">🔄 Cambiar</button>
       </div>
-    <div class="param-card" style="margin-top:16px">
-      <div class="param-card-title">Competidores IA por segmento</div>
-      <div id="adminNivelIAContent">Cargando...</div>
-    </div>
       <div id="codigoAccesoStatus" style="font-size:.75rem;margin-top:8px;color:var(--text3)">
         Código actual: <span style="font-family:var(--font-mono);color:var(--accent3);font-weight:700">${data.codigoAcceso || '—'}</span>
       </div>
     </div>`;
 
   document.getElementById('btnSaveParams').addEventListener('click', saveParametros);
-  loadAdminNivelIA(data);
 }
 
 async function cambiarCodigoAcceso() {
