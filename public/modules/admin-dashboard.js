@@ -38,6 +38,29 @@ async function loadAdminDashboard() {
   if (ronda.roundState === 'simulated') {
     try {
       const rd = await api('GET', `/admin/resultados/${ronda.currentRound}`);
+      // Banner de Shock de Mercado — visible en Dashboard post-ejecución (incluye neutral)
+      const shockBannerDash = (() => {
+        const sh = rd?.shock;
+        if (!sh) return '';
+        const colores = { boom:'#10B981', crisis:'#EF4444', neutral:'#6B7280', sectorial:'#F59E0B' };
+        const fondos  = { boom:'rgba(16,185,129,.10)', crisis:'rgba(239,68,68,.10)', neutral:'rgba(107,114,128,.08)', sectorial:'rgba(245,158,11,.10)' };
+        const color   = sh.color || colores[sh.tipo] || '#6B7280';
+        const fondo   = fondos[sh.tipo] || 'rgba(107,114,128,.08)';
+        const factor  = sh.factorDemanda !== 1.0
+          ? ' · Demanda ' + (sh.factorDemanda > 1 ? '+' : '') + Math.round((sh.factorDemanda - 1) * 100) + '%'
+          : '';
+        const segs = sh.segmentosAfectados === 'todos' ? 'Todos los segmentos' : 'Segmentos específicos';
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;'
+          + 'background:' + fondo + ';border:1px solid ' + color + '33;border-radius:var(--r);border-left:4px solid ' + color + '">'
+          + '<span style="font-size:1.4rem">' + (sh.icono || '⚡') + '</span>'
+          + '<div style="flex:1">'
+          + '<div style="font-weight:700;font-size:.82rem;color:' + color + ';text-transform:uppercase;letter-spacing:1px">'
+          + 'SHOCK DE MERCADO · Ronda ' + (rd.ronda || ronda.currentRound || '') + ' · ' + (sh.tipo?.toUpperCase() || 'EVENTO') + '</div>'
+          + '<div style="font-size:.85rem;color:var(--text1);margin-top:2px">' + sh.descripcion + '</div>'
+          + '<div style="font-size:.75rem;color:var(--text3);margin-top:3px">' + segs + factor
+          + (sh.forzadoPor === 'profesor' ? ' &nbsp;·&nbsp; <span style="color:var(--accent3);font-weight:600">📌 Elegido por el profesor</span>' : '') + '</div>'
+          + '</div></div>';
+      })();
       // Dashboard: solo mini-resumen (ranking + charts) sin IDs duplicados
       // El panel completo con tabs está en 📈 Resultados
       if (rd?.resultados?.length) {
@@ -65,6 +88,7 @@ async function loadAdminDashboard() {
           + '<p style="font-size:.75rem;color:var(--text3);margin-top:8px;text-align:right">Ver análisis completo → <strong>📈 Resultados</strong></p>'
           + '</div>';
       }
+      bottomHTML = shockBannerDash + bottomHTML;
     } catch {}
   } else if (ronda.roundState === 'pre-sim') {
     // Show pre-sim confirmation progress
