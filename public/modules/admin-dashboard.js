@@ -216,14 +216,14 @@ async function loadAdminDashboard() {
           <optgroup label="── Boom (mercado favorable) ──">
             <option value="boom_macro">📈 Crecimiento económico regional (+18% todos)</option>
             <option value="boom_feria">🏪 Feria comercial internacional (+12% todos)</option>
-            <option value="boom_tend">🚀 Tendencia viral en redes (+25% seg. jóvenes)</option>
+            <option value="boom_tend">🚀 Tendencia viral en redes (+25% todos)</option>
             <option value="boom_export">🌍 Acuerdo comercial regional (+15% todos)</option>
           </optgroup>
           <optgroup label="── Crisis (mercado adverso) ──">
             <option value="crisis_rec">📉 Recesión económica (−18% todos)</option>
             <option value="crisis_imp">⚠️ Importaciones ilegales (−13% todos)</option>
             <option value="crisis_reg">🏛️ Nueva regulación sectorial (−12% todos)</option>
-            <option value="crisis_inf">💸 Inflación segmento premium (−20% seg. 2-3)</option>
+            <option value="crisis_inf">💸 Inflación segmento premium (−20% todos)</option>
           </optgroup>
           <optgroup label="── Sin evento ──">
             <option value="neutral">⚖️ Mercado estable (sin impacto)</option>
