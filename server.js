@@ -102,14 +102,14 @@ const NOTICIAS_CATALOGO = {
     senales: [
       { icono:'📱', fuente:'Agencia Digital Bolivia', fecha:'hace 2 días',
         titulo:'Tendencia de calzado urbano se viraliza en plataformas de redes sociales',
-        cuerpo:'Influencers con alta audiencia comenzaron a compartir contenido sobre calzado urbano y deportivo. Las búsquedas en plataformas de e-commerce aumentaron significativamente en algunos segmentos demográficos. No todos los productos ni segmentos muestran la misma dinámica.' },
+        cuerpo:'Influencers con alta audiencia comenzaron a compartir contenido sobre calzado urbano y deportivo. Las búsquedas en plataformas de e-commerce aumentaron significativamente. Aún es pronto para dimensionar el alcance del fenómeno en el mercado.' },
       { icono:'🚀', fuente:'Observatorio de Consumo Joven', fecha:'hace 3 días',
-        titulo:'Consumo de calzado de moda entre jóvenes muestra aceleración en zonas urbanas',
-        cuerpo:'Encuestas rápidas en centros comerciales de Santa Cruz revelan mayor frecuencia de compra entre consumidores de 18 a 30 años. La influencia digital aparece como principal detonante, concentrándose en segmentos específicos del mercado.' }
+        titulo:'Consumo de calzado de moda muestra aceleración en zonas urbanas',
+        cuerpo:'Encuestas rápidas en centros comerciales de Santa Cruz revelan mayor frecuencia de compra entre los consumidores. La influencia digital aparece como principal detonante, aunque su alcance final sobre el mercado todavía es incierto.' }
     ],
     noticia: { icono:'🚀', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
-      titulo:'Tendencia viral disparó la demanda un 25% en segmentos jóvenes urbanos',
-      cuerpo:'El fenómeno en redes sociales se materializó en demanda extraordinaria en segmentos urbanos jóvenes (0 y 1). Los segmentos de mayor edad y el mercado institucional no reportaron variación. Empresas posicionadas en estos segmentos lograron capturas superiores al promedio del mercado.' }
+      titulo:'Tendencia viral disparó la demanda un 25% en todos los segmentos',
+      cuerpo:'El fenómeno en redes sociales se materializó en demanda extraordinaria en todos los segmentos del mercado de calzado. Empresas con fuerte presencia en jóvenes urbanos lograron capturas superiores al promedio, pero el impulso se extendió a toda la industria.' }
   },
   boom_export: {
     senales: [
@@ -166,15 +166,15 @@ const NOTICIAS_CATALOGO = {
   crisis_inf: {
     senales: [
       { icono:'💸', fuente:'INE Bolivia', fecha:'hace 3 días',
-        titulo:'Inflación acumulada presiona el poder adquisitivo en segmentos de ingreso medio-alto',
-        cuerpo:'El IPC acumulado supera las proyecciones iniciales del BCB. El efecto es más pronunciado en bienes de consumo no esencial de precio elevado. Analistas advierten que segmentos de mayor valor adquisitivo están postergando compras de calzado de precio superior.' },
+        titulo:'Inflación acumulada presiona el poder adquisitivo de los hogares',
+        cuerpo:'El IPC acumulado supera las proyecciones iniciales del BCB. El efecto se percibe en el consumo de bienes no esenciales. Analistas advierten que los hogares están postergando compras de calzado en distintos rangos de precio.' },
       { icono:'📊', fuente:'Consultora Datum Bolivia', fecha:'hace 1 semana',
-        titulo:'Ventas de bienes de consumo premium caen por tercer mes consecutivo en zonas urbanas',
-        cuerpo:'Un estudio en puntos comerciales de Santa Cruz y La Paz muestra que productos de precio superior a Bs 200 registran caídas en volumen. Los segmentos masivos y de precio accesible muestran mayor resiliencia ante el entorno inflacionario.' }
+        titulo:'Ventas de calzado caen por tercer mes consecutivo en zonas urbanas',
+        cuerpo:'Un estudio en puntos comerciales de Santa Cruz y La Paz muestra caídas de volumen en el sector calzado. El entorno inflacionario presiona la rotación en los distintos puntos de venta.' }
     ],
     noticia: { icono:'💸', fuente:'Informe de Mercado SimNego', fecha:'Trimestre actual',
-      titulo:'Inflación erosionó mercado premium: caída del 20% en segmentos de alto valor',
-      cuerpo:'La presión inflacionaria afectó selectivamente los segmentos de mayor precio (2 y 3). Los segmentos masivos y de bajo precio se mantuvieron estables. Las empresas posicionadas en segmentos premium debieron absorber la contracción con mayor inventario y menor rotación de caja.' }
+      titulo:'Inflación erosionó el mercado: caída del 20% en todos los segmentos',
+      cuerpo:'La presión inflacionaria afectó la capacidad de compra en todos los segmentos. Los segmentos especializados y de mayor valor sufrieron mayor impacto relativo. Las empresas debieron absorber la contracción con mayor inventario y menor rotación de caja.' }
   },
   neutral: {
     senales: [
