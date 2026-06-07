@@ -529,12 +529,117 @@ window.eliminarCompetidor = function(i) {
   renderCompetenciaEditor();
 };
 
+// ── Shocks de Mercado ───────────────────────────────────────────────────────
+// Catálogo UI de los 8 shocks editables (+ neutral fijo). Valores 'def' = defaults
+// del SHOCKS_CATALOGO del motor; sirven de fallback si la sim aún no los tiene.
+var SHOCKS_CATALOGO_UI = [
+  { id:'boom_macro',  tipo:'boom',   icono:'📈', desc:'Crecimiento económico regional', def:1.18 },
+  { id:'boom_feria',  tipo:'boom',   icono:'🏪', desc:'Feria comercial internacional',  def:1.12 },
+  { id:'boom_tend',   tipo:'boom',   icono:'🚀', desc:'Tendencia viral en redes',        def:1.25 },
+  { id:'boom_export', tipo:'boom',   icono:'🌍', desc:'Acuerdo comercial regional',      def:1.15 },
+  { id:'crisis_rec',  tipo:'crisis', icono:'📉', desc:'Recesión económica',              def:0.82 },
+  { id:'crisis_imp',  tipo:'crisis', icono:'⚠️', desc:'Importaciones ilegales',          def:0.87 },
+  { id:'crisis_reg',  tipo:'crisis', icono:'🏛️', desc:'Nueva regulación sectorial',      def:0.88 },
+  { id:'crisis_inf',  tipo:'crisis', icono:'💸', desc:'Inflación segmento premium',      def:0.80 },
+];
+
+async function loadAdminShocks() {
+  if (!requireSimSelected('adminShocksContent')) return;
+  var data = await api('GET', '/admin/config');
+  var p   = data.parametros || {};
+  var sf  = p.shockFactores || {};
+  var pctBoom   = (p.shockPctBoom   != null) ? p.shockPctBoom   : 0.35;
+  var pctCrisis = (p.shockPctCrisis != null) ? p.shockPctCrisis : 0.35;
+
+  var filaShock = function(s) {
+    var val   = (sf[s.id] != null) ? sf[s.id] : s.def;
+    var pct   = Math.round((val - 1) * 100);
+    var color = s.tipo === 'boom' ? '#10B981' : '#EF4444';
+    return '<tr>'
+      + '<td style="padding:8px 12px;font-size:1.2rem">' + s.icono + '</td>'
+      + '<td style="padding:8px 12px;font-size:.85rem">' + s.desc + '</td>'
+      + '<td style="padding:8px 12px"><span style="color:' + color + ';font-weight:600;text-transform:uppercase;font-size:.72rem">' + s.tipo + '</span></td>'
+      + '<td style="padding:8px 12px;text-align:right"><input class="param-input" type="number" step="0.01" data-shock-id="' + s.id + '" value="' + val + '" style="width:90px"/></td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;color:var(--text3)" data-shock-pct="' + s.id + '">' + (pct > 0 ? '+' : '') + pct + '%</td>'
+      + '</tr>';
+  };
+
+  var filas = SHOCKS_CATALOGO_UI.map(filaShock).join('');
+  var pctNeutral = Math.round((1 - pctBoom - pctCrisis) * 100) / 100;
+
+  document.getElementById('adminShocksContent').innerHTML =
+    '<div class="param-grid">'
+    + '<div class="param-card" style="grid-column:1/-1">'
+    +   '<div class="param-card-title">⚡ Factores de Shock de Mercado</div>'
+    +   '<p class="param-hint" style="margin-bottom:12px">Multiplican la demanda al ejecutar la ronda — &gt;1 favorable, &lt;1 adverso. Aplican a TODOS los segmentos.</p>'
+    +   '<div class="table-wrap"><table style="width:100%;border-collapse:collapse">'
+    +     '<thead><tr>'
+    +       '<th style="padding:6px 12px"></th>'
+    +       '<th style="padding:6px 12px;text-align:left;font-size:.72rem">Evento</th>'
+    +       '<th style="padding:6px 12px;text-align:left;font-size:.72rem">Tipo</th>'
+    +       '<th style="padding:6px 12px;text-align:right;font-size:.72rem">Factor</th>'
+    +       '<th style="padding:6px 12px;text-align:right;font-size:.72rem">Impacto</th>'
+    +     '</tr></thead><tbody>' + filas
+    +     '<tr style="opacity:.55"><td style="padding:8px 12px;font-size:1.2rem">⚖️</td><td style="padding:8px 12px;font-size:.85rem">Mercado estable</td><td style="padding:8px 12px"><span style="color:var(--text3);font-weight:600;text-transform:uppercase;font-size:.72rem">neutral</span></td><td style="padding:8px 12px;text-align:right;font-family:var(--font-mono)">1.00</td><td style="padding:8px 12px;text-align:right;font-family:var(--font-mono);font-size:.8rem;color:var(--text3)">0%</td></tr>'
+    +   '</tbody></table></div>'
+    + '</div>'
+    + '<div class="param-card" style="grid-column:1/-1">'
+    +   '<div class="param-card-title">🎲 Probabilidades del shock aleatorio</div>'
+    +   '<p class="param-hint" style="margin-bottom:12px">Cuando el docente elige "Aleatorio", el sistema sortea Boom / Crisis / Neutral con estos pesos.</p>'
+    +   '<div class="param-row"><label class="param-label">Prob. Boom</label><input class="param-input" type="number" step="0.01" min="0" max="1" id="shockPctBoom" value="' + pctBoom + '"/><span class="param-hint">0.35 = 35% de un evento favorable</span></div>'
+    +   '<div class="param-row"><label class="param-label">Prob. Crisis</label><input class="param-input" type="number" step="0.01" min="0" max="1" id="shockPctCrisis" value="' + pctCrisis + '"/><span class="param-hint">0.35 = 35% de un evento adverso</span></div>'
+    +   '<div class="param-row"><label class="param-label">Prob. Neutral</label><input class="param-input" type="number" id="shockPctNeutral" value="' + pctNeutral + '" disabled style="opacity:.6"/><span class="param-hint">Calculado: 1 − Boom − Crisis</span></div>'
+    + '</div>'
+    + '<div class="param-actions" style="grid-column:1/-1"><button class="btn btn-primary" id="btnSaveShocks">💾 Guardar shocks</button></div>'
+    + '</div>';
+
+  // Recalcular impacto % al cambiar un factor
+  document.querySelectorAll('[data-shock-id]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      var pct = Math.round((+el.value - 1) * 100);
+      var cell = document.querySelector('[data-shock-pct="' + el.dataset.shockId + '"]');
+      if (cell) cell.textContent = (pct > 0 ? '+' : '') + pct + '%';
+    });
+  });
+
+  // Recalcular pctNeutral al cambiar Boom/Crisis
+  function recalcNeutral() {
+    var b = +document.getElementById('shockPctBoom').value || 0;
+    var c = +document.getElementById('shockPctCrisis').value || 0;
+    document.getElementById('shockPctNeutral').value = Math.round((1 - b - c) * 100) / 100;
+  }
+  document.getElementById('shockPctBoom').addEventListener('input', recalcNeutral);
+  document.getElementById('shockPctCrisis').addEventListener('input', recalcNeutral);
+
+  document.getElementById('btnSaveShocks').addEventListener('click', async function() {
+    var shockFactores = {};
+    document.querySelectorAll('[data-shock-id]').forEach(function(el) {
+      shockFactores[el.dataset.shockId] = +el.value;
+    });
+    var shockPctBoom   = +document.getElementById('shockPctBoom').value;
+    var shockPctCrisis = +document.getElementById('shockPctCrisis').value;
+    if (shockPctBoom < 0 || shockPctCrisis < 0 || (shockPctBoom + shockPctCrisis) > 1) {
+      toast('Boom + Crisis no puede ser negativo ni superar 1 (100%)', 'error');
+      return;
+    }
+    try {
+      await api('PUT', '/admin/parametros', { parametros: {
+        shockFactores: shockFactores,
+        shockPctBoom: shockPctBoom,
+        shockPctCrisis: shockPctCrisis,
+      } });
+      toast('✓ Shocks guardados', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+}
+
 
 // ── Exponer como window.* para setupNav ──────────────────
 window.loadAdminParametros = loadAdminParametros;
 window.loadAdminSegmentos = loadAdminSegmentos;
 window.loadAdminAfinidad = loadAdminAfinidad;
 window.loadAdminCompetencia = loadAdminCompetencia;
+window.loadAdminShocks = loadAdminShocks;
 window.cambiarCodigoAcceso = cambiarCodigoAcceso;
 window.saveParametros = saveParametros;
 console.log('[admin-parametros] ✅ Módulo cargado — Parámetros, Segmentos, Afinidad, Competencia activos');

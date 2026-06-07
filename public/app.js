@@ -250,6 +250,7 @@ function setupNav(screenId) {
         'eq-resultados':'KPIs', 'eq-inventarios':'Mis Inventarios', 'eq-creditos':'Mis Créditos', 'eq-reportes':'Investigación y Ranking',
         'eq-noticias':'Noticias del Macroentorno',
         'admin-creditos':'Reporte de Créditos', 'admin-afinidad':'Matriz de Afinidad', 'admin-competencia':'Competencia Externa',
+        'admin-shocks':'Shocks de Mercado',
       };
       const tt = document.getElementById(screenId === 'screen-admin' ? 'adminTopTitle' : 'equipoTopTitle');
       if (tt) tt.textContent = titles[btn.dataset.view] || '';
@@ -275,6 +276,7 @@ function setupNav(screenId) {
       if (btn.dataset.view === 'admin-mercado') window.loadAdminMercado?.();
       if (btn.dataset.view === 'admin-parametros') window.loadAdminParametros?.();
       if (btn.dataset.view === 'admin-segmentos') window.loadAdminSegmentos?.();
+      if (btn.dataset.view === 'admin-shocks') window.loadAdminShocks?.();
       if (btn.dataset.view === 'admin-profesores') loadAdminProfesores();
       if (btn.dataset.view === 'eq-manual') { buildManual(); }
     });
