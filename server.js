@@ -38,7 +38,7 @@ const SHOCKS_CATALOGO = [
     factorDemanda: 1.12, segmentosAfectados:'todos' },
   { id:'boom_tend',    tipo:'boom',   icono:'🚀', color:'#10B981',
     descripcion:'Tendencia viral en redes sociales impulsa demanda en segmentos jóvenes',
-    factorDemanda: 1.25, segmentosAfectados:[0, 1] },
+    factorDemanda: 1.25, segmentosAfectados:'todos' },
   { id:'boom_export',  tipo:'boom',   icono:'🌍', color:'#10B981',
     descripcion:'Acuerdo comercial regional abre nuevos canales de distribución',
     factorDemanda: 1.15, segmentosAfectados:'todos' },
@@ -54,7 +54,7 @@ const SHOCKS_CATALOGO = [
     factorDemanda: 0.88, segmentosAfectados:'todos' },
   { id:'crisis_inf',   tipo:'crisis', icono:'💸', color:'#EF4444',
     descripcion:'Inflación aguda contrae el poder adquisitivo en segmentos premium',
-    factorDemanda: 0.80, segmentosAfectados:[2, 3] },
+    factorDemanda: 0.80, segmentosAfectados:'todos' },
 ];
 
 /**
@@ -191,7 +191,7 @@ const NOTICIAS_CATALOGO = {
   }
 };
 
-function generarShock(simId, rondaNumero, probabilidad = 0.35) {
+function generarShock(simId, rondaNumero, probabilidad = 0.35, params = null) {
   // Semilla determinista: simId hash + número de ronda
   let seed = simId.split('').reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0x7fffffff, 1)
              + rondaNumero * 97;
@@ -200,6 +200,31 @@ function generarShock(simId, rondaNumero, probabilidad = 0.35) {
     return seed / 0x7fffffff;
   };
   rand(); rand(); // warm-up
+
+  const pctBoom   = params?.shockPctBoom   ?? null;
+  const pctCrisis = params?.shockPctCrisis ?? null;
+
+  if (pctBoom !== null && pctCrisis !== null) {
+    const pctNeutral = Math.max(0, 1 - pctBoom - pctCrisis);
+    const r = rand();
+    if (r < pctNeutral) {
+      return { id:'neutral', tipo:'neutral', icono:'⚖️', color:'#6B7280',
+               descripcion:'Mercado estable — sin eventos externos esta ronda',
+               factorDemanda:1.00, segmentosAfectados:'todos' };
+    }
+    const booms  = SHOCKS_CATALOGO.filter(s => s.tipo === 'boom');
+    const crisis = SHOCKS_CATALOGO.filter(s => s.tipo === 'crisis');
+    let shockBase;
+    if (r < pctNeutral + pctBoom) {
+      shockBase = booms[Math.floor(rand() * booms.length)];
+    } else {
+      shockBase = crisis[Math.floor(rand() * crisis.length)];
+    }
+    const factorOverride = params?.shockFactores?.[shockBase.id];
+    return factorOverride !== undefined
+      ? { ...shockBase, factorDemanda: factorOverride }
+      : shockBase;
+  }
 
   if (rand() > probabilidad) {
     return { id:'neutral', tipo:'neutral', icono:'⚖️', color:'#6B7280',
@@ -1184,11 +1209,11 @@ async function route(req, res, body) {
                   factorDemanda:1.00, segmentosAfectados:'todos', forzadoPor:'profesor' };
         console.log(`[server] Shock R${n} FORZADO neutral por profesor`);
       } else {
-        shock = generarShock(sim.id, n, probabilidadShock);
+        shock = generarShock(sim.id, n, probabilidadShock, sim.parametros);
         console.log(`[server] Shock R${n} (aleatorio): [${shock.tipo}] ${shock.descripcion}`);
       }
     } else {
-      shock = generarShock(sim.id, n, probabilidadShock);
+      shock = generarShock(sim.id, n, probabilidadShock, sim.parametros);
       console.log(`[server] Shock R${n} (aleatorio): [${shock.tipo}] ${shock.descripcion} (factor=${shock.factorDemanda})`);
     }
 
@@ -1525,7 +1550,7 @@ async function route(req, res, body) {
       }
 
       // Usar el shock ya guardado en la ronda (no regenerar)
-      const shockRonda = ronda.shock || generarShock(sim.id, n, sim.parametros?.probabilidadShock ?? 0.35);
+      const shockRonda = ronda.shock || generarShock(sim.id, n, sim.parametros?.probabilidadShock ?? 0.35, sim.parametros);
 
       const simCfg = {
         params:             sim.parametros,
@@ -1755,7 +1780,7 @@ async function route(req, res, body) {
 
     // Si la ronda es histórica (sin shock guardado), calcularlo determinísticamente
     const probShockAdmin = sim.parametros.probabilidadShock ?? 0.35;
-    const shockFinal = ronda.shock || generarShock(sim.id, n, probShockAdmin);
+    const shockFinal = ronda.shock || generarShock(sim.id, n, probShockAdmin, sim.parametros);
     return send(res, 200, { ronda: n, estado: ronda.estado, ejecutadaAt: ronda.ejecutadaAt,
       resultados, mercadoSegmentos: ronda.mercadoSegmentos, dashboard: ronda.dashboard,
       dashboardFiscal, shock: shockFinal });  // Etapa 3.5
@@ -2231,7 +2256,7 @@ async function route(req, res, body) {
       return send(res, 200, { fase:'espera', ronda:n, noticias:[], shock:null });
     }
 
-    const shockGen  = generarShock(sim.id, rondaRef, probShock);
+    const shockGen  = generarShock(sim.id, rondaRef, probShock, sim.parametros);
 
     if (fase === 'post') {
       // Usar shock guardado en BD (más fiable que regenerar)

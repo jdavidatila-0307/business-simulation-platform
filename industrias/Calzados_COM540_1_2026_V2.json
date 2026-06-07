@@ -75,7 +75,10 @@
     "costoInvestigacionPremium": 10000,
     "modulos_modCanibalizacion": 1,
     "costoInvestigacionEstrategico": 15000,
-    "pctCostoCalidad": 0.08
+    "pctCostoCalidad": 0.08,
+    "shockFactores": { "boom_macro": 1.18, "boom_feria": 1.12, "boom_tend": 1.25, "boom_export": 1.15, "crisis_rec": 0.82, "crisis_imp": 0.87, "crisis_reg": 0.88, "crisis_inf": 0.80 },
+    "shockPctBoom": 0.35,
+    "shockPctCrisis": 0.35
   },
   "tiposProducto": {
     "Calzado Sensorial TEA": {
