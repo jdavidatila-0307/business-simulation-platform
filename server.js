@@ -1828,15 +1828,18 @@ async function route(req, res, body) {
   }
 
   // ─── ADMIN — Backup ───────────────────────────────────────────
-  if (url === '/admin/backup' && method === 'GET') {
+  if ((url === '/admin/backup' && method === 'GET') ||
+      (url.startsWith('/admin/backup/') && method === 'GET')) {
     if (needAdmin()) return;
-    if (!sim) return send(res, 400, { error: 'Sin simulación activa' });
+    const simIdParam = url.startsWith('/admin/backup/') ? url.slice('/admin/backup/'.length) : null;
+    const targetSim = simIdParam ? await storage.getSimulacion(simIdParam) : sim;
+    if (!targetSim) return send(res, 404, { error: 'Simulación no encontrada' });
     try {
-      const equipos  = await storage.getEquipos(sim.id);
+      const equipos  = await storage.getEquipos(targetSim.id);
       const usuarios = await storage.listUsers();
       const rondas = [], decisiones = [], resultados = [];
-      for (let i = 1; i <= (sim.config?.currentRound ?? 1); i++) {
-        const r = await storage.getRonda(sim.id, i);
+      for (let i = 1; i <= (targetSim.config?.currentRound ?? 1); i++) {
+        const r = await storage.getRonda(targetSim.id, i);
         if (!r) continue;
         rondas.push({ numero: i, estado: r.estado, ejecutadaAt: r.ejecutadaAt });
         if (r.decisiones) Object.entries(r.decisiones).forEach(([key, dec]) => {
@@ -1848,24 +1851,24 @@ async function route(req, res, body) {
       }
       const backup = {
         _meta: {
-          version: 'SimNego v3.2', simulacion: sim.nombre || sim.id,
-          sim_id: sim.id, fecha: new Date().toISOString(),
-          ronda_actual: sim.config?.currentRound ?? 1, equipos_count: equipos.length,
+          version: 'SimNego v3.2', simulacion: targetSim.nombre || targetSim.id,
+          sim_id: targetSim.id, fecha: new Date().toISOString(),
+          ronda_actual: targetSim.config?.currentRound ?? 1, equipos_count: equipos.length,
         },
         simulacion: {
-          id: sim.id, nombre: sim.nombre, descripcion: sim.descripcion || '',
-          codigoAcceso: sim.codigo_acceso || '', estado: sim.estado || 'active',
-          creadaAt: sim.creada_at || new Date().toISOString(),
-          config: sim.config || {}, parametros: sim.parametros || {},
-          tiposProducto: sim.tipos_producto || {}, canales: sim.canales || {},
-          segmentos: sim.segmentos || [], afinidadMatrix: sim.afinidad_matrix || {},
-          competenciaExterna: sim.competencia_externa || [],
+          id: targetSim.id, nombre: targetSim.nombre, descripcion: targetSim.descripcion || '',
+          codigoAcceso: targetSim.codigo_acceso || '', estado: targetSim.estado || 'active',
+          creadaAt: targetSim.creada_at || new Date().toISOString(),
+          config: targetSim.config || {}, parametros: targetSim.parametros || {},
+          tiposProducto: targetSim.tipos_producto || {}, canales: targetSim.canales || {},
+          segmentos: targetSim.segmentos || [], afinidadMatrix: targetSim.afinidad_matrix || {},
+          competenciaExterna: targetSim.competencia_externa || [],
         },
         equipos, rondas, decisiones, resultados,
         usuarios: usuarios.map(u => ({ id: u.id, username: u.username, role: u.role, sim_id: u.sim_id })),
       };
       const json = JSON.stringify(backup, null, 2);
-      const filename = `backup_simnego_${new Date().toISOString().slice(0,10)}_R${sim.config?.currentRound ?? 1}.json`;
+      const filename = `backup_simnego_${new Date().toISOString().slice(0,10)}_R${targetSim.config?.currentRound ?? 1}.json`;
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="${filename}"`,
