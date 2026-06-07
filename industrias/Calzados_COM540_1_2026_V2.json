@@ -148,9 +148,9 @@
     {
       "nombre": "Padres y familias con niños (0-10 años)",
       "tendencia": "Alto crecimiento",
-      "demandaBase": 7000,
-      "descripcion": "Padres y madres que buscan calzado cómodo, seguro y funcional para sus hijos. Compran en tiendas infantiles, online y ferias. Valoran durabilidad, seguridad y relación precio-calidad. Tamaño base calibrado sobre estimaciones del Eq.4 (5.000-20.000).",
-      "indiceExterno": 12.42,
+      "demandaBase": 30000,
+      "descripcion": "Padres y madres que buscan calzado cómodo, seguro y funcional para sus hijos. Compran en tiendas infantiles, online y ferias. Valoran durabilidad, seguridad y relación precio-calidad. Tamaño base calibrado sobre estimaciones del Eq.4 (5.000-20.000) — ajustado a 30.000 para viabilidad financiera con costoBase Bs 79 y costos fijos Bs 112.100/trim (PE = 3.547 u, share 15% → 3.690 u > PE).",
+      "indiceExterno": 14.28,
       "pctContrabando": 0.18,
       "tasaCrecimiento": 0.06
     },
