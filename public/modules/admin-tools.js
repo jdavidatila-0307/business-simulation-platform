@@ -261,7 +261,7 @@ window.doBackupSimulacion = async function(simIdParam) {
   var btn = event && event.target ? event.target : document.querySelector('[onclick*="doBackupSimulacion"]');
   try {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
-    var resp = await fetch('/admin/backup', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') } });
+    var resp = await fetch('/admin/backup' + (simIdParam ? '/' + encodeURIComponent(simIdParam) : ''), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') } });
     if (!resp.ok) { var e = await resp.json().catch(function(){return{};}); throw new Error(e.error || resp.statusText); }
     var disposition = resp.headers.get('Content-Disposition') || '';
     var match = disposition.match(/filename="([^"]+)"/);
