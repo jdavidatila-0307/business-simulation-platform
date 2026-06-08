@@ -256,6 +256,57 @@ _waitForApi(function() {
   }, true); // useCapture=true para interceptar antes que app.js
 
   
+// ── doBackupTodas ─────────────────────────────────────────────────────────────
+// Descarga el backup de TODAS las simulaciones, una por una (fetch directo de blob,
+// no api() porque devuelve archivo). 800ms entre descargas para no saturar el navegador.
+window.doBackupTodas = async function() {
+  var btn = event && event.target ? event.target : document.querySelector('[onclick*="doBackupTodas"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+    var sims = await api('GET', '/admin/simulaciones');
+    if (!sims || !sims.length) {
+      if (typeof toast === 'function') toast('No hay simulaciones para respaldar', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Backup de todas'; }
+      return;
+    }
+    if (typeof toast === 'function') toast('Generando backup de ' + sims.length + ' simulación(es)…');
+    var ok = 0, fallidas = 0;
+    for (var i = 0; i < sims.length; i++) {
+      var s = sims[i];
+      if (btn) btn.textContent = '⏳ ' + (i + 1) + '/' + sims.length + '…';
+      try {
+        var resp = await fetch('/admin/backup/' + encodeURIComponent(s.id), {
+          headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+        });
+        if (!resp.ok) { fallidas++; continue; }
+        var disposition = resp.headers.get('Content-Disposition') || '';
+        var match = disposition.match(/filename="([^"]+)"/);
+        var filename = match ? match[1] : 'backup_' + s.id + '.json';
+        var blob = await resp.blob();
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        ok++;
+      } catch (e) { fallidas++; }
+      // 800ms entre descargas (no tras la última)
+      if (i < sims.length - 1) await new Promise(function(r) { setTimeout(r, 800); });
+    }
+    if (typeof toast === 'function') {
+      toast('✓ ' + ok + ' backup(s) descargado(s)' + (fallidas ? ' · ' + fallidas + ' fallida(s)' : ''), fallidas ? 'error' : 'success');
+    }
+    if (btn) {
+      btn.disabled = false; btn.textContent = '✅ Listo';
+      setTimeout(function() { if (btn) btn.textContent = '💾 Backup de todas'; }, 3000);
+    }
+  } catch (e) {
+    if (typeof toast === 'function') toast('Error en backup masivo: ' + e.message, 'error');
+    else alert('Error en backup masivo: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Backup de todas'; }
+  }
+};
+
 // ── doBackupSimulacion ────────────────────────────────────────────────────────
 window.doBackupSimulacion = async function(simIdParam) {
   var btn = event && event.target ? event.target : document.querySelector('[onclick*="doBackupSimulacion"]');

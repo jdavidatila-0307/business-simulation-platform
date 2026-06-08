@@ -771,6 +771,7 @@ async function loadAdminSimulaciones() {
       <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
         <button class="btn btn-success" onclick="showCrearSimulacion()">+ Nueva Simulación</button>
         <button class="btn btn-ghost" onclick="loadAdminSimulaciones()">↺ Actualizar</button>
+        <button class="btn btn-ghost" onclick="doBackupTodas()">💾 Backup de todas</button>
       </div>
 
       <div id="crearSimForm" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;margin-bottom:24px">
