@@ -782,6 +782,72 @@ async function countDecisiones(simulacionId, rondaNumero) {
   } catch(e) { return 0; }
 }
 
+// ─── Fase 0 — niveles de activos fijos por equipo (tabla sim_fase0) ───
+// Columnas actualizables vía upsert (excluye id, sim_id, equipo_id, created_at).
+const FASE0_COLS = [
+  'estado', 'segmento_1', 'producto_1', 'nivel_af', 'activos_fijos_comprados',
+  'capacidad_produccion_base', 'operarios_iniciales', 'costo_operario', 'sueldo_vendedor',
+  'credito_operativo_pre_r1', 'plazo_operativo_pre_r1', 'credito_inversion_pre_r1',
+  'plazo_inversion_pre_r1', 'caja_inicial_docente', 'capital_inversion',
+  'capital_total_otorgado', 'caja_inicial', 'deuda_inicial', 'cuadre_verificado',
+  'delta_cuadre', 'observaciones_docente', 'enviado_at', 'aprobado_at'
+];
+
+async function getFase0(simId) {
+  try {
+    const r = await pool.query(
+      'SELECT * FROM sim_fase0 WHERE sim_id=$1 ORDER BY equipo_id',
+      [simId]
+    );
+    return r.rows || [];
+  } catch(e) {
+    console.error('[storage.getFase0] Error en sim_fase0:', e.message);
+    return [];
+  }
+}
+
+async function getFase0Equipo(simId, equipoId) {
+  try {
+    const r = await pool.query(
+      'SELECT * FROM sim_fase0 WHERE sim_id=$1 AND equipo_id=$2',
+      [simId, equipoId]
+    );
+    return r.rows[0] || null;
+  } catch(e) {
+    console.error('[storage.getFase0Equipo] Error en sim_fase0:', e.message);
+    return null;
+  }
+}
+
+async function upsertFase0(simId, equipoId, data) {
+  try {
+    // Solo columnas conocidas (whitelist) — los nombres van directo al SQL.
+    const keys = Object.keys(data || {}).filter(k => FASE0_COLS.includes(k));
+
+    const cols = ['sim_id', 'equipo_id', ...keys];
+    const vals = [simId, equipoId, ...keys.map(k => data[k])];
+    const placeholders = cols.map((_, i) => '$' + (i + 1));
+
+    // Si data no trae columnas actualizables, el SET es un no-op que conserva la fila.
+    const updateSet = keys.length
+      ? keys.map(k => `${k} = EXCLUDED.${k}`).join(', ')
+      : 'equipo_id = EXCLUDED.equipo_id';
+
+    const r = await pool.query(
+      `INSERT INTO sim_fase0 (${cols.join(', ')})
+       VALUES (${placeholders.join(', ')})
+       ON CONFLICT (sim_id, equipo_id)
+       DO UPDATE SET ${updateSet}
+       RETURNING *`,
+      vals
+    );
+    return r.rows[0] || null;
+  } catch(e) {
+    console.error('[storage.upsertFase0] Error en sim_fase0:', e.message);
+    return null;
+  }
+}
+
 module.exports = {
   findUserById, findUserByEmailOrId, findEquipoByNombre, countDecisiones,
   createUser, listUsers, deleteUser,
@@ -790,5 +856,6 @@ module.exports = {
   getRonda, updateRonda, ensureRonda, defaultDecision, getRondasAll,
   saveDecision,
   getSimConfig, updateSimConfig,
+  getFase0, getFase0Equipo, upsertFase0,
   genSimId, genCodigo
 };
