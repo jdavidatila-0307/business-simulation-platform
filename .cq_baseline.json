@@ -6,7 +6,7 @@
     "toastWS": "70473855",
     "api": "e894afaf",
     "showScreen": "004289c2",
-    "setupNav": "5b99f9f2",
+    "setupNav": "3bdb3149",
     "initLogin": "80967d5f",
     "doLogin": "4e05691a",
     "buildMiembroRow": "7caec508",
@@ -150,7 +150,7 @@
     "generarReportes": "c7830392"
   },
   "__archivos_completos__": {
-    "public/index.html": "a507037c",
+    "public/index.html": "78756fa0",
     "public/styles.css": "8056c204",
     "public/manual.html": "a01819e9"
   },
