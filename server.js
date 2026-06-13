@@ -969,6 +969,22 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true, estado: registro.estado });
   }
 
+  if (url === '/admin/fase0/activar' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    sim.config.fase0Activa = true;
+    await storage.updateSimulacion(sim.id, { config: sim.config });
+    return send(res, 200, { ok: true, fase0Activa: true });
+  }
+
+  if (url === '/admin/fase0/cerrar' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    sim.config.fase0Activa = false;
+    await storage.updateSimulacion(sim.id, { config: sim.config });
+    return send(res, 200, { ok: true, fase0Activa: false });
+  }
+
   // ─── ADMIN — Rondas ───────────────────────────────────────────
   if (url === '/admin/ronda' && method === 'GET') {
     if (needAdmin()) return;
@@ -2406,6 +2422,48 @@ async function route(req, res, body) {
     const ranking = sorted.map(r => ({ esYo: r.equipo===s.userId, utilidadNeta:r.utilidadNeta, ventas:r.ventasReales, share:r.shareReal, caja:r.cajaFinal }));
     const ebits = resultados.map(r => r.utilidadNeta);
     return send(res, 200, { ronda: n, ranking, stats: { ebitPromedio: ebits.reduce((a,b)=>a+b,0)/ebits.length, totalEquipos: ebits.length } });
+  }
+
+  // ─── EQUIPO — Fase 0 ───
+  if (url === '/api/fase0' && method === 'GET') {
+    if (needEquipo()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const equipoId = s.userId;
+    const registro = await storage.getFase0Equipo(sim.id, equipoId);
+    const fase0Activa = sim.config.fase0Activa ?? false;
+    return send(res, 200, { fase0Activa, registro, equipoId });
+  }
+
+  if (url === '/api/fase0/guardar' && method === 'POST') {
+    if (needEquipo()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const equipoId = s.userId;
+    const permitidos = ['segmento_1', 'producto_1', 'nivel_af', 'activos_fijos_comprados',
+      'capacidad_produccion_base', 'operarios_iniciales', 'costo_operario', 'sueldo_vendedor',
+      'credito_operativo_pre_r1', 'plazo_operativo_pre_r1', 'credito_inversion_pre_r1', 'plazo_inversion_pre_r1'];
+    const data = {};
+    permitidos.forEach(k => { if (body[k] !== undefined) data[k] = body[k]; });
+    const actual = await storage.getFase0Equipo(sim.id, equipoId);
+    if (actual && (actual.estado === 'enviado' || actual.estado === 'cerrado'))
+      return send(res, 400, { error: 'Tu Fase 0 ya fue enviada y no puede modificarse' });
+    const registro = await storage.upsertFase0(sim.id, equipoId, data);
+    return send(res, 200, { ok: true, registro });
+  }
+
+  if (url === '/api/fase0/enviar' && method === 'POST') {
+    if (needEquipo()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const equipoId = s.userId;
+    const registro = await storage.getFase0Equipo(sim.id, equipoId);
+    if (!registro) return send(res, 400, { error: 'Completa tu Fase 0 antes de enviar' });
+    if (registro.estado === 'enviado' || registro.estado === 'cerrado')
+      return send(res, 400, { error: 'Tu Fase 0 ya fue enviada' });
+    const requeridos = ['segmento_1', 'producto_1', 'nivel_af', 'operarios_iniciales', 'costo_operario'];
+    const faltantes = requeridos.filter(k => registro[k] === null || registro[k] === undefined || registro[k] === '');
+    if (faltantes.length)
+      return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
+    await storage.upsertFase0(sim.id, equipoId, { estado: 'enviado', enviado_at: new Date().toISOString() });
+    return send(res, 200, { ok: true, estado: 'enviado' });
   }
 
   return null;
