@@ -293,6 +293,7 @@ async function cambiarCodigoAcceso() {
 async function saveParametros() {
   var parametros = {};
   document.querySelectorAll('[data-pkey]').forEach(function(el) { parametros[el.dataset.pkey] = +el.value; });
+  document.querySelectorAll('[data-pkey-str]').forEach(function(el) { parametros[el.dataset.pkeyStr] = el.value; });
   document.querySelectorAll('[data-modulo]').forEach(function(el) { parametros['modulos_' + el.dataset.modulo] = el.checked ? 1 : 0; });
   var tiposProducto = {};
   document.querySelectorAll('[data-tp]').forEach(function(el) { tiposProducto[el.dataset.tp] = { costoBase: +el.value }; });
