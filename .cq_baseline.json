@@ -138,7 +138,10 @@
     "genSimId": "00f02ff3",
     "genCodigo": "3a14b4ae",
     "getRondasAll": "a15ec542",
-    "countDecisiones": "478cec61"
+    "countDecisiones": "478cec61",
+    "getFase0": "c11988f5",
+    "getFase0Equipo": "387b0ba0",
+    "upsertFase0": "e5d22a42"
   },
   "src/reports.js": {
     "generarReporteBasico": "cb670787",
