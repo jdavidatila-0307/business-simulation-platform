@@ -919,6 +919,56 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true, capitalInicial: eq.capitalInicial || null });
   }
 
+  // ─── ADMIN — Fase 0 ───────────────────────────────────────────
+  if (url === '/admin/fase0' && method === 'GET') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const equipos = await storage.getEquipos(sim.id);
+    const registros = await storage.getFase0(sim.id);
+    const out = equipos.map(eq => ({
+      equipo: eq,
+      fase0: registros.find(r => r.equipo_id === eq.id) || null
+    }));
+    return send(res, 200, out);
+  }
+
+  if (url === '/admin/fase0/capital' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const { equipoId, cajaInicialDocente, capitalInversion } = body;
+    const cajaDoc = Number(cajaInicialDocente);
+    const capInv  = Number(capitalInversion);
+    if (!Number.isFinite(cajaDoc) || cajaDoc <= 0)
+      return send(res, 400, { error: 'cajaInicialDocente debe ser un número positivo' });
+    if (!Number.isFinite(capInv) || capInv < 0)
+      return send(res, 400, { error: 'capitalInversion debe ser un número no negativo' });
+    const equipos = await storage.getEquipos(sim.id);
+    if (!equipos.find(e => e.id === equipoId)) return send(res, 404, { error: 'Equipo no encontrado' });
+    const capitalTotalOtorgado = cajaDoc + capInv;
+    const data = await storage.upsertFase0(sim.id, equipoId, {
+      caja_inicial_docente: cajaDoc,
+      capital_inversion: capInv,
+      capital_total_otorgado: capitalTotalOtorgado
+    });
+    return send(res, 200, { ok: true, data });
+  }
+
+  if (url === '/admin/fase0/habilitar' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const { equipoId } = body;
+    const equipos = await storage.getEquipos(sim.id);
+    if (!equipos.find(e => e.id === equipoId)) return send(res, 404, { error: 'Equipo no encontrado' });
+    let registro = await storage.getFase0Equipo(sim.id, equipoId);
+    if (!registro) {
+      registro = await storage.upsertFase0(sim.id, equipoId, { estado: 'borrador' });
+    } else if (registro.estado === 'cerrado') {
+      return send(res, 400, { error: 'Fase 0 cerrada para este equipo' });
+    }
+    if (!registro) return send(res, 500, { error: 'Error al crear registro Fase 0' });
+    return send(res, 200, { ok: true, estado: registro.estado });
+  }
+
   // ─── ADMIN — Rondas ───────────────────────────────────────────
   if (url === '/admin/ronda' && method === 'GET') {
     if (needAdmin()) return;
