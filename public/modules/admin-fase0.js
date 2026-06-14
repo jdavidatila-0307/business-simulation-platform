@@ -48,8 +48,11 @@ function buildFase0ConfigHTML(p, locked) {
       + '</div>';
   }).join('');
 
-  return '<div class="param-card" style="margin-bottom:14px">'
-    + '<div class="param-card-title">🏗️ Configuración de Niveles AF</div>'
+  return '<div class="section-header" style="margin-bottom:16px">'
+    + '<h3>🏗️ Configuración de Niveles de Activos Fijos</h3>'
+    + '<p>Define los niveles disponibles antes de activar la Fase 0. Una vez activa, quedan bloqueados.</p>'
+    + '</div>'
+    + '<div class="param-card" style="margin-bottom:24px">'
     + filas
     + '<div class="param-row"><label class="param-label">Factor de capacidad</label>'
     +   '<input class="param-input" type="number" step="any" data-pkey="fase0_factor_capacidad" value="' + factor + '"' + dis + '/>'
