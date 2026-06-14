@@ -33,9 +33,17 @@ async function loadAdminFase0() {
 
   try {
     var registros = await api('GET', '/admin/fase0');
+    var cfg = await api('GET', '/admin/config');
+    var fase0Activa = cfg.fase0Activa ?? false;
+
+    var toolbar = '<div class="param-actions" style="margin-bottom:14px">'
+      + '<button class="btn ' + (fase0Activa ? 'btn-ghost' : 'btn-success') + '" onclick="doActivarFase0()"' + (fase0Activa ? ' disabled' : '') + '>🚀 Activar Fase 0</button>'
+      + '<button class="btn ' + (fase0Activa ? 'btn-danger' : 'btn-ghost') + '" onclick="doCerrarFase0()"' + (fase0Activa ? '' : ' disabled') + '>🔒 Cerrar Fase 0</button>'
+      + '<span style="margin-left:10px;font-size:.82rem;color:var(--text3)">Estado: ' + (fase0Activa ? '🟢 Activa' : '⚪ Inactiva') + '</span>'
+      + '</div>';
 
     if (!registros || !registros.length) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏗️</div><p>Sin equipos en esta simulación.</p></div>';
+      el.innerHTML = toolbar + '<div class="empty-state"><div class="empty-icon">🏗️</div><p>Sin equipos en esta simulación.</p></div>';
       return;
     }
 
@@ -67,7 +75,7 @@ async function loadAdminFase0() {
         + '</tr>';
     }).join('');
 
-    el.innerHTML = '<div class="table-wrap"><table>'
+    el.innerHTML = toolbar + '<div class="table-wrap"><table>'
       + '<thead><tr><th>Equipo</th><th>Estado</th><th>Caja Trabajo (Bs)</th>'
       + '<th>Inversión (Bs)</th><th>Total (Bs)</th><th>Acciones</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div>';
@@ -168,6 +176,18 @@ window.doHabilitarFase0 = async function(equipoId) {
   } catch(e) {
     toast(e.message, 'error');
   }
+};
+
+window.doActivarFase0 = async function() {
+  await api('POST', '/admin/fase0/activar');
+  toast('Fase 0 activada');
+  loadAdminFase0();
+};
+window.doCerrarFase0 = async function() {
+  if (!confirm('¿Cerrar Fase 0? Los equipos ya no podrán editar.')) return;
+  await api('POST', '/admin/fase0/cerrar');
+  toast('Fase 0 cerrada');
+  loadAdminFase0();
 };
 
 // ── Exponer como window.* para setupNav ──────────────────
