@@ -156,10 +156,15 @@ async function loadAdminFase0() {
         + '</tr>';
     }).join('');
 
-    el.innerHTML = toolbar + configNiveles + '<div class="table-wrap"><table>'
+    el.innerHTML = toolbar + configNiveles
+      + '<div class="section-header" style="margin-bottom:16px;margin-top:24px">'
+      + '<h3>🏢 Estado de Fase 0 por Equipo</h3>'
+      + '<p>Asigna capital a cada equipo y habilita su acceso a la hoja de Fase 0.</p>'
+      + '</div>'
+      + '<div class="param-card" style="margin-bottom:24px"><div class="table-wrap"><table>'
       + '<thead><tr><th>Equipo</th><th>Estado</th><th>Caja Trabajo (Bs)</th>'
       + '<th>Inversión (Bs)</th><th>Total (Bs)</th><th>Acciones</th></tr></thead>'
-      + '<tbody>' + rows + '</tbody></table></div>';
+      + '<tbody>' + rows + '</tbody></table></div></div>';
     f0WireNivelesConfig();
 
   } catch(e) {
