@@ -189,6 +189,8 @@ function f0RenderForm(reg, ref, p) {
     +   '<div class="param-row"><span class="param-label">Capital de trabajo (docente)</span><strong id="f0_calc_trabajo">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">Inversión disponible (docente)</span><strong id="f0_calc_inversion">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">(−) Planta elegida</span><strong id="f0_calc_planta">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(+) Crédito operativo</span><strong id="f0_calc_credop">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(+) Crédito inversión</span><strong id="f0_calc_credinv">Bs 0</strong></div>'
     +   '<div class="param-row" style="border-top:1px solid var(--border2);padding-top:8px">'
     +     '<span class="param-label">= Caja disponible R1</span>'
     +     '<strong><span id="f0_calc_semaforo">🟢</span> <span id="f0_calc_caja" style="font-family:var(--font-mono)">Bs 0</span></strong></div>'
@@ -230,19 +232,21 @@ function f0WireForm(reg) {
     var costoOp = Number(f0val('f0_costo_operario'))      || 0;
     var sueldoV = Number(f0val('f0_sueldo_vendedor'))     || 0;
 
-    var cajaR1 = cajaDoc + (invDoc - planta);
+    var credOp  = Number(f0val('f0_credito_operativo')) || 0;
+    var credInv = Number(f0val('f0_credito_inversion')) || 0;
+    var cajaR1 = cajaDoc + (invDoc - planta) + credOp + credInv;
     var fijos  = oper * costoOp + sueldoV;
 
     f0setText('f0_calc_trabajo',   f0bs(cajaDoc));
     f0setText('f0_calc_inversion', f0bs(invDoc));
     f0setText('f0_calc_planta',    f0bs(planta));
+    f0setText('f0_calc_credop',    f0bs(credOp));
+    f0setText('f0_calc_credinv',   f0bs(credInv));
     f0setText('f0_calc_caja',      f0bs(cajaR1));
     f0setText('f0_calc_fijos',     f0bs(fijos));
     f0setText('f0_calc_semaforo',  cajaR1 < 0 ? '🔴' : (cajaR1 < fijos ? '🟡' : '🟢'));
 
     // ── Balance inicial proyectado ──
-    var credOp  = Number(f0val('f0_credito_operativo')) || 0;
-    var credInv = Number(f0val('f0_credito_inversion')) || 0;
     var caja          = cajaDoc + invDoc - planta + credOp + credInv;
     var af            = planta;
     var totalActivos  = caja + af;
