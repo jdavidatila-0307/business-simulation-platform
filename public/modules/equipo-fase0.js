@@ -296,7 +296,8 @@ function f0Collect() {
   var sel = document.querySelector('input[name="f0_nivel"]:checked');
   var data = {
     segmento_1: f0val('f0_segmento_1'),
-    producto_1: f0val('f0_producto_1'),
+    producto_1: (f0val('f0_producto_1') || '')
+      .replace(/\s*\(Bs[\d.,\s]+\)\s*$/, '').trim(),
     operarios_iniciales: Number(f0val('f0_operarios_iniciales')) || 0,
     costo_operario: Number(f0val('f0_costo_operario')) || 0,
     sueldo_vendedor: Number(f0val('f0_sueldo_vendedor')) || 0,
