@@ -790,6 +790,25 @@ async function loadAdminSimulaciones() {
             <input class="form-input" id="newSimRondas" type="number" min="1" max="20" value="20">
           </div>
           <div style="grid-column:span 2">
+            <label class="form-label">Modo de inicio</label>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+                <input type="radio" name="newSimModo" value="fase0" checked style="margin-top:3px"/>
+                <div>
+                  <strong>Con Fase 0 — Constitución diferenciada</strong>
+                  <div style="font-size:.72rem;color:var(--text3)">Cada equipo define su empresa antes de R1. Más realista y pedagógico.</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+                <input type="radio" name="newSimModo" value="homogeneo" style="margin-top:3px"/>
+                <div>
+                  <strong>Homogéneo — Condiciones iguales</strong>
+                  <div style="font-size:.72rem;color:var(--text3)">Todos los equipos arrancan igual. Ideal para demos o cursos cortos.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div style="grid-column:span 2">
             <label class="form-label">Descripción (opcional)</label>
             <input class="form-input" id="newSimDesc" placeholder="Ej: COM400A Trimestre I 2026 — Sección matutina">
           </div>
@@ -854,6 +873,7 @@ window.crearSimulacion = async () => {
   const copyFromSimId = document.getElementById('newSimCopyFrom').value || null;
   // NUEVO: leer industria seleccionada
   const industria   = document.getElementById('newSimIndustria')?.value || null;
+  const modoInicio  = document.querySelector('input[name="newSimModo"]:checked')?.value || 'fase0';
 
   try {
     const r = await api('POST', '/admin/simulaciones', {
@@ -862,6 +882,7 @@ window.crearSimulacion = async () => {
       totalRounds,
       copyFromSimId,
       industria:    copyFromSimId ? null : industria,  // ignorar plantilla si se copia de otra sim
+      modoInicio,
     });
     toast(`✓ Simulación creada — Código: ${r.codigoAcceso}${r.industria ? ` · Industria: ${r.industria}` : ''}`, 'success');
     document.getElementById('crearSimForm').style.display = 'none';
