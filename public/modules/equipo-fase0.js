@@ -124,15 +124,25 @@ function f0RenderForm(reg, ref, p) {
         return '<option ' + (t.nombre === reg.producto_1 ? 'selected' : '') + '>' + t.nombre + ' (Bs ' + t.costoBase + ')</option>';
       }).join('');
 
-  var nivelRadios = niveles.map(function (nv) {
-    var checked = (Number(reg.nivel_af) === nv.n) ? 'checked' : '';
-    return '<label class="param-row" style="cursor:pointer;gap:10px;align-items:center">'
-      + '<input type="radio" name="f0_nivel" value="' + nv.n + '" data-monto="' + nv.monto + '" data-cap="' + nv.capacidad + '" ' + checked + '/>'
-      + '<strong style="min-width:90px">' + nv.nombre + '</strong>'
-      + '<span style="font-family:var(--font-mono)">' + f0bs(nv.monto) + '</span>'
-      + '<span style="color:var(--text3);font-size:.8rem">Cap: ' + nv.capacidad + ' u</span>'
-      + '</label>';
-  }).join('');
+  var nivelRadios = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:12px 0">'
+    + niveles.map(function(nv) {
+      var checked = (Number(reg.nivel_af) === nv.n) ? 'checked' : '';
+      var selected = (Number(reg.nivel_af) === nv.n);
+      var borderColor = selected ? 'var(--accent)' : 'var(--border)';
+      var bg = selected ? 'var(--bg2)' : 'var(--bg1)';
+      return '<label style="cursor:pointer;display:flex;flex-direction:column;'
+        + 'align-items:center;padding:14px 8px;border-radius:var(--r-lg);'
+        + 'border:2px solid ' + borderColor + ';background:' + bg + ';'
+        + 'text-align:center;gap:6px;transition:border-color .15s">'
+        + '<input type="radio" name="f0_nivel" value="' + nv.n + '"'
+        + ' data-monto="' + nv.monto + '" data-cap="' + nv.capacidad + '" '
+        + checked + ' style="display:none"/>'
+        + '<strong style="font-size:.95rem">' + nv.nombre + '</strong>'
+        + '<span style="font-family:var(--font-mono);font-size:.85rem">' + f0bs(nv.monto) + '</span>'
+        + '<span style="color:var(--text3);font-size:.75rem">' + nv.capacidad + ' pares/trim</span>'
+        + '</label>';
+    }).join('')
+    + '</div>';
 
   var numInput = function (id, value, min) {
     return '<input class="param-input" type="number" step="any" id="' + id + '"'
@@ -255,6 +265,24 @@ function f0WireForm(reg) {
     elx.addEventListener('input', recalc);
     elx.addEventListener('change', recalc);
   });
+
+  // Tarjetas de nivel AF: actualizar selección visual al elegir una
+  function f0PintarNiveles() {
+    document.querySelectorAll('#eqFase0Content input[name="f0_nivel"]').forEach(function (r) {
+      var card = r.closest('label');
+      if (!card) return;
+      card.style.borderColor = r.checked ? 'var(--accent)' : 'var(--border)';
+      card.style.background = r.checked ? 'var(--bg2)' : 'var(--bg1)';
+    });
+  }
+  document.querySelectorAll('#eqFase0Content input[name="f0_nivel"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      this.checked = true;   // marca el radio elegido
+      f0PintarNiveles();     // deselecciona visualmente las demás tarjetas
+      recalc();
+    });
+  });
+
   document.getElementById('f0BtnGuardar').addEventListener('click', function () { f0Guardar(); });
   document.getElementById('f0BtnEnviar').addEventListener('click', function () { f0Enviar(); });
   recalc();
