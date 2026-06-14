@@ -26,6 +26,82 @@ function fase0Badge(estado) {
   return '<span class="badge" style="background:' + cfg.bg + ';color:' + cfg.fg + '">' + cfg.label + '</span>';
 }
 
+// Sección de configuración de niveles AF (solo docente). locked=true cuando Fase 0 está activa.
+function buildFase0ConfigHTML(p, locked) {
+  var dis = locked ? ' disabled' : '';
+  var factor = (p.fase0_factor_capacidad != null) ? Number(p.fase0_factor_capacidad) : 0.01875;
+  var defaults = [
+    { n: 1, nombre: 'Taller',   monto: 40000  },
+    { n: 2, nombre: 'Pequeña',  monto: 60000  },
+    { n: 3, nombre: 'Estándar', monto: 80000  },
+    { n: 4, nombre: 'Mediana',  monto: 120000 },
+    { n: 5, nombre: 'Grande',   monto: 160000 }
+  ];
+  var filas = defaults.map(function(d) {
+    var nombre = (p['fase0_af_' + d.n + '_nombre'] != null) ? p['fase0_af_' + d.n + '_nombre'] : d.nombre;
+    var monto  = (p['fase0_af_' + d.n + '_monto']  != null) ? Number(p['fase0_af_' + d.n + '_monto']) : d.monto;
+    return '<div class="param-row">'
+      + '<label class="param-label">Nivel ' + d.n + '</label>'
+      + '<input class="param-input" type="text" data-pkey-str="fase0_af_' + d.n + '_nombre" value="' + nombre + '" style="width:130px"' + dis + '/>'
+      + '<input class="param-input" type="number" step="any" data-pkey="fase0_af_' + d.n + '_monto" value="' + monto + '" style="width:120px"' + dis + '/>'
+      + '<span class="param-hint">Capacidad: <strong id="fase0_cap_' + d.n + '">' + Math.round(monto * factor) + '</strong></span>'
+      + '</div>';
+  }).join('');
+
+  return '<div class="param-card" style="margin-bottom:14px">'
+    + '<div class="param-card-title">🏗️ Configuración de Niveles AF</div>'
+    + filas
+    + '<div class="param-row"><label class="param-label">Factor de capacidad</label>'
+    +   '<input class="param-input" type="number" step="any" data-pkey="fase0_factor_capacidad" value="' + factor + '"' + dis + '/>'
+    +   '<span class="param-hint">Capacidad = AF × factor</span></div>'
+    + '<div class="param-row"><label class="param-label">Plazos crédito operativo</label>'
+    +   '<input class="param-input" type="text" data-pkey-str="fase0_plazos_credito_op" value="' + (p.fase0_plazos_credito_op != null ? p.fase0_plazos_credito_op : '10,20') + '"' + dis + '/>'
+    +   '<span class="param-hint">Separados por coma</span></div>'
+    + '<div class="param-row"><label class="param-label">Plazos crédito inversión</label>'
+    +   '<input class="param-input" type="text" data-pkey-str="fase0_plazos_credito_inv" value="' + (p.fase0_plazos_credito_inv != null ? p.fase0_plazos_credito_inv : '20,40') + '"' + dis + '/>'
+    +   '<span class="param-hint">Separados por coma</span></div>'
+    + '<div class="param-actions">'
+    +   '<button class="btn btn-primary" id="btnGuardarNivelesAF" onclick="doGuardarNivelesAF()"' + dis + '>'
+    +     (locked ? '🔒 Bloqueado (Fase 0 activa)' : '💾 Guardar configuración niveles AF') + '</button>'
+    + '</div>'
+    + '</div>';
+}
+
+// Recálculo de capacidad (AF × factor) en tiempo real — scoped a #adminFase0Content.
+function f0WireNivelesConfig() {
+  function recalcFase0() {
+    var factorEl = document.querySelector('#adminFase0Content [data-pkey="fase0_factor_capacidad"]');
+    var factor = factorEl ? (parseFloat(factorEl.value) || 0) : 0;
+    for (var n = 1; n <= 5; n++) {
+      var montoEl = document.querySelector('#adminFase0Content [data-pkey="fase0_af_' + n + '_monto"]');
+      var capEl = document.getElementById('fase0_cap_' + n);
+      if (montoEl && capEl) {
+        var monto = parseFloat(montoEl.value) || 0;
+        capEl.textContent = Math.round(monto * factor);
+      }
+    }
+  }
+  document.querySelectorAll('#adminFase0Content [data-pkey^="fase0_af_"]').forEach(function(el) {
+    el.addEventListener('input', recalcFase0);
+  });
+  var factorEl = document.querySelector('#adminFase0Content [data-pkey="fase0_factor_capacidad"]');
+  if (factorEl) factorEl.addEventListener('input', recalcFase0);
+  recalcFase0();
+}
+
+window.doGuardarNivelesAF = async function() {
+  var parametros = {};
+  document.querySelectorAll('#adminFase0Content [data-pkey]').forEach(function(el) { parametros[el.dataset.pkey] = +el.value; });
+  document.querySelectorAll('#adminFase0Content [data-pkey-str]').forEach(function(el) { parametros[el.dataset.pkeyStr] = el.value; });
+  try {
+    await api('PUT', '/admin/parametros', { parametros: parametros });
+    toast('✓ Configuración de niveles AF guardada', 'success');
+    loadAdminFase0();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+};
+
 async function loadAdminFase0() {
   var el = document.getElementById('adminFase0Content');
   if (!el) return;
@@ -35,6 +111,7 @@ async function loadAdminFase0() {
     var registros = await api('GET', '/admin/fase0');
     var cfg = await api('GET', '/admin/config');
     var fase0Activa = cfg.fase0Activa ?? false;
+    var configNiveles = buildFase0ConfigHTML(cfg.parametros || {}, fase0Activa === true);
 
     var toolbar = '<div class="param-actions" style="margin-bottom:14px">'
       + '<button class="btn ' + (fase0Activa ? 'btn-ghost' : 'btn-success') + '" onclick="doActivarFase0()"' + (fase0Activa ? ' disabled' : '') + '>🚀 Activar Fase 0</button>'
@@ -43,7 +120,8 @@ async function loadAdminFase0() {
       + '</div>';
 
     if (!registros || !registros.length) {
-      el.innerHTML = toolbar + '<div class="empty-state"><div class="empty-icon">🏗️</div><p>Sin equipos en esta simulación.</p></div>';
+      el.innerHTML = toolbar + configNiveles + '<div class="empty-state"><div class="empty-icon">🏗️</div><p>Sin equipos en esta simulación.</p></div>';
+      f0WireNivelesConfig();
       return;
     }
 
@@ -75,10 +153,11 @@ async function loadAdminFase0() {
         + '</tr>';
     }).join('');
 
-    el.innerHTML = toolbar + '<div class="table-wrap"><table>'
+    el.innerHTML = toolbar + configNiveles + '<div class="table-wrap"><table>'
       + '<thead><tr><th>Equipo</th><th>Estado</th><th>Caja Trabajo (Bs)</th>'
       + '<th>Inversión (Bs)</th><th>Total (Bs)</th><th>Acciones</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div>';
+    f0WireNivelesConfig();
 
   } catch(e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:16px">' + e.message + '</p>';
