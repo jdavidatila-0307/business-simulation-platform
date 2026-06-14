@@ -114,6 +114,23 @@ async function loadAdminFase0() {
     var registros = await api('GET', '/admin/fase0');
     var cfg = await api('GET', '/admin/config');
     var fase0Activa = cfg.fase0Activa ?? false;
+    var modoInicio = cfg.modoInicio || 'fase0';
+
+    if (modoInicio === 'homogeneo') {
+      el.innerHTML = '<div class="section-header">'
+        + '<h3>⚙️ Modo Homogéneo</h3>'
+        + '<p>Esta simulación usa condiciones iguales para todos los equipos. '
+        + 'La Fase 0 no está disponible.</p>'
+        + '</div>'
+        + '<div class="param-card" style="margin-top:16px">'
+        + '<div class="param-row"><span class="param-label">Modo de inicio</span>'
+        + '<strong>Homogéneo — todos los equipos arrancan con los mismos parámetros</strong></div>'
+        + '<div class="param-row"><span class="param-label">Fase 0</span>'
+        + '<strong style="color:var(--text3)">No disponible en este modo</strong></div>'
+        + '</div>';
+      return;
+    }
+
     var configNiveles = buildFase0ConfigHTML(cfg.parametros || {}, fase0Activa === true);
 
     var toolbar = '<div class="param-actions" style="margin-bottom:14px">'
