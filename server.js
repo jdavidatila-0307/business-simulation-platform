@@ -542,7 +542,7 @@ async function route(req, res, body) {
   
     if (url === '/admin/simulaciones' && method === 'POST') {
       if (needAdmin()) return;
-      const { nombre, descripcion, totalRounds, copyFromSimId, industria } = body;
+      const { nombre, descripcion, totalRounds, copyFromSimId, industria, modoInicio } = body;
       if (!nombre?.trim()) return send(res, 400, { error: 'Nombre de simulación requerido' });
   
       const user = await storage.findUserById(s.userId);
@@ -584,6 +584,7 @@ async function route(req, res, body) {
           roundState:   'pending',
           industria:    industriaNombre || 'Calzados_COM540_1_2026_V1',  // metadata para el frontend
         },
+        metadata: { modoInicio: modoInicio || 'fase0' },
         // Prioridad: baseSim > plantilla > constants.js (jaboncillos)
         parametros:       baseSim?.parametros        || plantillaCfg?.params             || require('./src/constants').PARAMS,
         tiposProducto:    baseSim?.tipos_producto     || plantillaCfg?.tiposProducto      || require('./src/constants').TIPOS_PRODUCTO,
