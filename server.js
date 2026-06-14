@@ -2489,7 +2489,20 @@ async function route(req, res, body) {
     const faltantes = requeridos.filter(k => registro[k] === null || registro[k] === undefined || registro[k] === '');
     if (faltantes.length)
       return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
-    await storage.upsertFase0(sim.id, equipoId, { estado: 'enviado', enviado_at: new Date().toISOString() });
+    const cajaInicial = Math.max(0,
+      (registro.caja_inicial_docente || 0)
+      + (registro.capital_inversion || 0)
+      - (registro.activos_fijos_comprados || 0)
+      + (registro.credito_operativo_pre_r1 || 0)
+      + (registro.credito_inversion_pre_r1 || 0));
+    const deudaInicial = (registro.credito_operativo_pre_r1 || 0)
+      + (registro.credito_inversion_pre_r1 || 0);
+    await storage.upsertFase0(sim.id, equipoId, {
+      estado: 'enviado',
+      enviado_at: new Date().toISOString(),
+      caja_inicial: cajaInicial,
+      deuda_inicial: deudaInicial
+    });
     return send(res, 200, { ok: true, estado: 'enviado' });
   }
 
