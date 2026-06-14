@@ -251,11 +251,13 @@ function setupNav(screenId) {
         'eq-noticias':'Noticias del Macroentorno',
         'admin-creditos':'Reporte de Créditos', 'admin-afinidad':'Matriz de Afinidad', 'admin-competencia':'Competencia Externa',
         'admin-shocks':'Shocks de Mercado',
+        'eq-fase0':'Mi Empresa',
         'admin-fase0':'Fase 0',
       };
       const tt = document.getElementById(screenId === 'screen-admin' ? 'adminTopTitle' : 'equipoTopTitle');
       if (tt) tt.textContent = titles[btn.dataset.view] || '';
       if (btn.dataset.view === 'admin-simulaciones') loadAdminSimulaciones();
+      if (btn.dataset.view === 'eq-fase0') window.loadEquipoFase0?.();
       if (btn.dataset.view === 'eq-hoja') loadHojaDecision();
       if (btn.dataset.view === 'eq-financiero') window.loadEquipoFinanciero?.();
       if (btn.dataset.view === 'eq-resultados') window.loadEquipoResultados?.();
@@ -1357,7 +1359,15 @@ async function initEquipo() {
     const decData = await api('GET', '/api/decisiones');
     state.ref = decData.referencia || null;
     state.decisiones = decData.decision;
-    await loadHojaDecision();
+    const f0Data = await api('GET', '/api/fase0').catch(() => null);
+    if (f0Data && f0Data.fase0Activa &&
+        f0Data.registro?.estado !== 'enviado' &&
+        f0Data.registro?.estado !== 'cerrado') {
+      const btnFase0 = document.querySelector('[data-view="eq-fase0"]');
+      if (btnFase0) btnFase0.click();
+    } else {
+      await loadHojaDecision();
+    }
   } catch(e) {
     const wrap = document.getElementById('decisionFormWrap');
     if (wrap) {
