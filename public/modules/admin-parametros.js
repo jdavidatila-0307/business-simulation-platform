@@ -249,44 +249,6 @@ async function loadAdminParametros() {
         </div>
       </div>
 
-      <div class="param-card" style="grid-column:span 2">
-        <div class="param-card-title">🏗️ Fase 0 — Niveles de Activos Fijos</div>
-        ${[
-          { n:1, nombre:'Taller',   monto:40000  },
-          { n:2, nombre:'Pequeña',  monto:60000  },
-          { n:3, nombre:'Estándar', monto:80000  },
-          { n:4, nombre:'Mediana',  monto:120000 },
-          { n:5, nombre:'Grande',   monto:160000 },
-        ].map(function(nv){
-          var nombre = p['fase0_af_'+nv.n+'_nombre'] ?? nv.nombre;
-          var monto  = p['fase0_af_'+nv.n+'_monto']  ?? nv.monto;
-          var factor = p.fase0_factor_capacidad ?? 0.01875;
-          return `
-          <div class="param-row">
-            <label class="param-label">Nivel ${nv.n}</label>
-            <input class="param-input" type="text" data-pkey-str="fase0_af_${nv.n}_nombre" value="${nombre}" style="width:130px"/>
-            <input class="param-input" type="number" step="any" data-pkey="fase0_af_${nv.n}_monto" value="${monto}" style="width:120px"/>
-            <span class="param-hint">Capacidad: <strong id="fase0_cap_${nv.n}">${Math.round(monto * factor)}</strong></span>
-          </div>`;
-        }).join('')}
-
-        <div class="param-row">
-          <label class="param-label">Factor de capacidad</label>
-          <input class="param-input" type="number" step="any" data-pkey="fase0_factor_capacidad" value="${p.fase0_factor_capacidad ?? 0.01875}"/>
-          <span class="param-hint">Capacidad = AF × factor</span>
-        </div>
-        <div class="param-row">
-          <label class="param-label">Plazos crédito operativo</label>
-          <input class="param-input" type="text" data-pkey-str="fase0_plazos_credito_op" value="${p.fase0_plazos_credito_op ?? '10,20'}"/>
-          <span class="param-hint">Plazos disponibles separados por coma</span>
-        </div>
-        <div class="param-row">
-          <label class="param-label">Plazos crédito inversión</label>
-          <input class="param-input" type="text" data-pkey-str="fase0_plazos_credito_inv" value="${p.fase0_plazos_credito_inv ?? '20,40'}"/>
-          <span class="param-hint">Plazos disponibles separados por coma</span>
-        </div>
-      </div>
-
     </div>
     <div class="param-actions">
       <button class="btn btn-primary" id="btnSaveParams">💾 Guardar Parámetros</button>
@@ -311,28 +273,6 @@ async function loadAdminParametros() {
     </div>`;
 
   document.getElementById('btnSaveParams').addEventListener('click', saveParametros);
-
-  // Fase 0 — recálculo de capacidad (AF × factor) en tiempo real
-  (function() {
-    function recalcFase0() {
-      var factorEl = document.querySelector('[data-pkey="fase0_factor_capacidad"]');
-      var factor = factorEl ? (parseFloat(factorEl.value) || 0) : 0;
-      for (var n = 1; n <= 5; n++) {
-        var montoEl = document.querySelector('[data-pkey="fase0_af_' + n + '_monto"]');
-        var capEl = document.getElementById('fase0_cap_' + n);
-        if (montoEl && capEl) {
-          var monto = parseFloat(montoEl.value) || 0;
-          capEl.textContent = Math.round(monto * factor);
-        }
-      }
-    }
-    document.querySelectorAll('[data-pkey^="fase0_af_"]').forEach(function(el) {
-      el.addEventListener('input', recalcFase0);
-    });
-    var factorEl = document.querySelector('[data-pkey="fase0_factor_capacidad"]');
-    if (factorEl) factorEl.addEventListener('input', recalcFase0);
-    recalcFase0();
-  })();
 }
 
 async function cambiarCodigoAcceso() {
