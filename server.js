@@ -2062,6 +2062,7 @@ async function route(req, res, body) {
       codigoAcceso: sim.codigo_acceso,
       simId: sim.id,
       nivelCompetidoresIA: sim.config?.nivelCompetidoresIA || 'ninguno',
+      fase0Activa: sim.config?.fase0Activa ?? false,
     });
   }
 
