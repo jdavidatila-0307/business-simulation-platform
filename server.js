@@ -2431,7 +2431,11 @@ async function route(req, res, body) {
     const equipoId = s.userId;
     const registro = await storage.getFase0Equipo(sim.id, equipoId);
     const fase0Activa = sim.config.fase0Activa ?? false;
-    return send(res, 200, { fase0Activa, registro, equipoId });
+    const fase0Params = Object.fromEntries(
+      Object.entries(sim.parametros || {})
+        .filter(([k]) => k.startsWith('fase0_'))
+    );
+    return send(res, 200, { fase0Activa, registro, equipoId, fase0Params });
   }
 
   if (url === '/api/fase0/guardar' && method === 'POST') {
