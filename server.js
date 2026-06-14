@@ -969,6 +969,25 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true, estado: registro.estado });
   }
 
+  if (url === '/admin/fase0/credito' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const { equipoId, creditoOperativo, creditoInversion } = body;
+    const credOp  = Number(creditoOperativo);
+    const credInv = Number(creditoInversion);
+    if (!Number.isFinite(credOp) || credOp < 0)
+      return send(res, 400, { error: 'creditoOperativo debe ser un número no negativo' });
+    if (!Number.isFinite(credInv) || credInv < 0)
+      return send(res, 400, { error: 'creditoInversion debe ser un número no negativo' });
+    const equipos = await storage.getEquipos(sim.id);
+    if (!equipos.find(e => e.id === equipoId)) return send(res, 404, { error: 'Equipo no encontrado' });
+    const data = await storage.upsertFase0(sim.id, equipoId, {
+      credito_operativo_pre_r1: credOp,
+      credito_inversion_pre_r1: credInv
+    });
+    return send(res, 200, { ok: true, data });
+  }
+
   if (url === '/admin/fase0/activar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
