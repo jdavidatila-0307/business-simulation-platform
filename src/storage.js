@@ -105,14 +105,14 @@ async function createSimulacion(ownerId, simData) {
   const {
     id, nombre, descripcion, codigoAcceso, estado, creadaAt,
     config, parametros, tiposProducto, canales, segmentos,
-    afinidadMatrix, competenciaExterna, rondas, users
+    afinidadMatrix, competenciaExterna, rondas, users, metadata
   } = simData;
   await pool.query(
     `INSERT INTO simulaciones (
       id, owner_id, nombre, descripcion, codigo_acceso, estado, creada_at,
       config, parametros, tipos_producto, canales, segmentos,
-      afinidad_matrix, competencia_externa, rondas, users
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      afinidad_matrix, competencia_externa, rondas, users, metadata
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       id, 
       ownerId, 
@@ -129,7 +129,8 @@ async function createSimulacion(ownerId, simData) {
       JSON.stringify(afinidadMatrix),        // ← JSONB
       JSON.stringify(competenciaExterna),    // ← JSONB
       JSON.stringify(rondas || {}),          // ← JSONB (por si viene null/undefined)
-      JSON.stringify(users || [])            // ← JSONB
+      JSON.stringify(users || []),           // ← JSONB
+      JSON.stringify(metadata || {})         // ← JSONB
     ]
   );
 }
