@@ -648,6 +648,7 @@ body::before {
 .login-card .form-hint {
   color: rgba(255, 255, 255, 0.50);
 }
+.table-wrap {
   overflow-x: auto;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
