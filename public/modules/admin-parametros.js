@@ -194,11 +194,11 @@ async function loadAdminParametros() {
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>Canal</th>
-              <th>Costo adicional/unid (Bs)</th>
-              <th>Comisión sobre ventas</th>
-              <th>Factor impacto vendedores</th>
-              <th>Bono atractivo</th>
+              <th style="width:20%">Canal</th>
+              <th style="width:20%">Costo adicional<br>/unid (Bs)</th>
+              <th style="width:20%">Comisión<br>sobre ventas</th>
+              <th style="width:20%">Factor impacto<br>vendedores</th>
+              <th style="width:20%">Bono<br>atractivo</th>
             </tr></thead>
             <tbody>
               ${Object.entries(can).map(([n,v])=>`
