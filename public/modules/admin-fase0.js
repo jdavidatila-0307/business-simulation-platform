@@ -136,6 +136,9 @@ async function loadAdminFase0() {
       var inv   = f ? (f.capital_inversion       || 0) : 0;
       var total = f ? (f.capital_total_otorgado  || 0) : 0;
       var tieneCapital = total > 0 || caja > 0;
+      var credOp  = f ? (f.credito_operativo_pre_r1  || 0) : 0;
+      var credInv = f ? (f.credito_inversion_pre_r1  || 0) : 0;
+      var tieneCredito = credOp > 0 || credInv > 0;
 
       var nombreEsc = (eq.nombre || '').replace(/'/g, "\\'");
 
@@ -146,13 +149,20 @@ async function loadAdminFase0() {
         ? ' <button class="btn btn-sm btn-ghost" onclick="doHabilitarFase0(\'' + eq.id + '\')">🔓 Habilitar</button>'
         : '';
 
+      var btnCredito = tieneCredito
+        ? ' <button class="btn btn-sm btn-success" onclick="doAprobarCredito(\''
+          + eq.id + '\',\'' + nombreEsc + '\',' + credOp + ',' + credInv + ')">✅ Crédito</button>'
+        : '';
+
       return '<tr>'
         + '<td><strong>' + (eq.nombre || eq.id) + '</strong></td>'
         + '<td>' + fase0Badge(estado) + '</td>'
         + '<td class="num">' + (f ? fmt.bs(caja)  : '—') + '</td>'
         + '<td class="num">' + (f ? fmt.bs(inv)   : '—') + '</td>'
         + '<td class="num">' + (f ? fmt.bs(total) : '—') + '</td>'
-        + '<td>' + btnCapital + btnHabilitar + '</td>'
+        + '<td class="num">' + (credOp  > 0 ? fmt.bs(credOp)  : '—') + '</td>'
+        + '<td class="num">' + (credInv > 0 ? fmt.bs(credInv) : '—') + '</td>'
+        + '<td>' + btnCapital + btnHabilitar + btnCredito + '</td>'
         + '</tr>';
     }).join('');
 
@@ -163,7 +173,9 @@ async function loadAdminFase0() {
       + '</div>'
       + '<div class="param-card" style="margin-bottom:24px"><div class="table-wrap"><table>'
       + '<thead><tr><th>Equipo</th><th>Estado</th><th>Caja Trabajo (Bs)</th>'
-      + '<th>Inversión (Bs)</th><th>Total (Bs)</th><th>Acciones</th></tr></thead>'
+      + '<th>Inversión (Bs)</th><th>Total (Bs)</th>'
+      + '<th>Créd. Op<br>(Bs)</th><th>Créd. Inv<br>(Bs)</th>'
+      + '<th>Acciones</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div></div>';
     f0WireNivelesConfig();
 
@@ -275,6 +287,62 @@ window.doCerrarFase0 = async function() {
   await api('POST', '/admin/fase0/cerrar');
   toast('Fase 0 cerrada');
   loadAdminFase0();
+};
+
+window.doAprobarCredito = function(equipoId, nombreEquipo, credOpSolicitado, credInvSolicitado) {
+  var nombre = (nombreEquipo || equipoId || '');
+  var nombreHtml = nombre.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  var prev = document.getElementById('fase0CreditoModal');
+  if (prev) prev.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'fase0CreditoModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+      '<div class="modal-card">'
+    +   '<div class="modal-title">✅ Aprobar crédito — ' + nombreHtml + '</div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 12px">Montos solicitados por el equipo. Ajústalos si es necesario antes de aprobar.</p>'
+    +   '<div class="param-row">'
+    +     '<label class="param-label" for="fase0CredOp">Crédito operativo (Bs)</label>'
+    +     '<input class="param-input" type="number" step="any" id="fase0CredOp" value="' + (Number(credOpSolicitado) || 0) + '"/>'
+    +   '</div>'
+    +   '<div class="param-row">'
+    +     '<label class="param-label" for="fase0CredInv">Crédito inversión (Bs)</label>'
+    +     '<input class="param-input" type="number" step="any" id="fase0CredInv" value="' + (Number(credInvSolicitado) || 0) + '"/>'
+    +   '</div>'
+    +   '<div class="modal-actions">'
+    +     '<button class="btn btn-ghost" id="fase0CredCancelBtn">Cancelar</button>'
+    +     '<button class="btn btn-success" id="fase0CredSaveBtn">✅ Aprobar</button>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  function cerrar() {
+    var m = document.getElementById('fase0CreditoModal');
+    if (m) m.remove();
+  }
+  document.getElementById('fase0CredCancelBtn').addEventListener('click', cerrar);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) cerrar(); });
+
+  document.getElementById('fase0CredSaveBtn').addEventListener('click', async function() {
+    var credOp  = Number(document.getElementById('fase0CredOp').value);
+    var credInv = Number(document.getElementById('fase0CredInv').value);
+    if (!Number.isFinite(credOp) || credOp < 0) { toast('El crédito operativo debe ser un número no negativo', 'error'); return; }
+    if (!Number.isFinite(credInv) || credInv < 0) { toast('El crédito inversión debe ser un número no negativo', 'error'); return; }
+    try {
+      await api('POST', '/admin/fase0/credito', {
+        equipoId: equipoId,
+        creditoOperativo: credOp,
+        creditoInversion: credInv
+      });
+      cerrar();
+      toast('✓ Crédito aprobado', 'success');
+      loadAdminFase0();
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  });
 };
 
 // ── Exponer como window.* para setupNav ──────────────────
