@@ -2490,13 +2490,13 @@ async function route(req, res, body) {
     if (faltantes.length)
       return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
     const cajaInicial = Math.max(0,
-      (registro.caja_inicial_docente || 0)
-      + (registro.capital_inversion || 0)
-      - (registro.activos_fijos_comprados || 0)
-      + (registro.credito_operativo_pre_r1 || 0)
-      + (registro.credito_inversion_pre_r1 || 0));
-    const deudaInicial = (registro.credito_operativo_pre_r1 || 0)
-      + (registro.credito_inversion_pre_r1 || 0);
+      Number(registro.caja_inicial_docente || 0)
+      + Number(registro.capital_inversion || 0)
+      - Number(registro.activos_fijos_comprados || 0)
+      + Number(registro.credito_operativo_pre_r1 || 0)
+      + Number(registro.credito_inversion_pre_r1 || 0));
+    const deudaInicial = Number(registro.credito_operativo_pre_r1 || 0)
+      + Number(registro.credito_inversion_pre_r1 || 0);
     await storage.upsertFase0(sim.id, equipoId, {
       estado: 'enviado',
       enviado_at: new Date().toISOString(),
