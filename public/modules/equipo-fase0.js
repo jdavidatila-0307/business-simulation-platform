@@ -183,6 +183,23 @@ function f0RenderForm(reg, ref, p) {
     +     '<span class="param-label">= Caja disponible R1</span>'
     +     '<strong><span id="f0_calc_semaforo">🟢</span> <span id="f0_calc_caja" style="font-family:var(--font-mono)">Bs 0</span></strong></div>'
     +   '<div class="param-row"><span class="param-label">Costos fijos estimados R1</span><strong id="f0_calc_fijos">Bs 0</strong></div>'
+    +   '<div class="param-card-title" style="margin-top:14px;font-size:.9rem">📊 Balance inicial proyectado</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
+    +     '<div>'
+    +       '<div style="font-size:.78rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Activos</div>'
+    +       '<div class="param-row"><span class="param-label">Caja</span><strong id="f0_bal_caja">Bs 0</strong></div>'
+    +       '<div class="param-row"><span class="param-label">Activos Fijos</span><strong id="f0_bal_af">Bs 0</strong></div>'
+    +       '<div class="param-row" style="border-top:1px solid var(--border2);padding-top:6px"><span class="param-label">Total Activos</span><strong id="f0_bal_total_activos">Bs 0</strong></div>'
+    +     '</div>'
+    +     '<div>'
+    +       '<div style="font-size:.78rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Pasivos + Patrimonio</div>'
+    +       '<div class="param-row"><span class="param-label">Préstamo operativo</span><strong id="f0_bal_deuda_op">Bs 0</strong></div>'
+    +       '<div class="param-row"><span class="param-label">Préstamo inversión</span><strong id="f0_bal_deuda_inv">Bs 0</strong></div>'
+    +       '<div class="param-row"><span class="param-label">Total Pasivos</span><strong id="f0_bal_total_pasivos">Bs 0</strong></div>'
+    +       '<div class="param-row" style="border-top:1px solid var(--border2);padding-top:6px"><span class="param-label">Capital / Patrimonio</span><strong id="f0_bal_capital">Bs 0</strong></div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div class="param-row" style="margin-top:8px"><span class="param-label">Verificación A = P + Pat</span><strong id="f0_bal_cuadre">—</strong></div>'
     + '</div>'
     // ── BOTONES ──
     + '<div class="param-actions">'
@@ -212,6 +229,26 @@ function f0WireForm(reg) {
     f0setText('f0_calc_caja',      f0bs(cajaR1));
     f0setText('f0_calc_fijos',     f0bs(fijos));
     f0setText('f0_calc_semaforo',  cajaR1 < 0 ? '🔴' : (cajaR1 < fijos ? '🟡' : '🟢'));
+
+    // ── Balance inicial proyectado ──
+    var credOp  = Number(f0val('f0_credito_operativo')) || 0;
+    var credInv = Number(f0val('f0_credito_inversion')) || 0;
+    var caja          = cajaDoc + invDoc - planta + credOp + credInv;
+    var af            = planta;
+    var totalActivos  = caja + af;
+    var totalPasivos  = credOp + credInv;
+    var capital       = cajaDoc + invDoc;
+    var totalPP       = totalPasivos + capital;
+    var cuadra        = Math.abs(totalActivos - totalPP) <= 1;
+
+    f0setText('f0_bal_caja',           f0bs(caja));
+    f0setText('f0_bal_af',             f0bs(af));
+    f0setText('f0_bal_total_activos',  f0bs(totalActivos));
+    f0setText('f0_bal_deuda_op',       f0bs(credOp));
+    f0setText('f0_bal_deuda_inv',      f0bs(credInv));
+    f0setText('f0_bal_total_pasivos',  f0bs(totalPasivos));
+    f0setText('f0_bal_capital',        f0bs(capital));
+    f0setText('f0_bal_cuadre',         cuadra ? '✅ Cuadra' : '⚠️ No cuadra (Δ ' + f0bs(totalActivos - totalPP) + ')');
   }
 
   document.querySelectorAll('#eqFase0Content input, #eqFase0Content select').forEach(function (elx) {
