@@ -2083,6 +2083,7 @@ async function route(req, res, body) {
       simId: sim.id,
       nivelCompetidoresIA: sim.config?.nivelCompetidoresIA || 'ninguno',
       fase0Activa: sim.config?.fase0Activa ?? false,
+      modoInicio: sim.metadata?.modoInicio || 'fase0',
     });
   }
 
@@ -2456,7 +2457,8 @@ async function route(req, res, body) {
       Object.entries(sim.parametros || {})
         .filter(([k]) => k.startsWith('fase0_'))
     );
-    return send(res, 200, { fase0Activa, registro, equipoId, fase0Params });
+    return send(res, 200, { fase0Activa, registro, equipoId, fase0Params,
+      modoInicio: sim.metadata?.modoInicio || 'fase0' });
   }
 
   if (url === '/api/fase0/guardar' && method === 'POST') {
