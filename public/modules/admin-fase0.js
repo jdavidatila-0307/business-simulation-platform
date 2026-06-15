@@ -301,9 +301,13 @@ window.doActivarFase0 = async function() {
 };
 window.doCerrarFase0 = async function() {
   if (!confirm('¿Cerrar Fase 0? Los equipos ya no podrán editar.')) return;
-  await api('POST', '/admin/fase0/cerrar');
-  toast('Fase 0 cerrada');
-  loadAdminFase0();
+  try {
+    await api('POST', '/admin/fase0/cerrar');
+    toast('Fase 0 cerrada', 'success');
+    loadAdminFase0();
+  } catch(e) {
+    toast(e.message || 'Error al cerrar Fase 0', 'error');
+  }
 };
 
 window.doAprobarCredito = function(equipoId, nombreEquipo, credOpSolicitado, credInvSolicitado) {
