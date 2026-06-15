@@ -1067,7 +1067,7 @@ async function route(req, res, body) {
 
       const decisiones = {};
       for (const eq of equipos.filter(e => !e.isBot)) {
-        const dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
+        let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
         const resPrev = Object.values(resObj)
           .filter(v => v && typeof v === 'object' && v.equipoNombre)
           .find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id));
