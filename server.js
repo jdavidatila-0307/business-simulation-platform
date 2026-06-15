@@ -1000,6 +1000,22 @@ async function route(req, res, body) {
   if (url === '/admin/fase0/cerrar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    // Validar que todos los equipos humanos hayan enviado/cerrado su Fase 0
+    const equipos = await storage.getEquipos(sim.id);
+    const humanos = equipos.filter(eq => eq.rol === 'equipo' && !eq.isBot);
+    const registros = await storage.getFase0(sim.id);
+    const regPorEquipo = {};
+    for (const r of registros) regPorEquipo[r.equipo_id] = r;
+    const pendientes = humanos.filter(eq => {
+      const reg = regPorEquipo[eq.id];
+      return !reg || (reg.estado !== 'enviado' && reg.estado !== 'cerrado');
+    });
+    if (pendientes.length > 0) {
+      return send(res, 400, {
+        error: 'Hay equipos que aún no han enviado su Fase 0: ' + pendientes.map(eq => eq.nombre).join(', '),
+        pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
+      });
+    }
     sim.config.fase0Activa = false;
     await storage.updateSimulacion(sim.id, { config: sim.config });
     return send(res, 200, { ok: true, fase0Activa: false });
