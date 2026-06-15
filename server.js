@@ -1065,6 +1065,13 @@ async function route(req, res, body) {
       const prevRonda = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
       const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
 
+      const modoInicio = sim.metadata?.modoInicio || 'homogeneo';
+      const { getEstadoInicial } = require('./src/initializer');
+      let fase0PorEquipo = {};
+      if (modoInicio === 'fase0' && n === 1) {
+        const registrosFase0 = await storage.getFase0(sim.id);
+        registrosFase0.forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
+      }
       const decisiones = {};
       for (const eq of equipos.filter(e => !e.isBot)) {
         let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
@@ -1076,7 +1083,24 @@ async function route(req, res, body) {
           dec = propagarEstado(dec, resPrev, sim.parametros);
           console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
-          console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
+          if (modoInicio === 'fase0' && n === 1) {
+            const estadoInicial = getEstadoInicial(
+              sim.parametros, fase0PorEquipo[eq.id] || null, modoInicio
+            );
+            Object.assign(dec, {
+              cajaInicial:           estadoInicial.cajaInicial,
+              activosFijosIniciales: estadoInicial.activosFijosIniciales,
+              deudaInicial:          estadoInicial.deudaInicial,
+              capitalInicial:        estadoInicial.capitalInicial,
+              operariosIniciales:    estadoInicial.operariosIniciales,
+            });
+            if (dec.productos && dec.productos[0]) {
+              dec.productos[0].operariosIniciales = estadoInicial.operariosIniciales;
+            }
+            console.log(`[server] ${eq.nombre}: Fase0 caja=${estadoInicial.cajaInicial} AF=${estadoInicial.activosFijosIniciales} deuda=${estadoInicial.deudaInicial} origen=${estadoInicial._origen}`);
+          } else {
+            console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
+          }
         }
         decisiones[eq.id] = dec;
       }
