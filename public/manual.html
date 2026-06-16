@@ -1005,6 +1005,10 @@
 
     <div class="sidebar-nav">
       <p class="nav-section-label">Contenido</p>
+      <a class="nav-item" href="#sec-fase0" onclick="closeMenu()">
+        <span class="nav-icon">🏗️</span> Constituye tu Empresa
+        <span class="nav-num">00</span>
+      </a>
       <a class="nav-item active" href="#sec-propósito" onclick="closeMenu()">
         <span class="nav-icon">🎯</span> Propósito y Fundamento
         <span class="nav-num">01</span>
@@ -1106,6 +1110,115 @@
         <span class="badge"><span>🤝</span> Hasta 5 integrantes</span>
       </div>
     </div>
+
+    <!-- SECCIÓN 0: FASE 0 -->
+    <section class="section" id="sec-fase0">
+      <div class="section-header">
+        <div class="section-num">00</div>
+        <div class="section-title-block">
+          <h3>Constituye tu Empresa — Fase 0</h3>
+          <p class="section-subtitle">Antes de competir, debes fundar tu empresa. La Fase 0 es el momento donde defines tu identidad estratégica, tu capacidad productiva y tu estructura financiera inicial.</p>
+        </div>
+      </div>
+
+      <div class="content-block">
+        <div class="alert alert-warning">
+          <strong>⚠️ Acción irreversible:</strong> Una vez que envíes tu Fase 0, <strong>no podrás modificarla</strong>. Analiza cuidadosamente cada decisión antes de confirmar.
+        </div>
+
+        <h4>¿Qué es la Fase 0?</h4>
+        <p>La Fase 0 es la etapa de <strong>constitución diferenciada de empresa</strong>. A diferencia de otras simulaciones donde todos parten igual, en SimNeg cada equipo arranca con una estructura financiera y operativa propia, definida por sus propias decisiones estratégicas.</p>
+        <p>El capital que el docente te asigna debe distribuirse entre <strong>capital de trabajo</strong> (para operar) e <strong>inversión en activos fijos</strong> (tu planta de producción). Esta decisión determinará tu capacidad competitiva desde el primer trimestre.</p>
+
+        <h4 style="margin-top:28px">⚙️ Paso 1 — Estrategia</h4>
+        <p>Define el rumbo comercial de tu empresa para toda la simulación:</p>
+        <ul>
+          <li><strong>Segmento objetivo:</strong> El mercado al que te dirigirás. Cada segmento tiene preferencias distintas de precio, calidad y canal. Investiga antes de elegir.</li>
+          <li><strong>Producto:</strong> El tipo de calzado que fabricarás. El costo base varía por producto y afecta tu margen desde R1.</li>
+        </ul>
+        <div class="alert alert-info" style="margin-top:12px">
+          💡 <strong>Tip estratégico:</strong> Elige un segmento con alta afinidad hacia tu producto. Consulta la Matriz de Afinidad en el Anexo C.
+        </div>
+
+        <h4 style="margin-top:28px">🏭 Paso 2 — Tamaño de Operación</h4>
+        <p>Elige el nivel de planta (activos fijos) que determinará tu <strong>capacidad máxima de producción</strong> por trimestre:</p>
+        <table class="data-table">
+          <thead><tr><th>Nivel</th><th>Inversión</th><th>Capacidad</th></tr></thead>
+          <tbody>
+            <tr><td>Taller</td><td>Bs 40.000</td><td>750 pares/trim</td></tr>
+            <tr><td>Pequeña</td><td>Bs 60.000</td><td>1.125 pares/trim</td></tr>
+            <tr><td>Estándar</td><td>Bs 80.000</td><td>1.500 pares/trim</td></tr>
+            <tr><td>Mediana</td><td>Bs 120.000</td><td>2.250 pares/trim</td></tr>
+            <tr><td>Grande</td><td>Bs 160.000</td><td>3.000 pares/trim</td></tr>
+          </tbody>
+        </table>
+        <div class="alert alert-warning" style="margin-top:12px">
+          ⚠️ <strong>Importante:</strong> El nivel de planta <strong>no puede cambiarse</strong> durante R1–R4. Planifica considerando tu mercado objetivo y capital disponible.
+        </div>
+
+        <h4 style="margin-top:28px">👥 Paso 3 — Personal Inicial</h4>
+        <p>Define tu estructura de personal de arranque:</p>
+        <ul>
+          <li><strong>Operarios iniciales:</strong> Determinan tu capacidad real de producción. Cada operario produce según la productividad base de la industria.</li>
+          <li><strong>Costo por operario:</strong> Gasto fijo trimestral por cada operario. Afecta directamente tu flujo de caja.</li>
+          <li><strong>Sueldo por vendedor:</strong> Si planeas contratar vendedores desde R1, considera este costo.</li>
+        </ul>
+        <div class="alert alert-warning" style="margin-top:12px">
+          ⚠️ <strong>Regla crítica:</strong> Los operarios iniciales <strong>NUNCA pueden bajar</strong> en rondas posteriores. Empieza con lo que puedes sostener.
+        </div>
+
+        <h4 style="margin-top:28px">💳 Paso 4 — Financiamiento Pre-R1</h4>
+        <p>Si necesitas capital adicional antes de iniciar R1, puedes solicitar créditos al docente:</p>
+        <ul>
+          <li><strong>Crédito operativo:</strong> Para capital de trabajo adicional. Plazo corto.</li>
+          <li><strong>Crédito de inversión:</strong> Para financiar activos fijos. Plazo largo.</li>
+        </ul>
+        <p style="margin-top:8px">El docente aprobará, modificará o rechazará tu solicitud. Los montos aprobados se reflejan automáticamente en tu calculadora.</p>
+
+        <h4 style="margin-top:28px">🧮 La Calculadora de Caja R1</h4>
+        <p>La calculadora te muestra en tiempo real cuánto efectivo tendrás al iniciar R1:</p>
+        <div class="formula-block" style="background:rgba(158,216,48,0.06);border:1px solid rgba(158,216,48,0.2);border-radius:12px;padding:20px;margin:16px 0;font-family:var(--font-mono);font-size:.9rem">
+          <div>Capital de trabajo (docente)</div>
+          <div>+ Inversión disponible (docente)</div>
+          <div>− Planta elegida (activos fijos)</div>
+          <div>+ Crédito operativo aprobado</div>
+          <div>+ Crédito de inversión aprobado</div>
+          <div style="border-top:1px solid rgba(158,216,48,0.3);margin-top:8px;padding-top:8px;color:var(--gold);font-weight:600">= Caja disponible R1 🟢</div>
+        </div>
+        <p>El semáforo indica tu situación:</p>
+        <ul>
+          <li>🟢 <strong>Verde:</strong> Caja positiva y cubre costos fijos estimados.</li>
+          <li>🟡 <strong>Amarillo:</strong> Caja positiva pero insuficiente para cubrir costos fijos.</li>
+          <li>🔴 <strong>Rojo:</strong> Caja negativa. Revisa tu estructura antes de enviar.</li>
+        </ul>
+
+        <h4 style="margin-top:28px">📊 Balance Inicial Proyectado</h4>
+        <p>El balance te muestra la ecuación contable fundamental de tu empresa al arrancar:</p>
+        <table class="data-table">
+          <thead><tr><th>ACTIVOS</th><th>PASIVOS + PATRIMONIO</th></tr></thead>
+          <tbody>
+            <tr><td>Caja disponible R1</td><td>Crédito operativo</td></tr>
+            <tr><td>Activos fijos (planta)</td><td>Crédito de inversión</td></tr>
+            <tr><td></td><td>Capital propio (docente)</td></tr>
+            <tr><td><strong>Total Activos</strong></td><td><strong>Total P + Patrimonio</strong></td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:8px">✅ El balance siempre cuadra: <strong>Activos = Pasivos + Patrimonio</strong>. Este es el principio de partida doble que guía toda la contabilidad del simulador.</p>
+
+        <h4 style="margin-top:28px">✅ Cómo enviar tu Fase 0</h4>
+        <ol>
+          <li>Completa los 4 pasos en la pantalla <strong>"🏗️ Mi Empresa"</strong>.</li>
+          <li>Presiona <strong>"💾 Guardar borrador"</strong> para no perder tu avance.</li>
+          <li>Verifica que el semáforo esté en 🟢 o 🟡.</li>
+          <li>Presiona <strong>"✅ Enviar"</strong> y confirma en el popup.</li>
+          <li>Tu pantalla pasará a modo <strong>solo lectura</strong> — Fase 0 enviada.</li>
+        </ol>
+
+        <div class="alert alert-warning" style="margin-top:20px">
+          🔒 <strong>Recuerda:</strong> El docente cerrará la Fase 0 solo cuando <strong>TODOS</strong> los equipos hayan enviado. La simulación no avanza hasta ese momento.
+        </div>
+      </div>
+    </section>
 
     <!-- SECCIÓN 1: PROPÓSITO -->
     <section class="section" id="sec-propósito">
