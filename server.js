@@ -954,6 +954,21 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true, data });
   }
 
+  if (url === '/admin/fase0/costo-fijo' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const { equipoId, costoFijoMinimo } = body;
+    const minimo = Number(costoFijoMinimo);
+    if (!Number.isFinite(minimo) || minimo < 0)
+      return send(res, 400, { error: 'costoFijoMinimo debe ser un número no negativo' });
+    const equipos = await storage.getEquipos(sim.id);
+    if (!equipos.find(e => e.id === equipoId)) return send(res, 404, { error: 'Equipo no encontrado' });
+    const data = await storage.upsertFase0(sim.id, equipoId, {
+      costo_fijo_minimo: minimo
+    });
+    return send(res, 200, { ok: true, data });
+  }
+
   if (url === '/admin/fase0/habilitar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
@@ -2511,12 +2526,19 @@ async function route(req, res, body) {
     const equipoId = s.userId;
     const permitidos = ['segmento_1', 'producto_1', 'nivel_af', 'activos_fijos_comprados',
       'capacidad_produccion_base', 'operarios_iniciales', 'costo_operario', 'sueldo_vendedor',
-      'credito_operativo_pre_r1', 'plazo_operativo_pre_r1', 'credito_inversion_pre_r1', 'plazo_inversion_pre_r1'];
+      'credito_operativo_pre_r1', 'plazo_operativo_pre_r1', 'credito_inversion_pre_r1', 'plazo_inversion_pre_r1',
+      'costo_fijo_declarado'];
     const data = {};
     permitidos.forEach(k => { if (body[k] !== undefined) data[k] = body[k]; });
     const actual = await storage.getFase0Equipo(sim.id, equipoId);
     if (actual && (actual.estado === 'enviado' || actual.estado === 'cerrado'))
       return send(res, 400, { error: 'Tu Fase 0 ya fue enviada y no puede modificarse' });
+    if (data.costo_fijo_declarado != null) {
+      const minimo = Number(actual?.costo_fijo_minimo) || 0;
+      if (Number(data.costo_fijo_declarado) < minimo) {
+        return send(res, 400, { error: 'El costo fijo declarado (Bs ' + data.costo_fijo_declarado + ') no puede ser menor al mínimo asignado por el docente (Bs ' + minimo + ')' });
+      }
+    }
     const registro = await storage.upsertFase0(sim.id, equipoId, data);
     return send(res, 200, { ok: true, registro });
   }
