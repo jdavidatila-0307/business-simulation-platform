@@ -143,6 +143,7 @@ async function loadAdminFase0() {
       var credOp  = f ? (f.credito_operativo_pre_r1  || 0) : 0;
       var credInv = f ? (f.credito_inversion_pre_r1  || 0) : 0;
       var tieneCredito = credOp > 0 || credInv > 0;
+      var costoFijoMin = f ? (f.costo_fijo_minimo || 0) : 0;
 
       var nombreEsc = (eq.nombre || '').replace(/'/g, "\\'");
 
@@ -158,6 +159,9 @@ async function loadAdminFase0() {
           + eq.id + '\',\'' + nombreEsc + '\',' + credOp + ',' + credInv + ')">✅ Crédito</button>'
         : '';
 
+      var btnCostoFijo = ' <button class="btn btn-sm btn-ghost" onclick="doAsignarCostoFijo(\'' + eq.id + '\',\'' + nombreEsc + '\')">'
+        + (costoFijoMin > 0 ? '✏️ Editar mín.' : '💰 Costo fijo') + '</button>';
+
       return '<tr>'
         + '<td><strong>' + (eq.nombre || eq.id) + '</strong></td>'
         + '<td>' + fase0Badge(estado) + '</td>'
@@ -166,7 +170,8 @@ async function loadAdminFase0() {
         + '<td class="num">' + (f ? fmt.bs(total) : '—') + '</td>'
         + '<td class="num">' + (credOp  > 0 ? fmt.bs(credOp)  : '—') + '</td>'
         + '<td class="num">' + (credInv > 0 ? fmt.bs(credInv) : '—') + '</td>'
-        + '<td>' + btnCapital + btnHabilitar + btnCredito + '</td>'
+        + '<td class="num">' + (costoFijoMin > 0 ? fmt.bs(costoFijoMin) : '—') + '</td>'
+        + '<td>' + btnCapital + btnHabilitar + btnCredito + btnCostoFijo + '</td>'
         + '</tr>';
     }).join('');
 
@@ -179,6 +184,7 @@ async function loadAdminFase0() {
       + '<thead><tr><th>Equipo</th><th>Estado</th><th>Caja Trabajo (Bs)</th>'
       + '<th>Inversión (Bs)</th><th>Total (Bs)</th>'
       + '<th>Créd. Op<br>(Bs)</th><th>Créd. Inv<br>(Bs)</th>'
+      + '<th>Costo Fijo<br>Mín. (Bs)</th>'
       + '<th>Acciones</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div></div>';
     f0WireNivelesConfig();
@@ -264,6 +270,53 @@ window.doAsignarCapital = function(equipoId, nombreEquipo) {
       });
       cerrar();
       toast('✓ Capital asignado', 'success');
+      await loadAdminFase0();
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  });
+};
+
+window.doAsignarCostoFijo = function(equipoId, nombreEquipo) {
+  var nombreEsc = String(nombreEquipo || '').replace(/</g, '&lt;');
+  var existente = document.getElementById('fase0CostoFijoModal');
+  if (existente) existente.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'fase0CostoFijoModal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML =
+    '<div class="modal-card" style="max-width:420px">'
+    + '<h3>💰 Costo Fijo Mínimo — ' + nombreEsc + '</h3>'
+    + '<p class="param-hint" style="margin-bottom:16px">Monto mínimo (Bs/trimestre) que el equipo debe declarar para alquiler, servicios básicos y mantenimiento — basado en su plan de negocio real.</p>'
+    + '<div class="param-row"><label class="param-label">Costo Fijo Mínimo (Bs)</label>'
+    + '<input class="param-input" type="number" step="any" id="fase0CostoFijoMin" placeholder="0" style="width:140px"/></div>'
+    + '<div class="modal-actions" style="margin-top:20px">'
+    + '<button class="btn-secondary" id="fase0CostoFijoCancelBtn">Cancelar</button>'
+    + '<button class="btn-primary" id="fase0CostoFijoSaveBtn">Guardar</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+
+  var minEl = document.getElementById('fase0CostoFijoMin');
+
+  function cerrar() { modal.remove(); }
+  document.getElementById('fase0CostoFijoCancelBtn').addEventListener('click', cerrar);
+  modal.addEventListener('click', function(e) { if (e.target === modal) cerrar(); });
+
+  document.getElementById('fase0CostoFijoSaveBtn').addEventListener('click', async function() {
+    var costoFijoMinimo = Number(minEl.value);
+    if (!Number.isFinite(costoFijoMinimo) || costoFijoMinimo < 0) {
+      toast('El costo fijo mínimo debe ser un número no negativo', 'error');
+      return;
+    }
+    try {
+      await api('POST', '/admin/fase0/costo-fijo', {
+        equipoId: equipoId,
+        costoFijoMinimo: costoFijoMinimo
+      });
+      cerrar();
+      toast('✓ Costo fijo mínimo asignado', 'success');
       await loadAdminFase0();
     } catch(e) {
       toast(e.message, 'error');
