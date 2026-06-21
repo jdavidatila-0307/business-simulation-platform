@@ -392,6 +392,25 @@ async function main() {
     if (okS9 === totalS9) { console.log(`  ✅ 6eq×5prod×R12: ${okS9}/${totalS9} cuadran | Δ=0.00 Bs`); pasados++; }
     else { console.log(`  ❌ 6eq×5prod×R12: ${okS9}/${totalS9} cuadran`); fallados++; }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN S9: ${e.message}`); fallados++; }
+
+  // ── S10: capacidadMaxProduccion por equipo topa la producción ─────────
+  console.log('\nS10 — Capacidad de planta por equipo (tope = 100)');
+  try {
+    const eq = { id: 'eq_s10', nombre: 'S10_CapBaja' };
+    const dec = decBase({
+      equipo: 'eq_s10', equipoOriginal: 'eq_s10', equipoNombre: 'S10_CapBaja',
+      produccion: 500,                 // decide producir 500
+      capacidadMaxProduccion: 100,     // pero su planta solo permite 100
+    });
+    const cfg = cfgBase([eq], [dec]);
+    const res = engine.ejecutarSimulador([dec], cfg);
+    const r = res.resultados.find(r => r.equipoOriginal === 'eq_s10');
+    const topado = r.produccion === 100;
+    const cuadra = verificarCuadre(r, 'Cap planta por equipo');
+    if (cuadra && topado) { console.log(`  ✅ produccion=${r.produccion} (topado en 100, esperado 100)`); pasados++; }
+    else { console.error(`  ❌ produccion=${r.produccion} (esperado 100) | cuadra=${cuadra}`); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S10: ${e.message}`); fallados++; }
+
   // ── Resultado final ────────────────────────────────────────────────────
   console.log('\n══════════════════════════════════════════════════════');
   if (fallados === 0) {
