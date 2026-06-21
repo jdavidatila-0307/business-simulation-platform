@@ -569,6 +569,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
   const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
   const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
+  const gastoSueldosAdmin = esProductoPrincipal ? (params.sueldosAdministrativosFijos || 0) : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
   let gastosOp = roundBs(
@@ -576,6 +577,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoMktRedes    + gastoRRPP       +
     gastoCostoVend   + gastoOperarios  +
     gastoAdminFijo   + gastoPlantaFijo + gastoDepre    +
+    gastoSueldosAdmin +
     gastoAlmacen     +
     gastoInnovacionNeto + gastoInvMktNeto
     // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
@@ -606,6 +608,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoMktTotal   = gastoTotalMarketing; // ya incluye vendedores
   const pagoAdmin      = params.gastoAdminFijo;
   const pagoPlanta     = params.gastoFijoPlanta;
+  const pagoSueldosAdmin = gastoSueldosAdmin;
   // Nota: depreciación no es salida de caja
   const pagoInnovacion = gastoInnovacion;
   const pagoAlmacen    = costoAlmacenamiento;
@@ -745,6 +748,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoMktTotal     +  // S5: mkt bruto + vendedores
     pagoAdmin        +  // S6: admin fijo
     pagoPlanta       +  // S6: planta fija
+    pagoSueldosAdmin +  // S6: sueldos admin fijos
     pagoInnovacion   +  // S9: innovación bruto
     pagoCalidad      +  // S10: calidad
     pagoAlmacen      +
@@ -985,7 +989,8 @@ function ejecutarSimulador(decisiones, cfg) {
       const gPlanta  = params.gastoFijoPlanta         || 0;
       const gVend    = vend * (params.sueldoTrimestralVendedor || 0);
       const gOper    = oper * (params.costoOperario            || 0);
-      const gFijo       = gAdmin + gPlanta + gVend + gOper + dep;
+      const gSueldosAdmin = params.sueldosAdministrativosFijos || 0;
+      const gFijo       = gAdmin + gPlanta + gVend + gOper + dep + gSueldosAdmin;
       // Intereses sobre deuda existente
       const tasaTrim    = (params.tasaSobregiro||0.055);
       const intDeuda    = Math.round((d.deudaInicial||0) * tasaTrim);
@@ -993,7 +998,7 @@ function ejecutarSimulador(decisiones, cfg) {
       // CONTABILIDAD: depreciación es gasto NO desembolsable
       // Reduce utilidad y activos fijos pero NUNCA sale de caja
       // totalPagosEfectivo excluye depreciación
-      const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda);
+      const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda + gSueldosAdmin);
       const cobrosAnterior = d.cxcInicial || 0;
       const cajaCalc = (d.cajaInicial||0) + cobrosAnterior - totalPagosEfectivo;
       // Sobregiro si caja negativa

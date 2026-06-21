@@ -26,6 +26,7 @@ const PARAMS_BASE = {
   depreciacionTrimestral:     2500,
   gastoAdminFijo:            55000,
   gastoFijoPlanta:           15000,
+  sueldosAdministrativosFijos: 61425,
   costoOperario:              9600,
   operariosIniciales:            4,
   productividadBase:           440,

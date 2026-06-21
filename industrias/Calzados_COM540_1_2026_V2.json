@@ -35,6 +35,7 @@
     "gastoAdminFijo": 55000,
     "modulos_modIVA": 1,
     "gastoFijoPlanta": 45000,
+    "sueldosAdministrativosFijos": 61425,
     "pctMateriaPrima": 0.4,
     "tasaDecaimiento": 0.05,
     "pctVentasContado": 0.8,
