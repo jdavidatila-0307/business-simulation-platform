@@ -1050,6 +1050,10 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
+    const modoInicioActivar = sim.metadata?.modoInicio || 'homogeneo';
+    if (modoInicioActivar === 'fase0' && sim.config.fase0Activa === true) {
+      return send(res, 400, { error: 'No se puede activar la ronda: Fase 0 sigue abierta. Cierra Fase 0 primero (Admin → Fase 0 → Cerrar Fase 0).' });
+    }
     sim.config.roundState = 'open';
     await storage.updateSimulacion(sim.id, { config: sim.config });
     const n = sim.config.currentRound;
