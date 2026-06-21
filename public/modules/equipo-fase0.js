@@ -165,6 +165,15 @@ function f0RenderForm(reg, ref, p) {
     +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Elige el nivel de planta (activos fijos). Determina tu capacidad de producción.</p>'
     +   nivelRadios
     + '</div>'
+    + '<div class="param-card">'
+    +   '<div class="param-card-title">🏠 Costo Fijo Adicional (Bs/trimestre)</div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Alquiler, servicios básicos y mantenimiento. Declara el monto real de tu plan de negocio.</p>'
+    +   (reg.costo_fijo_minimo > 0
+         ? '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Mínimo asignado por el docente: <strong>' + f0bs(reg.costo_fijo_minimo) + '</strong></p>'
+         : '')
+    +   '<div class="param-row"><label class="param-label" for="f0_costo_fijo_declarado">Costo fijo declarado (Bs)</label>'
+    +     numInput('f0_costo_fijo_declarado', reg.costo_fijo_declarado, reg.costo_fijo_minimo || 0) + '</div>'
+    + '</div>'
     // ── SECCIÓN 3 — Personal ──
     + '<div class="param-card">'
     +   '<div class="param-card-title">👷 Personal</div>'
@@ -303,7 +312,8 @@ function f0Collect() {
     costo_operario: Number(f0val('f0_costo_operario')) || 0,
     sueldo_vendedor: Number(f0val('f0_sueldo_vendedor')) || 0,
     credito_operativo_pre_r1: Number(f0val('f0_credito_operativo')) || 0,
-    credito_inversion_pre_r1: Number(f0val('f0_credito_inversion')) || 0
+    credito_inversion_pre_r1: Number(f0val('f0_credito_inversion')) || 0,
+    costo_fijo_declarado: Number(f0val('f0_costo_fijo_declarado')) || 0
   };
   if (sel) {
     data.nivel_af = Number(sel.value);
