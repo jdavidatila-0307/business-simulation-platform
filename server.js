@@ -2530,7 +2530,8 @@ async function route(req, res, body) {
     const permitidos = ['segmento_1', 'producto_1', 'nivel_af', 'activos_fijos_comprados',
       'capacidad_produccion_base', 'operarios_iniciales', 'costo_operario', 'sueldo_vendedor',
       'credito_operativo_pre_r1', 'plazo_operativo_pre_r1', 'credito_inversion_pre_r1', 'plazo_inversion_pre_r1',
-      'costo_fijo_declarado'];
+      'costo_fijo_declarado',
+      'vehiculo_nivel', 'muebles_comprado', 'equipos_computo_comprado', 'patentes_comprado'];
     const data = {};
     permitidos.forEach(k => { if (body[k] !== undefined) data[k] = body[k]; });
     const actual = await storage.getFase0Equipo(sim.id, equipoId);

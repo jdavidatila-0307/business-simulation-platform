@@ -792,7 +792,8 @@ const FASE0_COLS = [
   'plazo_inversion_pre_r1', 'caja_inicial_docente', 'capital_inversion',
   'capital_total_otorgado', 'caja_inicial', 'deuda_inicial', 'cuadre_verificado',
   'delta_cuadre', 'observaciones_docente', 'enviado_at', 'aprobado_at',
-  'costo_fijo_minimo', 'costo_fijo_declarado'
+  'costo_fijo_minimo', 'costo_fijo_declarado',
+  'vehiculo_nivel', 'muebles_comprado', 'equipos_computo_comprado', 'patentes_comprado'
 ];
 
 async function getFase0(simId) {
