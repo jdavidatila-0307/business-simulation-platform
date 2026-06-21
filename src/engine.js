@@ -917,6 +917,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     activosFijosNetos: afNetos,
     costoUnitario, comisionPct,
     brandEquityFinal,
+    capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
   };
 }
 
@@ -1044,6 +1045,7 @@ function ejecutarSimulador(decisiones, cfg) {
         activosFijosIniciales: d.activosFijosIniciales || 80000,
         afNetos,
         totalActivos,
+        capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
         deudaInicial:     d.deudaInicial || 0,
         deudaFinal,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
@@ -1095,7 +1097,7 @@ function ejecutarSimulador(decisiones, cfg) {
       d.produccion || 0,
       opData.capacidadEfectiva,        // límite operarios
       produccionMaxMP,                 // límite MP
-      paramsConProveedores.capacidadMaxProduccion || Infinity  // límite planta
+      d.capacidadMaxProduccion ?? paramsConProveedores.capacidadMaxProduccion ?? Infinity  // límite planta (por equipo, fallback global)
     );
     d = {
       ...d,
@@ -1502,6 +1504,7 @@ function propagarEstado(decision, resPrev, params = {}) {
     saldoIUEcompensable:        Math.max(0, resPrev.saldoIUEfinal        ?? 0),
     pedidosPendientes:          resPrev.pedidosPendientesResta           ?? [],
     inventarioInicial:          resPrev.inventarioFinal                  ?? 0,
+    capacidadMaxProduccion:     resPrev.capacidadMaxProduccion           ?? params.capacidadMaxProduccion,
   };
 }
 

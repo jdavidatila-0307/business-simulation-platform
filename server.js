@@ -1112,6 +1112,7 @@ async function route(req, res, body) {
               deudaInicial:          estadoInicial.deudaInicial,
               capitalInicial:        estadoInicial.capitalInicial,
               operariosIniciales:    estadoInicial.operariosIniciales,
+              capacidadMaxProduccion: estadoInicial.capacidadMaxProduccion || undefined,
             });
             if (dec.productos && dec.productos[0]) {
               dec.productos[0].operariosIniciales = estadoInicial.operariosIniciales;
