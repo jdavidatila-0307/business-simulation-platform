@@ -411,6 +411,39 @@ async function main() {
     else { console.error(`  ❌ produccion=${r.produccion} (esperado 100) | cuadra=${cuadra}`); fallados++; }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN S10: ${e.message}`); fallados++; }
 
+  // ── S11: lead time de maquinaria — bloqueo de producción solo en R1 ────
+  console.log('\nS11 — Lead time maquinaria (R1 bloqueada, R2 opera)');
+  try {
+    const eq = { id: 'eq_s11', nombre: 'S11_LeadTime' };
+    const dec = decBase({
+      equipo: 'eq_s11', equipoOriginal: 'eq_s11', equipoNombre: 'S11_LeadTime',
+      produccion: 1000,                // decide producir 1000
+      capacidadMaxProduccion: 1350,    // capacidad real de planta (intacta, ej. BIOPASO)
+    });
+
+    // Caso A — R1 con bloqueo: producción forzada a 0 (planta en lead time)
+    const cfgR1 = { ...cfgBase([eq], [dec]), rondaNumero: 1, bloquearProduccionR1: true };
+    const resR1 = engine.ejecutarSimulador([dec], cfgR1);
+    const rR1   = resR1.resultados.find(r => r.equipoOriginal === 'eq_s11');
+    const okR1prod   = rR1.produccion === 0;
+    const okR1cuadra = verificarCuadre(rR1, 'Lead time R1 (bloqueada)');
+
+    // Caso B — R2 con el MISMO flag: lead time ya no aplica, capacidad real opera
+    const cfgR2 = { ...cfgBase([eq], [dec]), rondaNumero: 2, bloquearProduccionR1: true };
+    const resR2 = engine.ejecutarSimulador([dec], cfgR2);
+    const rR2   = resR2.resultados.find(r => r.equipoOriginal === 'eq_s11');
+    const okR2prod   = rR2.produccion === 1000;
+    const okR2cuadra = verificarCuadre(rR2, 'Lead time R2 (opera)');
+
+    if (okR1prod && okR1cuadra && okR2prod && okR2cuadra) {
+      console.log(`  ✅ R1 produccion=${rR1.produccion} (esperado 0) | R2 produccion=${rR2.produccion} (esperado 1000, cap real intacta)`);
+      pasados++;
+    } else {
+      console.error(`  ❌ R1 produccion=${rR1.produccion} (esp 0, cuadra=${okR1cuadra}) | R2 produccion=${rR2.produccion} (esp 1000, cuadra=${okR2cuadra})`);
+      fallados++;
+    }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S11: ${e.message}`); fallados++; }
+
   // ── Resultado final ────────────────────────────────────────────────────
   console.log('\n══════════════════════════════════════════════════════');
   if (fallados === 0) {
