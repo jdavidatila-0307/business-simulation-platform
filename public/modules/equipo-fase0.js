@@ -25,17 +25,18 @@ function f0setText(id, txt) { var e = document.getElementById(id); if (e) e.text
 function f0Niveles(p) {
   p = p || {};
   var defaults = [
-    { n: 1, nombre: 'Taller',   monto: 40000  },
-    { n: 2, nombre: 'Pequeña',  monto: 60000  },
-    { n: 3, nombre: 'Estándar', monto: 80000  },
-    { n: 4, nombre: 'Mediana',  monto: 120000 },
-    { n: 5, nombre: 'Grande',   monto: 160000 }
+    { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300  },
+    { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600  },
+    { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800  },
+    { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150 },
+    { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350 },
+    { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700 }
   ];
-  var factor = (p.fase0_factor_capacidad != null) ? Number(p.fase0_factor_capacidad) : 0.01875;
   return defaults.map(function(d) {
     var nombre = (p['fase0_af_' + d.n + '_nombre'] != null) ? p['fase0_af_' + d.n + '_nombre'] : d.nombre;
     var monto  = (p['fase0_af_' + d.n + '_monto']  != null) ? Number(p['fase0_af_' + d.n + '_monto']) : d.monto;
-    return { n: d.n, nombre: nombre, monto: monto || 0, capacidad: Math.round((monto || 0) * factor) };
+    var capacidad = (p['fase0_af_' + d.n + '_capacidad'] != null) ? Number(p['fase0_af_' + d.n + '_capacidad']) : d.capacidad;
+    return { n: d.n, nombre: nombre, monto: monto || 0, capacidad: capacidad || 0 };
   });
 }
 

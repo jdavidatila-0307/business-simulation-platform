@@ -29,22 +29,24 @@ function fase0Badge(estado) {
 // Sección de configuración de niveles AF (solo docente). locked=true cuando Fase 0 está activa.
 function buildFase0ConfigHTML(p, locked) {
   var dis = locked ? ' disabled' : '';
-  var factor = (p.fase0_factor_capacidad != null) ? Number(p.fase0_factor_capacidad) : 0.01875;
   var defaults = [
-    { n: 1, nombre: 'Taller',   monto: 40000  },
-    { n: 2, nombre: 'Pequeña',  monto: 60000  },
-    { n: 3, nombre: 'Estándar', monto: 80000  },
-    { n: 4, nombre: 'Mediana',  monto: 120000 },
-    { n: 5, nombre: 'Grande',   monto: 160000 }
+    { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300  },
+    { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600  },
+    { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800  },
+    { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150 },
+    { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350 },
+    { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700 }
   ];
   var filas = defaults.map(function(d) {
     var nombre = (p['fase0_af_' + d.n + '_nombre'] != null) ? p['fase0_af_' + d.n + '_nombre'] : d.nombre;
     var monto  = (p['fase0_af_' + d.n + '_monto']  != null) ? Number(p['fase0_af_' + d.n + '_monto']) : d.monto;
+    var capacidad = (p['fase0_af_' + d.n + '_capacidad'] != null) ? Number(p['fase0_af_' + d.n + '_capacidad']) : d.capacidad;
     return '<div class="param-row">'
       + '<label class="param-label">Nivel ' + d.n + '</label>'
       + '<input class="param-input" type="text" data-pkey-str="fase0_af_' + d.n + '_nombre" value="' + nombre + '" style="width:130px"' + dis + '/>'
       + '<input class="param-input" type="number" step="any" data-pkey="fase0_af_' + d.n + '_monto" value="' + monto + '" style="width:120px"' + dis + '/>'
-      + '<span class="param-hint">Capacidad: <strong id="fase0_cap_' + d.n + '">' + Math.round(monto * factor) + '</strong></span>'
+      + '<input class="param-input" type="number" step="any" data-pkey="fase0_af_' + d.n + '_capacidad" value="' + capacidad + '" style="width:100px"' + dis + '/>'
+      + '<span class="param-hint">Capacidad</span>'
       + '</div>';
   }).join('');
 
@@ -54,9 +56,6 @@ function buildFase0ConfigHTML(p, locked) {
     + '</div>'
     + '<div class="param-card" style="margin-bottom:24px">'
     + filas
-    + '<div class="param-row"><label class="param-label">Factor de capacidad</label>'
-    +   '<input class="param-input" type="number" step="any" data-pkey="fase0_factor_capacidad" value="' + factor + '"' + dis + '/>'
-    +   '<span class="param-hint">Capacidad = AF × factor</span></div>'
     + '<div class="param-row"><label class="param-label">Plazos crédito operativo</label>'
     +   '<input class="param-input" type="text" data-pkey-str="fase0_plazos_credito_op" value="' + (p.fase0_plazos_credito_op != null ? p.fase0_plazos_credito_op : '10,20') + '"' + dis + '/>'
     +   '<span class="param-hint">Separados por coma</span></div>'
@@ -70,26 +69,14 @@ function buildFase0ConfigHTML(p, locked) {
     + '</div>';
 }
 
-// Recálculo de capacidad (AF × factor) en tiempo real — scoped a #adminFase0Content.
+// Wiring de inputs Fase 0 — capacidad es valor manual independiente por nivel, scoped a #adminFase0Content.
 function f0WireNivelesConfig() {
-  function recalcFase0() {
-    var factorEl = document.querySelector('#adminFase0Content [data-pkey="fase0_factor_capacidad"]');
-    var factor = factorEl ? (parseFloat(factorEl.value) || 0) : 0;
-    for (var n = 1; n <= 5; n++) {
-      var montoEl = document.querySelector('#adminFase0Content [data-pkey="fase0_af_' + n + '_monto"]');
-      var capEl = document.getElementById('fase0_cap_' + n);
-      if (montoEl && capEl) {
-        var monto = parseFloat(montoEl.value) || 0;
-        capEl.textContent = Math.round(monto * factor);
-      }
-    }
-  }
+  // Capacidad ya no se deriva de monto×factor — es un valor
+  // editable independiente por nivel (fase0_af_N_capacidad).
+  // Esta función queda sin recálculo automático.
   document.querySelectorAll('#adminFase0Content [data-pkey^="fase0_af_"]').forEach(function(el) {
-    el.addEventListener('input', recalcFase0);
+    el.addEventListener('input', function() {});
   });
-  var factorEl = document.querySelector('#adminFase0Content [data-pkey="fase0_factor_capacidad"]');
-  if (factorEl) factorEl.addEventListener('input', recalcFase0);
-  recalcFase0();
 }
 
 window.doGuardarNivelesAF = async function() {
