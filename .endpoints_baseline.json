@@ -1,6 +1,6 @@
 {
-  "generadoEn": "2026-06-14T12:20:29.432Z",
-  "total": 64,
+  "generadoEn": "2026-06-21T13:48:19.336Z",
+  "total": 65,
   "endpoints": [
     "DELETE /admin/bots",
     "DELETE /admin/equipos",
@@ -35,6 +35,7 @@
     "POST /admin/fase0/activar",
     "POST /admin/fase0/capital",
     "POST /admin/fase0/cerrar",
+    "POST /admin/fase0/costo-fijo",
     "POST /admin/fase0/credito",
     "POST /admin/fase0/habilitar",
     "POST /admin/presim",
