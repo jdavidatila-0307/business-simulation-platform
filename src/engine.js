@@ -1099,14 +1099,18 @@ function ejecutarSimulador(decisiones, cfg) {
       produccionMaxMP,                 // límite MP
       d.capacidadMaxProduccion ?? paramsConProveedores.capacidadMaxProduccion ?? Infinity  // límite planta (por equipo, fallback global)
     );
+    // Lead time de maquinaria: en R1 de modo Fase 0 la planta recién comprada
+    // NO está operativa. La capacidad del equipo se conserva intacta; solo se
+    // fuerza la producción a 0 por esta condición externa, sin tocar capacidadMaxProduccion.
+    const produccionFinal = (rondaNum === 1 && cfg.bloquearProduccionR1 === true) ? 0 : produccionReal;
     d = {
       ...d,
       rondaNumero:            rondaNum,    // Etapa 3.4: para cálculo IUE
-      produccion:             produccionReal,
+      produccion:             produccionFinal,
       operariosFinales:       opData.operariosFinales,
       capacidadEfectiva:      opData.capacidadEfectiva,
       costoOperarios:         opData.costoOperarios,
-      stockMPFinal:           Math.max(0, mpData.stockMPDisponible - produccionReal * unidMP),
+      stockMPFinal:           Math.max(0, mpData.stockMPDisponible - produccionFinal * unidMP),
       pedidosPendientesResta: mpData.pedidosPendientesResta,
       pagoMP:                 mpData.pagoMP,
     };
