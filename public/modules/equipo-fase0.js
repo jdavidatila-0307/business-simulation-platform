@@ -19,6 +19,7 @@
 // ── Helpers de formato/lectura ──────────────────────────────────────────────
 function f0bs(n)            { return (typeof fmt !== 'undefined' && fmt.bs) ? fmt.bs(n) : ('Bs ' + (Number(n) || 0)); }
 function f0val(id)          { var e = document.getElementById(id); return e ? e.value : ''; }
+function f0chk(id)          { var e = document.getElementById(id); return e ? !!e.checked : false; }
 function f0setText(id, txt) { var e = document.getElementById(id); if (e) e.textContent = txt; }
 
 // Niveles de activos fijos — desde parámetros si están, si no defaults del admin
@@ -174,6 +175,24 @@ function f0RenderForm(reg, ref, p) {
     +   '<div class="param-row"><label class="param-label" for="f0_costo_fijo_declarado">Costo fijo declarado (Bs)</label>'
     +     numInput('f0_costo_fijo_declarado', reg.costo_fijo_declarado, reg.costo_fijo_minimo || 0) + '</div>'
     + '</div>'
+    // ── SECCIÓN — Activos Complementarios ──
+    + '<div class="param-card">'
+    +   '<div class="param-card-title">🚚 Activos Complementarios</div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Inversiones opcionales que mejoran el atractivo de tu empresa ante los clientes.</p>'
+    +   '<div class="param-row"><label class="param-label" for="f0_vehiculo_nivel">Vehículo</label>'
+    +     '<select class="param-input" id="f0_vehiculo_nivel">'
+    +       '<option value="0"' + ((Number(reg.vehiculo_nivel)||0) === 0 ? ' selected' : '') + '>Sin vehículo (Bs 0)</option>'
+    +       '<option value="1"' + ((Number(reg.vehiculo_nivel)||0) === 1 ? ' selected' : '') + '>Moto delivery (Bs 35.000)</option>'
+    +       '<option value="2"' + ((Number(reg.vehiculo_nivel)||0) === 2 ? ' selected' : '') + '>Furgoneta (Bs 243.000)</option>'
+    +       '<option value="3"' + ((Number(reg.vehiculo_nivel)||0) === 3 ? ' selected' : '') + '>Flota completa (Bs 313.000)</option>'
+    +     '</select></div>'
+    +   '<div class="param-row"><label class="param-label" for="f0_muebles_comprado">Muebles y Enseres (Bs 16.000)</label>'
+    +     '<input type="checkbox" id="f0_muebles_comprado"' + (reg.muebles_comprado ? ' checked' : '') + '/></div>'
+    +   '<div class="param-row"><label class="param-label" for="f0_equipos_computo_comprado">Equipos de Cómputo (Bs 43.650)</label>'
+    +     '<input type="checkbox" id="f0_equipos_computo_comprado"' + (reg.equipos_computo_comprado ? ' checked' : '') + '/></div>'
+    +   '<div class="param-row"><label class="param-label" for="f0_patentes_comprado">Patentes (Bs 1.400)</label>'
+    +     '<input type="checkbox" id="f0_patentes_comprado"' + (reg.patentes_comprado ? ' checked' : '') + '/></div>'
+    + '</div>'
     // ── SECCIÓN 3 — Personal ──
     + '<div class="param-card">'
     +   '<div class="param-card-title">👷 Personal</div>'
@@ -313,7 +332,11 @@ function f0Collect() {
     sueldo_vendedor: Number(f0val('f0_sueldo_vendedor')) || 0,
     credito_operativo_pre_r1: Number(f0val('f0_credito_operativo')) || 0,
     credito_inversion_pre_r1: Number(f0val('f0_credito_inversion')) || 0,
-    costo_fijo_declarado: Number(f0val('f0_costo_fijo_declarado')) || 0
+    costo_fijo_declarado: Number(f0val('f0_costo_fijo_declarado')) || 0,
+    vehiculo_nivel: Number(f0val('f0_vehiculo_nivel')) || 0,
+    muebles_comprado: f0chk('f0_muebles_comprado'),
+    equipos_computo_comprado: f0chk('f0_equipos_computo_comprado'),
+    patentes_comprado: f0chk('f0_patentes_comprado')
   };
   if (sel) {
     data.nivel_af = Number(sel.value);
