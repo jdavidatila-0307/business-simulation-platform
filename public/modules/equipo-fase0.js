@@ -115,6 +115,7 @@ function f0RenderReadOnly(r) {
 // ── Formulario completo ─────────────────────────────────────────────────────
 function f0RenderForm(reg, ref, p) {
   var niveles = f0Niveles(p);
+  var sueldoAdminFijo = Number(p.sueldosAdministrativosFijos) || 0;
 
   var segOpts = '<option value="">-- Seleccionar segmento --</option>'
     + ref.segmentos.map(function (s) {
@@ -171,12 +172,19 @@ function f0RenderForm(reg, ref, p) {
     + '</div>'
     + '<div class="param-card">'
     +   '<div class="param-card-title">🏠 Costo Fijo Adicional (Bs/trimestre)</div>'
-    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Alquiler, servicios básicos y mantenimiento. Declara el monto real de tu plan de negocio.</p>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Costo fijo propio de tu equipo para alquiler, servicios y mantenimiento. Debe ser igual o mayor al mínimo definido por el docente.</p>'
     +   (reg.costo_fijo_minimo > 0
          ? '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Mínimo asignado por el docente: <strong>' + f0bs(reg.costo_fijo_minimo) + '</strong></p>'
          : '')
     +   '<div class="param-row"><label class="param-label" for="f0_costo_fijo_declarado">Costo fijo declarado (Bs)</label>'
     +     numInput('f0_costo_fijo_declarado', reg.costo_fijo_declarado, reg.costo_fijo_minimo || 0) + '</div>'
+    + '</div>'
+    + '<div class="param-card">'
+    +   '<div class="param-card-title">👔 Personal administrativo fijo</div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Definido por el profesor para toda la simulación. Representa personal administrativo y gerencial, y se aplica por igual a todos los equipos.</p>'
+    +   (sueldoAdminFijo > 0
+         ? '<p style="font-size:.9rem;margin:0"><strong>' + f0bs(sueldoAdminFijo) + ' por trimestre</strong></p>'
+         : '<p style="font-size:.8rem;color:var(--text3);margin:0">Valor no configurado para esta simulación.</p>')
     + '</div>'
     // ── SECCIÓN — Activos Complementarios ──
     + '<div class="param-card">'

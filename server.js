@@ -2527,6 +2527,7 @@ async function route(req, res, body) {
       Object.entries(sim.parametros || {})
         .filter(([k]) => k.startsWith('fase0_'))
     );
+    fase0Params.sueldosAdministrativosFijos = sim.parametros?.sueldosAdministrativosFijos ?? 0;
     return send(res, 200, { fase0Activa, registro, equipoId, fase0Params,
       modoInicio: sim.metadata?.modoInicio || 'fase0' });
   }
