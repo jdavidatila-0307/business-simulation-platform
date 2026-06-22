@@ -154,11 +154,13 @@ function f0RenderForm(reg, ref, p) {
   return ''
     // ── SECCIÓN 1 — Estrategia ──
     + '<div class="param-card">'
-    +   '<div class="param-card-title">🎯 Estrategia <span style="font-size:.72rem;color:#f59e0b;font-weight:400">🔒 Se bloquea durante R1–R4</span></div>'
+    +   '<div class="param-card-title">🎯 Estrategia</div>'
     +   '<div class="param-row"><label class="param-label" for="f0_segmento_1">Segmento objetivo</label>'
     +     '<select class="param-input" id="f0_segmento_1">' + segOpts + '</select></div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Mercado principal al que orientarás tu estrategia inicial. Úsalo para alinear precio, producto, marketing y canales.</p>'
     +   '<div class="param-row"><label class="param-label" for="f0_producto_1">Producto</label>'
     +     '<select class="param-input" id="f0_producto_1">' + prodOpts + '</select></div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Producto con el que iniciarás la simulación. Debe ser coherente con el segmento objetivo y tu propuesta de valor.</p>'
     + '</div>'
     // ── SECCIÓN 2 — Tamaño de operación ──
     + '<div class="param-card">'
