@@ -13,6 +13,13 @@
       "coefPrecio=-0.005: calibrado para Bs 90-400"
     ]
   },
+  "estado": {
+    "visible": false,
+    "deprecated": true,
+    "historica": true,
+    "motivo": "Plantilla histórica reemplazada por Calzados_COM540_1_2026_V2",
+    "reemplazadaPor": "Calzados_COM540_1_2026_V2"
+  },
   "params": {
     "moneda": "Bs",
     "tasaIT": 0.03,
