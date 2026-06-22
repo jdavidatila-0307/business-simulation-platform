@@ -189,7 +189,8 @@ function f0RenderForm(reg, ref, p) {
     // ── SECCIÓN — Activos Complementarios ──
     + '<div class="param-card">'
     +   '<div class="param-card-title">🚚 Activos Complementarios</div>'
-    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Inversiones opcionales que mejoran el atractivo de tu empresa ante los clientes.</p>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 8px">Los activos complementarios fortalecen estrategias específicas. No generan un beneficio general: su efecto depende del canal o tipo de innovación que utilices.</p>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 10px">Vehículos: selecciona un nivel de inversión (0–3), no una cantidad; fortalecen canales logísticos como Distribuidores B2B, Ferias y Eventos o Convenios Institucionales.<br>Muebles y enseres: fortalecen Tienda Propia.<br>Equipos de cómputo: fortalecen Venta Digital.<br>Patentes: potencian la innovación de Proceso. Representan mejoras técnicas protegidas que ayudan a producir con mayor eficiencia y reducir costos; no aumentan directamente el atractivo del producto.</p>'
     +   '<div class="param-row"><label class="param-label" for="f0_vehiculo_nivel">Vehículo</label>'
     +     '<select class="param-input" id="f0_vehiculo_nivel">'
     +       '<option value="0"' + ((Number(reg.vehiculo_nivel)||0) === 0 ? ' selected' : '') + '>Sin vehículo (Bs 0)</option>'
