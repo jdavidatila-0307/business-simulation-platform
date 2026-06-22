@@ -26,18 +26,18 @@ function f0setText(id, txt) { var e = document.getElementById(id); if (e) e.text
 function f0Niveles(p) {
   p = p || {};
   var defaults = [
-    { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300  },
-    { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600  },
-    { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800  },
-    { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150 },
-    { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350 },
-    { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700 }
+    { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300,  operariosMinimos: 2 },
+    { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600,  operariosMinimos: 3 },
+    { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800,  operariosMinimos: 3 },
+    { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150, operariosMinimos: 5 },
+    { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350, operariosMinimos: 6 },
+    { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700, operariosMinimos: 7 }
   ];
   return defaults.map(function(d) {
     var nombre = (p['fase0_af_' + d.n + '_nombre'] != null) ? p['fase0_af_' + d.n + '_nombre'] : d.nombre;
     var monto  = (p['fase0_af_' + d.n + '_monto']  != null) ? Number(p['fase0_af_' + d.n + '_monto']) : d.monto;
     var capacidad = (p['fase0_af_' + d.n + '_capacidad'] != null) ? Number(p['fase0_af_' + d.n + '_capacidad']) : d.capacidad;
-    return { n: d.n, nombre: nombre, monto: monto || 0, capacidad: capacidad || 0 };
+    return { n: d.n, nombre: nombre, monto: monto || 0, capacidad: capacidad || 0, operariosMinimos: d.operariosMinimos };
   });
 }
 
@@ -142,6 +142,7 @@ function f0RenderForm(reg, ref, p) {
         + '<strong style="font-size:.95rem">' + nv.nombre + '</strong>'
         + '<span style="font-family:var(--font-mono);font-size:.85rem">' + f0bs(nv.monto) + '</span>'
         + '<span style="color:var(--text3);font-size:.75rem">' + nv.capacidad + ' pares/trim</span>'
+        + '<span style="color:var(--text3);font-size:.75rem">Mínimo ' + nv.operariosMinimos + ' operarios</span>'
         + '</label>';
     }).join('')
     + '</div>';
@@ -165,7 +166,7 @@ function f0RenderForm(reg, ref, p) {
     // ── SECCIÓN 2 — Tamaño de operación ──
     + '<div class="param-card">'
     +   '<div class="param-card-title">🏗️ Tamaño de operación</div>'
-    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Elige el nivel de planta (activos fijos). Determina tu capacidad de producción.</p>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Cada nivel de planta requiere un mínimo de operarios para operar correctamente. La planta define la capacidad máxima técnica, pero la producción efectiva también depende del personal contratado.</p>'
     +   nivelRadios
     + '</div>'
     + '<div class="param-card">'
