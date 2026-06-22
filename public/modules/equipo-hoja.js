@@ -492,27 +492,27 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr><td class="hoja-label">🎯 Segmento objetivo</td>
               <td>${sel('segmentoObjetivo',segOpts)}</td>
-              <td class="hoja-ref">7 segmentos disponibles</td>
+              <td class="hoja-ref">Grupo de clientes al que orientarás tu estrategia. Los segmentos disponibles dependen de la industria configurada por el profesor.</td>
               <td>${ta('segmentoProducto','¿Por qué este segmento?')}</td></tr>
           <tr><td class="hoja-label">🧪 Tipo de producto</td>
               <td>${sel('producto',prodOpts)}</td>
-              <td class="hoja-ref">Costo base varía por tipo</td>
+              <td class="hoja-ref">Producto con el que competirás en el mercado. Debe ser coherente con el segmento objetivo, precio, canal y propuesta de valor.</td>
               <td></td></tr>
           <tr><td class="hoja-label">📦 Canal principal</td>
               <td>${sel('canalPrincipal',canalOpts)}</td>
-              <td class="hoja-ref">Define costo, comisión e impacto vendedores</td>
+              <td class="hoja-ref">Canal más importante para llegar al cliente. Puede afectar costos, comisiones, atractivo y necesidad de vendedores según la industria.</td>
               <td>${ta('canal','¿Por qué este canal?')}</td></tr>
           <tr><td class="hoja-label">📦 Canal secundario</td>
               <td>${sel('canalSecundario',canal2Opts)}</td>
-              <td class="hoja-ref">Opcional — promedia con canal principal</td>
+              <td class="hoja-ref">Canal complementario. Sus efectos se combinan con el canal principal según la configuración del simulador.</td>
               <td></td></tr>
           <tr><td class="hoja-label">⭐ Calidad (1–10)</td>
               <td>${inp('calidad',productoActivo.calidad,'number','min="1" max="10" step="1"')}</td>
-              <td class="hoja-ref">+0.20 Bs/unid de CU por punto · Afecta atractivo</td>
+              <td class="hoja-ref">Nivel percibido de desempeño del producto. Mejorar calidad puede aumentar atractivo, pero también puede elevar el costo unitario según el producto y los parámetros de la industria.</td>
               <td></td></tr>
           <tr><td class="hoja-label">💰 Precio de venta (Bs)</td>
               <td>${inp('precioVenta',productoActivo.precioVenta,'number','min="0.1" step="0.1"')}</td>
-              <td class="hoja-ref">Precio al consumidor final. Afecta atractivo competitivo.</td>
+              <td class="hoja-ref">Valor de venta al cliente. Un precio mayor puede mejorar margen, pero reducir atractivo si el mercado percibe alternativas más convenientes.</td>
               <td>${ta('precios','¿Estrategia de precio?')}</td></tr>
 
         </tbody>
@@ -527,31 +527,31 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr><td class="hoja-label">📣 Publicidad</td>
               <td>${inp('publicidad',productoActivo.publicidad,'number','min="0" step="500"')}</td>
-              <td class="hoja-ref">Impacto en atractivo competitivo</td>
+              <td class="hoja-ref">Inversión para aumentar visibilidad del producto dentro del esfuerzo total de marketing.</td>
               <td>${ta('marketing','¿Cómo distribuiste el presupuesto?')}</td></tr>
           <tr><td class="hoja-label">🎁 Promoción</td>
               <td>${inp('promocion',productoActivo.promocion,'number','min="0" step="500"')}</td>
-              <td class="hoja-ref">Alta eficacia en segmentos masivos</td><td></td></tr>
+              <td class="hoja-ref">Incentivo comercial para estimular la compra. Forma parte del esfuerzo total de marketing.</td><td></td></tr>
           <tr><td class="hoja-label">🎪 Eventos</td>
               <td>${inp('eventos',productoActivo.eventos,'number','min="0" step="500"')}</td>
-              <td class="hoja-ref">Eficacia media; fortalece posicionamiento</td><td></td></tr>
+              <td class="hoja-ref">Acción comercial de contacto directo con clientes. Contribuye al esfuerzo total de marketing.</td><td></td></tr>
           <tr><td class="hoja-label">📱 Marketing en redes</td>
               <td>${inp('marketingRedes',productoActivo.marketingRedes,'number','min="0" step="500"')}</td>
-              <td class="hoja-ref">Alta eficacia en segmentos Natural y Cosmético</td><td></td></tr>
+              <td class="hoja-ref">Comunicación digital para reforzar visibilidad, interacción y recordación. Debe adaptarse a la industria activa.</td><td></td></tr>
           <tr><td class="hoja-label">📰 Relaciones públicas</td>
               <td>${inp('relacionesPublicas',productoActivo.relacionesPublicas,'number','min="0" step="500"')}</td>
-              <td class="hoja-ref">Alta eficacia en segmentos diferenciados</td><td></td></tr>
+              <td class="hoja-ref">Acción para fortalecer reputación y confianza del mercado. Forma parte del esfuerzo total de marketing.</td><td></td></tr>
           <tr style="border-top:2px solid var(--border2)">
             <td class="hoja-label">👥 Vendedores actuales</td>
             <td><span class="hoja-value-ro">${decision.vendedoresIniciales||0}</span></td>
-            <td class="hoja-ref">Propagado de ronda anterior</td><td></td></tr>
+            <td class="hoja-ref">Personal comercial que ayuda a ejecutar la estrategia de ventas. Su impacto depende del canal utilizado.</td><td></td></tr>
           ${hojaProductoActivo === 0 ? `
           <tr><td class="hoja-label">➕ Contratar vendedores</td>
               <td>${inp('contratarVendedores',decision.contratarVendedores??0,'number','min="0" max="10" step="1"')}</td>
-              <td class="hoja-ref">Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td><td></td></tr>
+              <td class="hoja-ref">Aumenta la fuerza comercial, pero eleva costos.</td><td style="font-size:.78rem;color:var(--text3)">Contratación: Bs ${fmt.num(p.costoContratacionVendedor||500)} c/u · Sueldo: Bs ${fmt.num(p.sueldoTrimestralVendedor||2400)}/trim.</td></tr>
           <tr><td class="hoja-label">➖ Despedir vendedores</td>
               <td>${inp('despedirVendedores',decision.despedirVendedores??0,'number','min="0" step="1"')}</td>
-              <td class="hoja-ref">Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td><td></td></tr>
+              <td class="hoja-ref">Reduce costos comerciales futuros, pero puede debilitar la ejecución de ventas.</td><td style="font-size:.78rem;color:var(--text3)">Costo despido: Bs ${fmt.num(p.costoDespidoVendedor||800)} c/u</td></tr>
           ` : `
           <tr><td colspan="4" style="padding:6px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
             ℹ️ Contratar/despedir vendedores se gestiona en <strong>Producto 1</strong> · Aplica a toda la empresa.
@@ -560,6 +560,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           `}
         </tbody>
       </table>
+      <div style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2)">
+        Estas inversiones se integran al esfuerzo total de marketing del producto. No garantizan ventas por sí solas.
+      </div>
     </div>
 
         <!-- S2.5: OPERARIOS — Etapa 3.2 -->
@@ -572,26 +575,26 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           <tr>
             <td class="hoja-label">🏭 Operarios actuales</td>
             <td><span class="hoja-value-ro">${decision.operariosIniciales ?? p.operariosIniciales ?? 4}</span></td>
-            <td class="hoja-ref">Propagado de ronda anterior</td>
+            <td class="hoja-ref">Personal productivo que permite utilizar la capacidad de planta.</td>
             <td style="font-size:.78rem;color:var(--text3)">Cap. efectiva: ${fmt.num((decision.operariosIniciales ?? p.operariosIniciales ?? 4) * (p.productividadBase ?? 440))} unid/trim</td>
           </tr>
           <tr>
             <td class="hoja-label">🏭 Producción (unidades)</td>
             <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
-            <td class="hoja-ref">Máx: ${fmt.num(p.capacidadMaxProduccion||1500)} unid</td>
+            <td class="hoja-ref">Cantidad que deseas fabricar. La producción real puede ser menor si faltan capacidad de planta, operarios o materia prima.</td>
             <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td>
           </tr>
           ${hojaProductoActivo === 0 ? `
           <tr>
             <td class="hoja-label">➕ Contratar operarios</td>
             <td>${inp('contratarOperarios', decision.contratarOperarios ?? 0, 'number', 'min="0" max="20" step="1"')}</td>
-            <td class="hoja-ref">Costo contratación: Bs ${fmt.num(p.costoContratacionOperario ?? 800)} c/u</td>
+            <td class="hoja-ref">Aumenta la capacidad productiva efectiva, pero incrementa costos laborales.</td>
             <td style="font-size:.78rem;color:var(--text3)">Sueldo: Bs ${fmt.num(p.costoOperario ?? 3200)}/trim/operario</td>
           </tr>
           <tr>
             <td class="hoja-label">➖ Despedir operarios</td>
             <td>${inp('despedirOperarios', decision.despedirOperarios ?? 0, 'number', 'min="0" step="1"')}</td>
-            <td class="hoja-ref">Costo despido: Bs ${fmt.num(p.costoDespidoOperario ?? 1200)} c/u</td>
+            <td class="hoja-ref">Reduce costos laborales futuros, pero puede limitar la producción efectiva.</td>
             <td style="font-size:.78rem;color:var(--text3)">Mínimo final: 0 operarios</td>
           </tr>
           <tr>
@@ -609,6 +612,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         </tbody>
       </table>
     </div>
+    ` : ''}
+
+    ${(p.costoOperario !== undefined && p.modulos_modOperarios !== 0) ? `
+      <div style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2);margin-top:-12px;margin-bottom:12px">
+        La producción efectiva se determina por la menor restricción disponible entre la cantidad planificada, la capacidad de planta, los operarios disponibles y la materia prima utilizable. Si la simulación inició con Fase 0, la R1 puede tener producción bloqueada por instalación de maquinaria.
+      </div>
     ` : ''}
 
         <!-- S2.6: MATERIA PRIMA — Etapa 3.1 -->
@@ -665,17 +674,17 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr><td class="hoja-label">🏦 Tipo de préstamo</td>
               <td>${sel('tipoPrestamo',tipoPresOpts)}</td>
-              <td class="hoja-ref">Operativo: ${fmt.pct(p.tasaPrestamoOperativo||0.04)} trim. · Inversión: ${fmt.pct(p.tasaPrestamoInversion||0.03)} trim.</td>
+              <td class="hoja-ref">Financiamiento que aumenta caja, pero genera deuda, intereses y posible comisión.</td>
               <td>${ta('finanzas','¿Necesitas financiamiento? ¿Por qué?')}</td></tr>
           <tr><td class="hoja-label">💵 Monto (Bs)</td>
               <td>${inp('montoPrestamo',decision.montoPrestamo,'number','min="0" step="1000"')}</td>
               <td class="hoja-ref">Comisión apertura: ${fmt.pct(p.comisionAperturaPrestamo||0.01)}</td><td></td></tr>
           <tr><td class="hoja-label">⏳ Plazo (trimestres)</td>
               <td>${inp('plazoPrestamo',decision.plazoPrestamo,'number','min="1" max="8" step="1"')}</td>
-              <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||2} trim. · Inv: ${p.plazoPrestamoInversion||4} trim.</td><td></td></tr>
+              <td class="hoja-ref">Condición referencial del préstamo. Verifica con el profesor si este campo incide en la simulación activa.</td><td></td></tr>
           <tr><td class="hoja-label">📉 Amortización (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
-              <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
+              <td class="hoja-ref">Pago parcial de deuda. Reduce obligaciones, pero consume caja.</td><td></td></tr>
         </tbody>
       </table>
       <div style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2)">
@@ -718,9 +727,10 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           <tr><td class="hoja-label">🔍 Tipo de reporte</td>
               <td>${sel('tipoInvestigacion',tipoInvOpts)}</td>
               <td class="hoja-ref">
-                <strong>Básico Bs ${fmt.num(p.costoInvestigacionBasica||5000)}:</strong> tamaño de mercado, precios, alertas del sector<br>
-                <strong>Premium Bs ${fmt.num(p.costoInvestigacionPremium||12000)}:</strong> + participación, sensibilidad, empresas anónimas<br>
-                <strong>Estratégico Bs ${fmt.num(p.costoInvestigacionEstrategico||20000)}:</strong> + nombres reales, elasticidad, punto de equilibrio dinámico
+                Compra de información para decidir mejor. No genera ventas automáticamente.<br>
+                <strong>Básica Bs ${fmt.num(p.costoInvestigacionBasica||5000)}:</strong> información inicial del mercado para orientar decisiones.<br>
+                <strong>Premium Bs ${fmt.num(p.costoInvestigacionPremium||12000)}:</strong> información más detallada para comparar segmentos, canales o competencia.<br>
+                <strong>Estratégica Bs ${fmt.num(p.costoInvestigacionEstrategico||20000)}:</strong> información más completa para apoyar decisiones de mayor alcance.
               </td>
               <td>${ta('investigacion','¿Por qué comprar este reporte?')}</td></tr>
         </tbody>
