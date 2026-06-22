@@ -14,7 +14,7 @@ const path = require('path');
 const DIR_INDUSTRIAS = path.resolve(__dirname, '..', 'industrias');  // industrias/ en la raíz del proyecto
 
 // Plantilla por defecto cuando no se especifica industria
-const PLANTILLA_DEFAULT = 'Calzados_COM540_1_2026_V1';
+const PLANTILLA_DEFAULT = 'Calzados_COM540_1_2026_V2';
 
 /**
  * Lista los nombres de plantillas disponibles en /industrias/.
