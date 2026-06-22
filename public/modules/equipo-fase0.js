@@ -224,14 +224,18 @@ function f0RenderForm(reg, ref, p) {
     // ── SECCIÓN 4 — Financiamiento ──
     + '<div class="param-card">'
     +   '<div class="param-card-title">🏦 Financiamiento pre-R1</div>'
+    +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">El financiamiento define los recursos iniciales de la empresa. El capital aportado por inversionistas fortalece caja y patrimonio sin generar deuda; el préstamo aumenta la caja, pero crea obligaciones financieras e intereses futuros.</p>'
     +   '<div class="param-row"><label class="param-label" for="f0_credito_operativo">Crédito operativo (Bs)</label>'
     +     numInput('f0_credito_operativo', reg.credito_operativo_pre_r1, 0) + '</div>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 10px">Financiamiento externo solicitado antes de iniciar la Ronda 1. Aumenta la caja disponible, pero también incrementa la deuda de la empresa.</p>'
     +   '<div class="param-row"><label class="param-label" for="f0_credito_inversion">Crédito inversión (Bs)</label>'
     +     numInput('f0_credito_inversion', reg.credito_inversion_pre_r1, 0) + '</div>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0">La deuda inicial es una obligación financiera que deberá pagarse en rondas futuras. Puede generar intereses y afectar la utilidad neta; el interés es el costo financiero por usar dinero prestado y reduce la utilidad y la caja cuando se paga.</p>'
     + '</div>'
     // ── CALCULADORA ──
     + '<div class="param-card" style="background:var(--bg2)">'
     +   '<div class="param-card-title">🧮 Calculadora de caja R1</div>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 10px">El capital de trabajo y la inversión disponible son aportes de los inversionistas: fortalecen la caja inicial y el patrimonio, pero no generan deuda ni intereses. La caja disponible es el dinero para iniciar operaciones y cubrir producción, personal, marketing, activos y otros pagos iniciales.</p>'
     +   '<div class="param-row"><span class="param-label">Capital de trabajo (docente)</span><strong id="f0_calc_trabajo">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">Inversión disponible (docente)</span><strong id="f0_calc_inversion">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">(−) Planta elegida</span><strong id="f0_calc_planta">Bs 0</strong></div>'
