@@ -22,12 +22,23 @@ const PLANTILLA_DEFAULT = 'Calzados_COM540_1_2026_V1';
  *
  * @returns {string[]}  Nombres sin extensión, ej. ['jaboncillos_v1', 'automoviles_v1']
  */
-function listarPlantillas() {
+function listarPlantillas({ incluirDeprecated = false } = {}) {
   try {
     return fs
       .readdirSync(DIR_INDUSTRIAS)
       .filter(f => f.endsWith('.json'))
-      .map(f => path.basename(f, '.json'));
+      .map(f => {
+        const nombre = path.basename(f, '.json');
+        if (incluirDeprecated) return nombre;
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(DIR_INDUSTRIAS, f), 'utf8'));
+          const estado = raw.estado || {};
+          return estado.visible === false || estado.deprecated === true ? null : nombre;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
   } catch {
     return [];
   }

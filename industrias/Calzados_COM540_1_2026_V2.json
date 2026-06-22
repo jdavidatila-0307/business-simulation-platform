@@ -17,6 +17,11 @@
     ],
     "creada": "2026-05-29"
   },
+  "estado": {
+    "visible": true,
+    "deprecated": false,
+    "oficial": true
+  },
   "params": {
     "moneda": "Bs",
     "tasaIT": 0.03,

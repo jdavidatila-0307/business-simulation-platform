@@ -174,7 +174,6 @@ const ARCHIVOS_CRITICOS = [
   { ruta: 'public/index.html',                           desc: 'Shell HTML' },
   { ruta: 'public/styles.css',                           desc: 'Estilos' },
   { ruta: 'public/manual.html',                          desc: 'Manual estudiante' },
-  { ruta: 'industrias/Calzados_COM540_1_2026_V1.json',  desc: 'Industria V1' },
   { ruta: 'industrias/Calzados_COM540_1_2026_V2.json',  desc: 'Industria V2 activa' },
   { ruta: 'test_cuadre.js',                              desc: 'Tests invariante A=P+Pat' },
   { ruta: 'qa_suite.js',                                 desc: 'Suite QA pre-clase' },
@@ -193,6 +192,30 @@ ARCHIVOS_CRITICOS.forEach(({ ruta, desc }) => {
     fail(`FALTA: ${ruta} — ${desc}`);
   }
 });
+
+// V2 debe permanecer publicada como plantilla oficial; V1 es histórica y opcional.
+function leerJSON(ruta) {
+  try { return JSON.parse(fs.readFileSync(path.resolve(ruta), 'utf8')); }
+  catch { return null; }
+}
+
+const plantillaV2 = leerJSON('industrias/Calzados_COM540_1_2026_V2.json');
+if (!plantillaV2) {
+  fail('Plantilla V2 no se puede leer');
+} else if (plantillaV2.estado?.visible !== true || plantillaV2.estado?.oficial !== true || plantillaV2.estado?.deprecated === true) {
+  fail('Plantilla V2 debe estar visible, oficial y no deprecated');
+} else {
+  ok('Plantilla V2 marcada como visible y oficial');
+}
+
+const plantillaV1 = leerJSON('industrias/Calzados_COM540_1_2026_V1.json');
+if (plantillaV1) {
+  if (plantillaV1.estado?.historica === true && plantillaV1.estado?.deprecated === true && plantillaV1.estado?.visible === false) {
+    ok('Plantilla V1 conservada como histórica y oculta');
+  } else {
+    warn('Plantilla V1 existe, pero no está marcada como histórica/deprecated');
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTRATO 5 — Campos de hoja de decisiones (app.js debe manejarlos)
