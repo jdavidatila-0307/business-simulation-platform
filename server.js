@@ -2582,12 +2582,12 @@ async function route(req, res, body) {
     if (!registro) return send(res, 400, { error: 'Completa tu Fase 0 antes de enviar' });
     if (registro.estado === 'enviado' || registro.estado === 'cerrado')
       return send(res, 400, { error: 'Tu Fase 0 ya fue enviada' });
+    const errorOperarios = validarOperariosMinimosFase0(registro.nivel_af, registro.operarios_iniciales);
+    if (errorOperarios) return send(res, 400, { error: errorOperarios });
     const requeridos = ['segmento_1', 'producto_1', 'nivel_af', 'operarios_iniciales', 'costo_operario'];
     const faltantes = requeridos.filter(k => registro[k] === null || registro[k] === undefined || registro[k] === '');
     if (faltantes.length)
       return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
-    const errorOperarios = validarOperariosMinimosFase0(registro.nivel_af, registro.operarios_iniciales);
-    if (errorOperarios) return send(res, 400, { error: errorOperarios });
     const cajaInicial = Math.max(0,
       Number(registro.caja_inicial_docente || 0)
       + Number(registro.capital_inversion || 0)
