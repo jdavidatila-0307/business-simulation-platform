@@ -444,6 +444,69 @@ async function main() {
     }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN S11: ${e.message}`); fallados++; }
 
+  // ── S12: Activos complementarios Fase 0 — atractivo condicionado por canal + patentes en Proceso ──
+  console.log('\nS12 — Activos complementarios (atractivo condicionado por canal; patentes solo Proceso)');
+  try {
+    const P = { ...PARAMS_BASE,
+      bonoVehiculoLogistico: 0.5, bonoMueblesTienda: 0.8,
+      bonoComputoDigital: 1.2, factorPatentesInnovacion: 1.3 };
+
+    // Corre un equipo (1 producto, sin canibalización) y devuelve su resultado
+    const correr = (overrides) => {
+      const eq = { id: 'eq_s12', nombre: 'S12' };
+      const dec = decBase({ equipo:'eq_s12', equipoOriginal:'eq_s12', equipoNombre:'S12', ...overrides });
+      const cfg = { ...cfgBase([eq], [dec]), params: P };
+      const res = engine.ejecutarSimulador([dec], cfg);
+      return res.resultados.find(r => r.equipoOriginal === 'eq_s12');
+    };
+    const aprox = (a, b) => Math.abs(a - b) <= 0.001;
+
+    // Caso 1a — Vehículo SÍ aporta con canal logístico (Distribuidores B2B), escala con nivel
+    const v_con = correr({ canalPrincipal:'Distribuidores B2B', produccion:400, vehiculo_nivel:3 });
+    const v_sin = correr({ canalPrincipal:'Distribuidores B2B', produccion:400, vehiculo_nivel:0 });
+    const d1a = v_con.atractivo - v_sin.atractivo;
+    const ok1a = aprox(d1a, 0.5 * 3);  // 1.5
+    console.log(`  ${ok1a?'✅':'❌'} Vehículo nivel3 + B2B: Δatractivo=${d1a.toFixed(3)} (esperado 1.5)`);
+
+    // Caso 1b — Vehículo NO aporta con canal no-logístico (Tienda Propia)
+    const v_np_con = correr({ canalPrincipal:'Tienda Propia', produccion:400, vehiculo_nivel:3 });
+    const v_np_sin = correr({ canalPrincipal:'Tienda Propia', produccion:400, vehiculo_nivel:0 });
+    const d1b = v_np_con.atractivo - v_np_sin.atractivo;
+    const ok1b = aprox(d1b, 0);
+    console.log(`  ${ok1b?'✅':'❌'} Vehículo nivel3 + Tienda Propia: Δatractivo=${d1b.toFixed(3)} (esperado 0)`);
+
+    // Caso 2 — Muebles SÍ aporta con Tienda Propia
+    const m_con = correr({ canalPrincipal:'Tienda Propia', produccion:400, muebles_comprado:true });
+    const m_sin = correr({ canalPrincipal:'Tienda Propia', produccion:400, muebles_comprado:false });
+    const d2 = m_con.atractivo - m_sin.atractivo;
+    const ok2 = aprox(d2, 0.8);
+    console.log(`  ${ok2?'✅':'❌'} Muebles + Tienda Propia: Δatractivo=${d2.toFixed(3)} (esperado 0.8)`);
+
+    // Caso 3 — Cómputo SÍ aporta con Venta Digital
+    const c_con = correr({ canalPrincipal:'Venta Digital', produccion:400, equipos_computo_comprado:true });
+    const c_sin = correr({ canalPrincipal:'Venta Digital', produccion:400, equipos_computo_comprado:false });
+    const d3 = c_con.atractivo - c_sin.atractivo;
+    const ok3 = aprox(d3, 1.2);
+    console.log(`  ${ok3?'✅':'❌'} Cómputo + Venta Digital: Δatractivo=${d3.toFixed(3)} (esperado 1.2)`);
+
+    // Caso 4 — Patentes potencian SOLO Proceso (menor CU); Producto queda intacto
+    const pr_con = correr({ innovacion:true, tipoInnovacion:'Proceso', montoInnovacion:50000, produccion:500, patentes_comprado:true });
+    const pr_sin = correr({ innovacion:true, tipoInnovacion:'Proceso', montoInnovacion:50000, produccion:500, patentes_comprado:false });
+    const ok4a = pr_con.costoUnitario < pr_sin.costoUnitario;
+    console.log(`  ${ok4a?'✅':'❌'} Patentes + Proceso: CU=${pr_con.costoUnitario} < ${pr_sin.costoUnitario} (debe bajar)`);
+
+    const pd_con = correr({ innovacion:true, tipoInnovacion:'Producto', montoInnovacion:50000, produccion:500, patentes_comprado:true });
+    const pd_sin = correr({ innovacion:true, tipoInnovacion:'Producto', montoInnovacion:50000, produccion:500, patentes_comprado:false });
+    const ok4b = pd_con.costoUnitario === pd_sin.costoUnitario;
+    console.log(`  ${ok4b?'✅':'❌'} Patentes + Producto: CU=${pd_con.costoUnitario} == ${pd_sin.costoUnitario} (sin cambio)`);
+
+    // Cuadre contable en un caso representativo (vehículo + B2B con activo)
+    const okCuadre = verificarCuadre(v_con, 'Activos — cuadre contable');
+
+    if (ok1a && ok1b && ok2 && ok3 && ok4a && ok4b && okCuadre) { pasados++; }
+    else { fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN S12: ${e.message}`); fallados++; }
+
   // ── Resultado final ────────────────────────────────────────────────────
   console.log('\n══════════════════════════════════════════════════════');
   if (fallados === 0) {
