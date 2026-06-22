@@ -23,6 +23,19 @@ const storage  = require('./src/storage');
 const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 
+// Mínimo operativo por nivel de planta en Fase 0. La validación se replica en
+// servidor para impedir que una petición directa persista o envíe un valor inválido.
+const FASE0_MIN_OPERARIOS_POR_NIVEL = Object.freeze({ 1: 2, 2: 3, 3: 3, 4: 5, 5: 6, 6: 7 });
+function validarOperariosMinimosFase0(nivel, operarios) {
+  const minimo = FASE0_MIN_OPERARIOS_POR_NIVEL[Number(nivel)];
+  if (!minimo) return null;
+  if (!Number.isFinite(Number(operarios)) || Number(operarios) < minimo) {
+    return 'El nivel de planta seleccionado requiere al menos ' + minimo
+      + ' operarios iniciales. Ajuste el número de operarios antes de enviar Fase 0.';
+  }
+  return null;
+}
+
 // ════════════════════════════════════════════════════════════════
 //  SHOCKS ALEATORIOS DE MERCADO
 //  Catálogo de eventos externos que afectan la demanda por ronda.
@@ -2546,6 +2559,11 @@ async function route(req, res, body) {
     const actual = await storage.getFase0Equipo(sim.id, equipoId);
     if (actual && (actual.estado === 'enviado' || actual.estado === 'cerrado'))
       return send(res, 400, { error: 'Tu Fase 0 ya fue enviada y no puede modificarse' });
+    const errorOperarios = validarOperariosMinimosFase0(
+      data.nivel_af ?? actual?.nivel_af,
+      data.operarios_iniciales ?? actual?.operarios_iniciales
+    );
+    if (errorOperarios) return send(res, 400, { error: errorOperarios });
     if (data.costo_fijo_declarado != null) {
       const minimo = Number(actual?.costo_fijo_minimo) || 0;
       if (Number(data.costo_fijo_declarado) < minimo) {
@@ -2568,6 +2586,8 @@ async function route(req, res, body) {
     const faltantes = requeridos.filter(k => registro[k] === null || registro[k] === undefined || registro[k] === '');
     if (faltantes.length)
       return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
+    const errorOperarios = validarOperariosMinimosFase0(registro.nivel_af, registro.operarios_iniciales);
+    if (errorOperarios) return send(res, 400, { error: errorOperarios });
     const cajaInicial = Math.max(0,
       Number(registro.caja_inicial_docente || 0)
       + Number(registro.capital_inversion || 0)

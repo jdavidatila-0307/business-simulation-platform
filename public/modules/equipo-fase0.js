@@ -138,7 +138,7 @@ function f0RenderForm(reg, ref, p) {
         + 'border:2px solid ' + borderColor + ';background:' + bg + ';'
         + 'text-align:center;gap:6px;transition:border-color .15s">'
         + '<input type="radio" name="f0_nivel" value="' + nv.n + '"'
-        + ' data-monto="' + nv.monto + '" data-cap="' + nv.capacidad + '" '
+        + ' data-monto="' + nv.monto + '" data-cap="' + nv.capacidad + '" data-operarios-minimos="' + nv.operariosMinimos + '" '
         + checked + ' style="display:none"/>'
         + '<strong style="font-size:.95rem">' + nv.nombre + '</strong>'
         + '<span style="font-family:var(--font-mono);font-size:.85rem">' + f0bs(nv.monto) + '</span>'
@@ -331,17 +331,39 @@ function f0WireForm(reg) {
       card.style.background = r.checked ? 'var(--bg2)' : 'var(--bg1)';
     });
   }
+  function f0ActualizarMinimoOperarios() {
+    var sel = document.querySelector('#eqFase0Content input[name="f0_nivel"]:checked');
+    var input = document.getElementById('f0_operarios_iniciales');
+    if (sel && input) input.min = Number(sel.dataset.operariosMinimos) || 1;
+  }
   document.querySelectorAll('#eqFase0Content input[name="f0_nivel"]').forEach(function (radio) {
     radio.addEventListener('change', function () {
       this.checked = true;   // marca el radio elegido
       f0PintarNiveles();     // deselecciona visualmente las demás tarjetas
+      f0ActualizarMinimoOperarios();
       recalc();
     });
   });
 
   document.getElementById('f0BtnGuardar').addEventListener('click', function () { f0Guardar(); });
   document.getElementById('f0BtnEnviar').addEventListener('click', function () { f0Enviar(); });
+  f0ActualizarMinimoOperarios();
   recalc();
+}
+
+function f0ValidarOperariosMinimos() {
+  var sel = document.querySelector('#eqFase0Content input[name="f0_nivel"]:checked');
+  var input = document.getElementById('f0_operarios_iniciales');
+  var minimo = sel ? Number(sel.dataset.operariosMinimos) : 0;
+  var operarios = input ? Number(input.value) : NaN;
+  if (!minimo || (Number.isFinite(operarios) && operarios >= minimo)) return true;
+  toast('El nivel de planta seleccionado requiere al menos ' + minimo
+    + ' operarios iniciales. Ajuste el número de operarios antes de enviar Fase 0.', 'error');
+  if (input) {
+    input.min = minimo;
+    input.focus();
+  }
+  return false;
 }
 
 function f0Collect() {
@@ -370,6 +392,7 @@ function f0Collect() {
 }
 
 async function f0Guardar() {
+  if (!f0ValidarOperariosMinimos()) return;
   try {
     await api('POST', '/api/fase0/guardar', f0Collect());
     toast('✓ Borrador guardado', 'success');
@@ -378,6 +401,7 @@ async function f0Guardar() {
 }
 
 async function f0Enviar() {
+  if (!f0ValidarOperariosMinimos()) return;
   if (!confirm('¿Enviar tu Fase 0? Una vez enviada no podrás modificarla.')) return;
   try {
     // Persistir lo escrito antes de validar el envío en el server.
