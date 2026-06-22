@@ -238,6 +238,22 @@ function procesarPedidosMP(d, rondaNumero, params) {
   return { stockMPDisponible, pedidosPendientesResta: pendientesResta, pagoMP };
 }
 
+// efInnovacion unitario — efecto de la innovación sobre el costo unitario.
+// Producto: +CU (premium). Proceso: −CU (eficiencia). Canal: no afecta el CU.
+// Patentes Fase 0 potencian SOLO el efecto de Proceso (factor configurable).
+function calcEfInnovacion(d, params = {}) {
+  if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
+  const baseFactor = d.montoInnovacion / d.produccion;
+  if (d.tipoInnovacion === 'Producto') {
+    return +baseFactor * (params.factorInnovacionProducto ?? 0.2);
+  }
+  if (d.tipoInnovacion === 'Proceso') {
+    const factorPatentes = d.patentes_comprado ? (params.factorPatentesInnovacion ?? 1.3) : 1;
+    return -baseFactor * (params.factorInnovacionProceso ?? 0.2) * factorPatentes;
+  }
+  return 0;
+}
+
 // ── Paso 3: Costo unitario ─────────────────────────────────────
 // CU = costoTransformacion + costoMP_ajustado + costoCalidad + costoCanal + efInnovacion
 //
@@ -286,14 +302,8 @@ function calcularCostoUnitario(d, tiposProducto, canales, params, costoMPunitari
     : null;
   const costoCanal = cs !== null ? avg(cp, cs) : cp;
 
-  // Innovación
-  let efInnovacion = 0;
-  if (d.innovacion && d.montoInnovacion > 0 && d.produccion > 0) {
-    const baseFactor = d.montoInnovacion / d.produccion;
-    if (d.tipoInnovacion === 'Producto') efInnovacion = +baseFactor * params.factorInnovacionProducto;
-    if (d.tipoInnovacion === 'Proceso')  efInnovacion = -baseFactor * params.factorInnovacionProceso;
-    // Canal: mejora atractivo, no afecta CU directamente
-  }
+  // Innovación (efecto sobre el CU) — helper compartido; patentes potencian solo Proceso
+  const efInnovacion = calcEfInnovacion(d, params);
 
   // ── Materia Prima con factorCosto del proveedor ──────────────────
   // pctMP: porcentaje del costoBase que representa materiales (default 40%)
@@ -357,6 +367,29 @@ function calcularAtractivo(d, segmento, afinidadMatrix, canales, vendedoresFinal
     ? (d.montoInnovacion || 0) * 0.00005
     : 0;
 
+  // ── Activos complementarios Fase 0 — bonos CONDICIONADOS al canal (magnitudes en params) ──
+  // El activo solo aporta atractivo si su canal asociado está en uso (principal o secundario).
+  const usaCanal = (nombre) =>
+    d.canalPrincipal === nombre || d.canalSecundario === nombre;
+
+  // Vehículo: potencia canales logísticos (B2B, Ferias, Convenios). Escala con el nivel (0-3).
+  const canalLogistico = usaCanal('Distribuidores B2B')
+    || usaCanal('Ferias y Eventos')
+    || usaCanal('Convenios Institucionales');
+  const bonoVehiculo = canalLogistico
+    ? (params.bonoVehiculoLogistico ?? 0.5) * (d.vehiculo_nivel || 0)
+    : 0;
+
+  // Muebles y Enseres: solo si vende en Tienda Propia.
+  const bonoMuebles = (d.muebles_comprado && usaCanal('Tienda Propia'))
+    ? (params.bonoMueblesTienda ?? 0.8)
+    : 0;
+
+  // Equipos de Cómputo: solo si vende por Venta Digital.
+  const bonoComputo = (d.equipos_computo_comprado && usaCanal('Venta Digital'))
+    ? (params.bonoComputoDigital ?? 1.2)
+    : 0;
+
   return afinidad
     + 0.8 * (d.calidad || 5)
     + 0.0001 * (d.gastoTotalMarketing || d.mktEfectivo || 0)  // usa gasto total incl. vendedores
@@ -364,7 +397,11 @@ function calcularAtractivo(d, segmento, afinidadMatrix, canales, vendedoresFinal
     + bonoCanal
     + impactoVendedores
     + bonusInnovacionCanal
-    + 0.05 * (d.brandEquityInicial ?? 50);
+    + 0.05 * (d.brandEquityInicial ?? 50)
+    // Activos complementarios Fase 0 (bonos condicionados al canal)
+    + bonoVehiculo
+    + bonoMuebles
+    + bonoComputo;
 }
 
 // ── Paso 5b: Participación de mercado ─────────────────────────
@@ -1169,25 +1206,13 @@ function ejecutarSimulador(decisiones, cfg) {
       // Desglose visual correcto post-rediseño MP
       costoTransformacion: roundBs(cbProd * (1 - pctMP_enr)),
       // efInnovacion para el desglose
-      efInnovacionUnit: (() => {
-        if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
-        const bf = d.montoInnovacion / d.produccion;
-        if (d.tipoInnovacion === 'Producto') return roundBs(+bf * (paramsConProveedores.factorInnovacionProducto ?? 0.2));
-        if (d.tipoInnovacion === 'Proceso')  return roundBs(-bf * (paramsConProveedores.factorInnovacionProceso ?? 0.2));
-        return 0;
-      })(),
+      efInnovacionUnit: roundBs(calcEfInnovacion(d, paramsConProveedores)),
       // costoCanal = CU − trans − MPneto − calidad − efInnovacion
       costoCanal_calc: (() => {
         const trans    = roundBs(cbProd * (1 - pctMP_enr));
         const mpNeto   = roundBs(costoMPunit * (1 - (paramsConProveedores.tasaIVA ?? 0.13)));
         const calidad  = roundBs((tiposProducto[d.producto]?.costoBase||0) * (params?.pctCostoCalidad??0.08) * ((d.calidad||5)-5));
-        const ef       = (() => {
-          if (!d.innovacion || !d.montoInnovacion || !d.produccion) return 0;
-          const bf = d.montoInnovacion / d.produccion;
-          if (d.tipoInnovacion === 'Producto') return roundBs(+bf * (paramsConProveedores.factorInnovacionProducto ?? 0.2));
-          if (d.tipoInnovacion === 'Proceso')  return roundBs(-bf * (paramsConProveedores.factorInnovacionProceso ?? 0.2));
-          return 0;
-        })();
+        const ef = roundBs(calcEfInnovacion(d, paramsConProveedores));
         return Math.max(0, roundBs(cu - trans - mpNeto - calidad - ef));
       })(),
       alertaCaja:      fin.cajaFinal < 500 ? 'ALERTA' : 'OK',

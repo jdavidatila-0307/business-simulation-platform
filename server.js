@@ -1087,7 +1087,7 @@ async function route(req, res, body) {
       const modoInicio = sim.metadata?.modoInicio || 'homogeneo';
       const { getEstadoInicial } = require('./src/initializer');
       let fase0PorEquipo = {};
-      if (modoInicio === 'fase0' && n === 1) {
+      if (modoInicio === 'fase0') {
         const registrosFase0 = await storage.getFase0(sim.id);
         registrosFase0.forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
       }
@@ -1121,6 +1121,14 @@ async function route(req, res, body) {
           } else {
             console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
           }
+        }
+        // Activos complementarios Fase 0 (inmutables) — re-leídos de BD cada ronda
+        if (modoInicio === 'fase0' && fase0PorEquipo[eq.id]) {
+          const f0 = fase0PorEquipo[eq.id];
+          dec.vehiculo_nivel           = Number(f0.vehiculo_nivel || 0);
+          dec.muebles_comprado         = !!f0.muebles_comprado;
+          dec.equipos_computo_comprado = !!f0.equipos_computo_comprado;
+          dec.patentes_comprado        = !!f0.patentes_comprado;
         }
         decisiones[eq.id] = dec;
       }
