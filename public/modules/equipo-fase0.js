@@ -366,6 +366,20 @@ function f0ValidarOperariosMinimos() {
   return false;
 }
 
+function f0ValidarCamposRequeridos() {
+  var requeridos = [
+    { etiqueta: 'Segmento objetivo', valor: f0val('f0_segmento_1') },
+    { etiqueta: 'Producto inicial', valor: f0val('f0_producto_1') },
+    { etiqueta: 'Nivel de planta', valor: document.querySelector('#eqFase0Content input[name="f0_nivel"]:checked') ? 'seleccionado' : '' },
+    { etiqueta: 'Operarios iniciales', valor: f0val('f0_operarios_iniciales') },
+    { etiqueta: 'Sueldo por operario', valor: f0val('f0_costo_operario') }
+  ];
+  var faltante = requeridos.find(function(campo) { return String(campo.valor).trim() === ''; });
+  if (!faltante) return true;
+  toast('Falta completar el campo requerido: ' + faltante.etiqueta, 'error');
+  return false;
+}
+
 function f0Collect() {
   var sel = document.querySelector('input[name="f0_nivel"]:checked');
   var data = {
@@ -401,6 +415,7 @@ async function f0Guardar() {
 }
 
 async function f0Enviar() {
+  if (!f0ValidarCamposRequeridos()) return;
   if (!f0ValidarOperariosMinimos()) return;
   if (!confirm('¿Enviar tu Fase 0? Una vez enviada no podrás modificarla.')) return;
   try {
