@@ -168,6 +168,8 @@ function f0RenderForm(reg, ref, p) {
     + '<div class="param-card">'
     +   '<div class="param-card-title">🏗️ Tamaño de operación</div>'
     +   '<p style="font-size:.8rem;color:var(--text3);margin:0 0 10px">Cada nivel de planta requiere un mínimo de operarios para operar correctamente. La planta define la capacidad máxima técnica, pero la producción efectiva también depende del personal contratado.</p>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 8px">La maquinaria requiere un período de instalación antes de operar. En simulaciones con Fase 0, la producción puede quedar bloqueada en R1 por lead time; la capacidad de planta no se pierde y queda disponible para rondas posteriores. Además, la producción efectiva depende de contar con operarios suficientes para utilizar esa capacidad.</p>'
+    +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 10px">Comprar una planta grande sin operarios suficientes puede generar capacidad ociosa.</p>'
     +   nivelRadios
     + '</div>'
     + '<div class="param-card">'
