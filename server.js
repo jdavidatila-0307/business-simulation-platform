@@ -42,6 +42,55 @@ function obtenerEstadoFase0(config) {
   return config?.fase0Activa === true ? 'activa' : 'no_activada';
 }
 
+function esNumeroFinito(valor) {
+  if (valor === null || valor === undefined || valor === '') return false;
+  return Number.isFinite(Number(valor));
+}
+
+function validarFase0CompletaParaR1({ equipos, fase0Registros }) {
+  const camposRequeridos = [
+    'caja_inicial',
+    'activos_fijos_comprados',
+    'deuda_inicial',
+    'capital_total_otorgado',
+    'operarios_iniciales',
+    'capacidad_produccion_base'
+  ];
+  const porEquipo = new Map((fase0Registros || []).map(registro => [registro.equipo_id, registro]));
+
+  return equipos
+    .filter(equipo => equipo.rol === 'equipo' && !equipo.isBot)
+    .flatMap(equipo => {
+      const registro = porEquipo.get(equipo.id);
+      if (!registro) return [{ id: equipo.id, nombre: equipo.nombre, campos: ['registro_fase0'] }];
+      const campos = [];
+      if (registro.estado !== 'enviado' && registro.estado !== 'cerrado') campos.push('estado');
+      camposRequeridos.forEach(campo => {
+        if (!esNumeroFinito(registro[campo])) campos.push(campo);
+      });
+      return campos.length ? [{ id: equipo.id, nombre: equipo.nombre, campos }] : [];
+    });
+}
+
+function validarParametrosHomogeneosParaR1(sim) {
+  const parametros = sim?.parametros;
+  if (!parametros || typeof parametros !== 'object' || Array.isArray(parametros)) {
+    return ['sim.parametros'];
+  }
+  const camposRequeridos = [
+    'cajaInicial',
+    'activosFijosIniciales',
+    'deudaInicial',
+    'capitalInicial',
+    'operariosIniciales',
+    'capacidadMaxProduccion',
+    'costoOperario',
+    'sueldoTrimestralVendedor',
+    'vendedoresIniciales'
+  ];
+  return camposRequeridos.filter(campo => !esNumeroFinito(parametros[campo]));
+}
+
 function decisionDeEquipo(decisiones, equipoId) {
   const mapa = decisiones || {};
   return mapa[equipoId] || mapa[Object.keys(mapa).find(k => k.startsWith(equipoId + '__'))] || null;
@@ -1131,12 +1180,33 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
     const modoInicioActivar = leerModoInicio(sim);
+    const n = sim.config.currentRound;
+    let registrosFase0 = null;
     if (modoInicioActivar === 'fase0' && sim.config.fase0Activa === true) {
       return send(res, 400, { error: 'No se puede activar la ronda: Fase 0 sigue abierta. Cierra Fase 0 primero (Admin → Fase 0 → Cerrar Fase 0).' });
     }
+    if (n === 1 && modoInicioActivar === 'fase0') {
+      if (obtenerEstadoFase0(sim.config) !== 'cerrada') {
+        return send(res, 400, {
+          error: 'No se puede activar R1: Fase 0 incompleta',
+          pendientes: [{ campos: ['fase0Estado'] }]
+        });
+      }
+      const equipos = await storage.getEquipos(sim.id);
+      registrosFase0 = await storage.getFase0(sim.id);
+      const pendientes = validarFase0CompletaParaR1({ equipos, fase0Registros: registrosFase0 });
+      if (pendientes.length) {
+        return send(res, 400, { error: 'No se puede activar R1: Fase 0 incompleta', pendientes });
+      }
+    }
+    if (n === 1 && modoInicioActivar === 'homogeneo') {
+      const pendientes = validarParametrosHomogeneosParaR1(sim);
+      if (pendientes.length) {
+        return send(res, 400, { error: 'No se puede activar R1: parámetros iniciales incompletos', pendientes });
+      }
+    }
     sim.config.roundState = 'open';
     await storage.updateSimulacion(sim.id, { config: sim.config });
-    const n = sim.config.currentRound;
     let ronda = await storage.getRonda(sim.id, n);
 
     // Si la ronda no existe o no tiene decisiones → propagar desde ronda anterior
@@ -1152,8 +1222,8 @@ async function route(req, res, body) {
       const modoInicio = leerModoInicio(sim);
       let fase0PorEquipo = {};
       if (modoInicio === 'fase0') {
-        const registrosFase0 = await storage.getFase0(sim.id);
-        registrosFase0.forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
+        const registros = registrosFase0 || await storage.getFase0(sim.id);
+        registros.forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
       }
       const decisiones = {};
       for (const eq of equipos.filter(e => !e.isBot)) {
@@ -1197,7 +1267,7 @@ async function route(req, res, body) {
       const modoInicio = leerModoInicio(sim);
       if (modoInicio === 'fase0' && n === 1) {
         const fase0PorEquipo = {};
-        (await storage.getFase0(sim.id)).forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
+        (registrosFase0 || await storage.getFase0(sim.id)).forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
         const equipos = await storage.getEquipos(sim.id);
         const decisiones = { ...(ronda.decisiones || {}) };
         let hidratada = false;
