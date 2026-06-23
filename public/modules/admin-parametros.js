@@ -25,11 +25,11 @@ async function loadAdminParametros() {
   const can = data.canales      || {};
   const ref = data;
 
-  // Si la sim no tiene parámetros ni proveedores, cargar defaults desde V1
+  // Si la sim no tiene parámetros ni proveedores, cargar defaults desde V2
   let proveedoresDefault = data.proveedores || [];
   if (!Object.keys(p).length || !proveedoresDefault.length) {
     try {
-      const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V1');
+      const v1 = await api('GET', '/admin/plantillas/Calzados_COM540_1_2026_V2');
       if (v1?.params && !Object.keys(p).length) p = v1.params;
       if (v1?.proveedores?.length && !proveedoresDefault.length) proveedoresDefault = v1.proveedores;
     } catch {}

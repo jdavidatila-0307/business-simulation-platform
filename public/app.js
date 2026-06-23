@@ -715,10 +715,10 @@ async function loadAdminSimulaciones() {
   const plantillasOpts = plantillasDisponibles
     .filter(p => p !== 'jaboncillos_v1')
     .map(p => {
-      const lbl = p === 'Calzados_COM540_1_2026_V1'
-        ? 'Calzados Especializados — COM540 2026 V1'
+      const lbl = p === 'Calzados_COM540_1_2026_V2'
+        ? 'Calzados Especializados — COM540 2026 V2'
         : p.replace(/_v\d+$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const sel = p === 'Calzados_COM540_1_2026_V1' ? ' selected' : '';
+      const sel = p === 'Calzados_COM540_1_2026_V2' ? ' selected' : '';
       return `<option value="${p}"${sel}>${lbl}</option>`;
     })
     .join('');

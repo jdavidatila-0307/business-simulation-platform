@@ -630,7 +630,7 @@ async function route(req, res, body) {
           currentRound: 1,
           totalRounds:  totalRounds || 20,
           roundState:   'pending',
-          industria:    industriaNombre || 'Calzados_COM540_1_2026_V1',  // metadata para el frontend
+          industria:    industriaNombre || 'Calzados_COM540_1_2026_V2',  // metadata para el frontend
         },
         metadata: { modoInicio: modoInicio || 'fase0' },
         // Prioridad: baseSim > plantilla > constants.js (jaboncillos)
@@ -2460,7 +2460,7 @@ async function route(req, res, body) {
           if (sim.proveedores?.length) return sim.proveedores;
           try {
             // Buscar el JSON de industria directamente (sin depender de plantillas.js)
-            const industria = (sim.config?.industria || 'Calzados_COM540_1_2026_V1')
+            const industria = (sim.config?.industria || 'Calzados_COM540_1_2026_V2')
               .replace(/[^a-zA-Z0-9_-]/g, '');
             // Buscar en industrias/ relativo al directorio de server.js
             const posibles = [
