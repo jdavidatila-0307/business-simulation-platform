@@ -98,9 +98,12 @@ async function loadAdminFase0() {
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Cargando...</div>';
 
   try {
-    var registros = await api('GET', '/admin/fase0');
+    var fase0Data = await api('GET', '/admin/fase0');
+    var registros = Array.isArray(fase0Data) ? fase0Data : (fase0Data.registros || []);
     var cfg = await api('GET', '/admin/config');
     var fase0Activa = cfg.fase0Activa ?? false;
+    var fase0Estado = cfg.fase0Estado || (fase0Activa ? 'activa' : 'no_activada');
+    var fase0Cerrada = fase0Estado === 'cerrada';
     var modoInicio = cfg.modoInicio || 'fase0';
 
     if (modoInicio === 'homogeneo') {
@@ -118,13 +121,15 @@ async function loadAdminFase0() {
       return;
     }
 
-    var configNiveles = buildFase0ConfigHTML(cfg.parametros || {}, fase0Activa === true);
+    var configNiveles = buildFase0ConfigHTML(cfg.parametros || {}, fase0Estado !== 'no_activada');
 
-    var toolbar = '<div class="param-actions" style="margin-bottom:14px">'
-      + '<button class="btn ' + (fase0Activa ? 'btn-ghost' : 'btn-success') + '" onclick="doActivarFase0()"' + (fase0Activa ? ' disabled' : '') + '>🚀 Activar Fase 0</button>'
-      + '<button class="btn ' + (fase0Activa ? 'btn-danger' : 'btn-ghost') + '" onclick="doCerrarFase0()"' + (fase0Activa ? '' : ' disabled') + '>🔒 Cerrar Fase 0</button>'
-      + '<span style="margin-left:10px;font-size:.82rem;color:var(--text3)">Estado: ' + (fase0Activa ? '🟢 Activa' : '⚪ Inactiva') + '</span>'
-      + '</div>';
+    var toolbar = fase0Cerrada
+      ? '<div class="param-actions" style="margin-bottom:14px"><span style="font-size:.82rem;color:var(--accent3)">🔒 Fase 0 cerrada / lista para R1</span></div>'
+      : '<div class="param-actions" style="margin-bottom:14px">'
+        + '<button class="btn ' + (fase0Activa ? 'btn-ghost' : 'btn-success') + '" onclick="doActivarFase0()"' + (fase0Activa ? ' disabled' : '') + '>🚀 Activar Fase 0</button>'
+        + '<button class="btn ' + (fase0Activa ? 'btn-danger' : 'btn-ghost') + '" onclick="doCerrarFase0()"' + (fase0Activa ? '' : ' disabled') + '>🔒 Cerrar Fase 0</button>'
+        + '<span style="margin-left:10px;font-size:.82rem;color:var(--text3)">Estado: ' + (fase0Activa ? '🟢 Fase 0 activa' : '⚪ Fase 0 no activada') + '</span>'
+        + '</div>';
 
     if (!registros || !registros.length) {
       el.innerHTML = toolbar + configNiveles + '<div class="empty-state"><div class="empty-icon">🏗️</div><p>Sin equipos en esta simulación.</p></div>';

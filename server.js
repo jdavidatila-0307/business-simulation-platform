@@ -37,6 +37,11 @@ function validarOperariosMinimosFase0(nivel, operarios) {
   return null;
 }
 
+function obtenerEstadoFase0(config) {
+  if (config?.fase0Estado) return config.fase0Estado;
+  return config?.fase0Activa === true ? 'activa' : 'no_activada';
+}
+
 // ════════════════════════════════════════════════════════════════
 //  SHOCKS ALEATORIOS DE MERCADO
 //  Catálogo de eventos externos que afectan la demanda por ronda.
@@ -944,7 +949,13 @@ async function route(req, res, body) {
       equipo: eq,
       fase0: registros.find(r => r.equipo_id === eq.id) || null
     }));
-    return send(res, 200, out);
+    const fase0Estado = obtenerEstadoFase0(sim.config);
+    return send(res, 200, {
+      registros: out,
+      fase0Activa: sim.config?.fase0Activa ?? false,
+      fase0Estado,
+      fase0Cerrada: fase0Estado === 'cerrada'
+    });
   }
 
   if (url === '/admin/fase0/capital' && method === 'POST') {
@@ -1021,9 +1032,13 @@ async function route(req, res, body) {
   if (url === '/admin/fase0/activar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    if (obtenerEstadoFase0(sim.config) === 'cerrada') {
+      return send(res, 400, { error: 'La Fase 0 ya está cerrada y lista para abrir R1' });
+    }
     sim.config.fase0Activa = true;
+    sim.config.fase0Estado = 'activa';
     await storage.updateSimulacion(sim.id, { config: sim.config });
-    return send(res, 200, { ok: true, fase0Activa: true });
+    return send(res, 200, { ok: true, fase0Activa: true, fase0Estado: 'activa' });
   }
 
   if (url === '/admin/fase0/cerrar' && method === 'POST') {
@@ -1046,8 +1061,9 @@ async function route(req, res, body) {
       });
     }
     sim.config.fase0Activa = false;
+    sim.config.fase0Estado = 'cerrada';
     await storage.updateSimulacion(sim.id, { config: sim.config });
-    return send(res, 200, { ok: true, fase0Activa: false });
+    return send(res, 200, { ok: true, fase0Activa: false, fase0Estado: 'cerrada' });
   }
 
   // ─── ADMIN — Rondas ───────────────────────────────────────────
@@ -2154,6 +2170,7 @@ async function route(req, res, body) {
   if (url === '/admin/config' && method === 'GET') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    const fase0Estado = obtenerEstadoFase0(sim.config);
     return send(res, 200, {
       parametros: sim.parametros,
       tiposProducto: sim.tipos_producto,
@@ -2167,6 +2184,8 @@ async function route(req, res, body) {
       simId: sim.id,
       nivelCompetidoresIA: sim.config?.nivelCompetidoresIA || 'ninguno',
       fase0Activa: sim.config?.fase0Activa ?? false,
+      fase0Estado,
+      fase0Cerrada: fase0Estado === 'cerrada',
       modoInicio: leerModoInicio(sim),
     });
   }
