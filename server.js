@@ -42,6 +42,35 @@ function obtenerEstadoFase0(config) {
   return config?.fase0Activa === true ? 'activa' : 'no_activada';
 }
 
+function decisionDeEquipo(decisiones, equipoId) {
+  const mapa = decisiones || {};
+  return mapa[equipoId] || mapa[Object.keys(mapa).find(k => k.startsWith(equipoId + '__'))] || null;
+}
+
+function equiposPendientesDecision(equipos, decisiones) {
+  return equipos.filter(eq => eq.rol === 'equipo' && !eq.isBot)
+    .filter(eq => !decisionDeEquipo(decisiones, eq.id)?.submitted);
+}
+
+function validarDecisionEstudiante(decision) {
+  const productos = Array.isArray(decision?.productos) && decision.productos.length
+    ? decision.productos.filter(p => p.activo !== false)
+    : [decision || {}];
+  if (!productos.length) return 'Debes incluir al menos un producto activo';
+  const operarios = Number(decision?.operariosIniciales ?? productos[0]?.operariosIniciales);
+  if (!Number.isFinite(operarios) || operarios <= 0) return 'Operarios iniciales debe ser mayor a 0';
+  for (let i = 0; i < productos.length; i++) {
+    const p = productos[i];
+    const prefijo = productos.length > 1 ? 'Producto ' + (i + 1) + ': ' : '';
+    if (!String(p.producto || '').trim()) return prefijo + 'debes seleccionar un producto';
+    if (!String(p.segmentoObjetivo || '').trim()) return prefijo + 'debes seleccionar un segmento objetivo';
+    if (!String(p.canalPrincipal || '').trim()) return prefijo + 'debes seleccionar un canal principal';
+    if (!(Number(p.precioVenta) > 0)) return prefijo + 'precio de venta debe ser mayor a 0';
+    if (!(Number(p.produccion) > 0)) return prefijo + 'producción debe ser mayor a 0';
+  }
+  return null;
+}
+
 // ════════════════════════════════════════════════════════════════
 //  SHOCKS ALEATORIOS DE MERCADO
 //  Catálogo de eventos externos que afectan la demanda por ronda.
@@ -762,9 +791,11 @@ async function route(req, res, body) {
         if (key) dec = ronda.decisiones[key];
       }
       const submitted    = dec?.submitted || false;
+      const hasDecision  = !!dec;
       const submittedAt  = dec?.submittedAt || null;
       return { id:eq.id, nombre:eq.nombre, miembros:eq.miembros||[],
-        submitted, submittedAt, capitalInicial: eq.capitalInicial || null,
+        submitted, hasDecision, submittedAt, forcedByAdmin: !!dec?.forcedByAdmin,
+        forcedReason: dec?.forcedReason || null, capitalInicial: eq.capitalInicial || null,
         registradoAt:eq.registradoAt||null, passwordPlain:eq.passwordPlain||null };
     });
     return send(res, 200, out);
@@ -1186,6 +1217,32 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true });
   }
 
+  if (url === '/admin/ronda/forzar-decision' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+    if (sim.config.roundState !== 'open') return send(res, 400, { error: 'La ronda debe estar abierta para forzar una decisión' });
+    const equipoId = body.equipoId;
+    const motivo = String(body.motivo || '').trim();
+    if (!equipoId || !motivo) return send(res, 400, { error: 'equipoId y motivo son obligatorios' });
+    const equipos = await storage.getEquipos(sim.id);
+    const equipo = equipos.find(eq => eq.id === equipoId && eq.rol === 'equipo' && !eq.isBot);
+    if (!equipo) return send(res, 404, { error: 'Equipo no encontrado' });
+    const n = sim.config.currentRound;
+    const ronda = await storage.getRonda(sim.id, n);
+    if (!ronda || ['simulated', 'calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ronda no disponible' });
+    if (!ronda.decisiones) ronda.decisiones = {};
+    const actual = decisionDeEquipo(ronda.decisiones, equipoId);
+    if (actual?.submitted && !actual.forcedByAdmin) return send(res, 400, { error: 'El equipo ya envió una decisión normal' });
+    const ahora = new Date().toISOString();
+    ronda.decisiones[equipoId] = {
+      ...(actual || storage.defaultDecision(equipo.id, equipo.nombre, sim.parametros)),
+      equipo: equipoId, submitted: true, submittedAt: ahora,
+      forcedByAdmin: true, forcedReason: motivo, forcedAt: ahora
+    };
+    await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
+    return send(res, 200, { ok: true, equipoId, forcedByAdmin: true });
+  }
+
   if (url === '/admin/ronda/pre-simular' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
@@ -1195,6 +1252,11 @@ async function route(req, res, body) {
     if (!['open','locked'].includes(sim.config.roundState)) return send(res, 400, { error: 'Estado incorrecto' });
     if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
     const equipos = await storage.getEquipos(sim.id);
+    const pendientes = equiposPendientesDecision(equipos, ronda.decisiones);
+    if (pendientes.length) return send(res, 400, {
+      error: 'Faltan decisiones enviadas o forzadas: ' + pendientes.map(eq => eq.nombre).join(', '),
+      pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
+    });
     // Si no hay decisiones en ronda.decisiones, usar defaultDecision para todos
     const decisionesRonda = ronda.decisiones || {};
     let decisiones = equipos.filter(eq => decisionesRonda[eq.id]).map(eq => ({...decisionesRonda[eq.id]}));
@@ -1366,6 +1428,11 @@ async function route(req, res, body) {
 
     const equipos = await storage.getEquipos(sim.id);
     if (!equipos.length) return send(res, 400, { error: 'Sin equipos' });
+    const pendientes = equiposPendientesDecision(equipos, ronda.decisiones);
+    if (pendientes.length) return send(res, 400, {
+      error: 'No se puede simular: faltan decisiones enviadas o forzadas de ' + pendientes.map(eq => eq.nombre).join(', '),
+      pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
+    });
 
     // Etapa 2.2: construir mapa de demandaBase de la ronda anterior
     const demandaBaseAnteriorMap = {};
@@ -2439,8 +2506,14 @@ async function route(req, res, body) {
     if (!ronda) return send(res, 400, { error: 'Sin ronda' });
     if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ronda simulada' });
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
+    const errorDecision = validarDecisionEstudiante(body.decision);
+    if (errorDecision) return send(res, 400, { error: 'Decisión incompleta: ' + errorDecision });
     const cur = ronda.decisiones[equipoId] || {};
-    ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: true, submittedAt: new Date().toISOString() };
+    ronda.decisiones[equipoId] = {
+      ...cur, ...body.decision, equipo: equipoId, submitted: true,
+      submittedAt: new Date().toISOString(), forcedByAdmin: false,
+      forcedReason: null, forcedAt: null
+    };
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     return send(res, 200, { ok: true });
   }
