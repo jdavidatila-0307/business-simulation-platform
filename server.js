@@ -1211,7 +1211,18 @@ async function route(req, res, body) {
   if (url === '/admin/ronda/cerrar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
-    if (sim.config.roundState !== 'open') return send(res, 400, { error: 'No está abierta' });
+    const n = sim.config.currentRound;
+    const ronda = await storage.getRonda(sim.id, n);
+    if (!ronda || ronda.ejecutadaAt || ['simulated', 'calculada'].includes(ronda.estado)) {
+      return send(res, 400, { error: 'La ronda no está disponible para cerrar envíos' });
+    }
+    if (ronda.estado !== 'open') return send(res, 400, { error: 'La ronda no está abierta' });
+    const equipos = await storage.getEquipos(sim.id);
+    const pendientes = equiposPendientesDecision(equipos, ronda.decisiones);
+    if (pendientes.length) return send(res, 400, {
+      error: 'No se pueden cerrar envíos. Hay equipos pendientes. Envíe o fuerce la decisión antes de cerrar: ' + pendientes.map(eq => eq.nombre).join(', '),
+      pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
+    });
     sim.config.roundState = 'locked';
     await storage.updateSimulacion(sim.id, { config: sim.config });
     return send(res, 200, { ok: true });
