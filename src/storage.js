@@ -496,7 +496,11 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     ? Math.max(0, equipoCap - af)
     : (p.cajaInicial ?? 50000);
   const capitalInicial = equipoCap ?? p.capitalInicial ?? (af + (p.cajaInicial ?? 50000));
+  const operariosIniciales = p.operariosIniciales ?? 4;
   const vendedoresIniciales = p.vendedoresIniciales ?? 2;
+  const capacidadMaxProduccion = p.capacidadMaxProduccion ?? 1500;
+  const costoOperario = p.costoOperario ?? 0;
+  const sueldoVendedor = p.sueldoTrimestralVendedor ?? 0;
 
    const productoBase = {
     productoId: 'prod_1',
@@ -542,7 +546,10 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     despedirVendedores: 0,
 
     // Etapa 3.2: Operarios
-    operariosIniciales:  p.operariosIniciales ?? 4,
+    operariosIniciales,
+    capacidadMaxProduccion,
+    costoOperario,
+    sueldoVendedor,
     contratarOperarios:  0,
     despedirOperarios:   0,
     montoCapacitacion:   0,
@@ -577,6 +584,10 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
 
     // RRHH empresarial
     rrhh: {
+      operariosIniciales,
+      vendedoresIniciales,
+      costoOperario,
+      sueldoVendedor,
       contratarVendedores: 0,
       despedirVendedores: 0,
       contratarOperarios: 0,
@@ -612,7 +623,11 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     tipoInvestigacion: 'No',
 
     // Estado inicial financiero
+    operariosIniciales,
     vendedoresIniciales,
+    capacidadMaxProduccion,
+    costoOperario,
+    sueldoVendedor,
     cajaInicial,                                      // por equipo si eq.capitalInicial, sino global
     capitalInicial,                                   // para que el motor calcule capitalContable correcto
     activosFijosIniciales: af,
