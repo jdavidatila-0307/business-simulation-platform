@@ -163,8 +163,9 @@ async function loadAdminDashboard() {
                 <div class="team-status-dot" style="background:${eq.submitted ? 'var(--success)' : 'var(--warning)'}"></div>
                 <div>
                   <div style="font-weight:600;font-size:.82rem">${eq.nombre}</div>
-                  <div style="font-size:.7rem;color:var(--text3)">${eq.submitted ? '✓ ' + fmt.dt(eq.submittedAt) : '⏳ Pendiente'}</div>
+                  <div style="font-size:.7rem;color:var(--text3)">${eq.submitted ? (eq.forcedByAdmin ? '⚠ Forzada por profesor' : '✓ ' + fmt.dt(eq.submittedAt)) : (eq.hasDecision ? '📝 Borrador' : '⏳ Pendiente')}</div>
                 </div>
+                ${!eq.submitted ? `<button class="btn btn-ghost btn-sm" onclick="forzarDecisionAdmin('${eq.id}')">Forzar</button>` : ''}
               </div>`).join('')}
       </div>`;
   }
@@ -1303,4 +1304,13 @@ window.buildAdminKPIHTML = buildAdminKPIHTML;
 window.buildAdminResultsHTML = buildAdminResultsHTML;
 window.buildAdminChartsHTML = buildAdminChartsHTML;
 window.renderAdminCharts = renderAdminCharts;
+window.forzarDecisionAdmin = async function(equipoId) {
+  const motivo = prompt('Motivo obligatorio para forzar la decisión:');
+  if (!motivo || !motivo.trim()) return toast('Debes indicar un motivo', 'error');
+  try {
+    await api('POST', '/admin/ronda/forzar-decision', { equipoId, motivo: motivo.trim() });
+    toast('Decisión forzada por profesor', 'success');
+    await loadAdminDashboard();
+  } catch(e) { toast(e.message, 'error'); }
+};
 console.log('[admin-dashboard] ✅ Módulo cargado — Dashboard activo');
