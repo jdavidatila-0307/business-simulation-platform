@@ -592,6 +592,10 @@ async function route(req, res, body) {
       if (needAdmin()) return;
       const { nombre, descripcion, totalRounds, copyFromSimId, industria, modoInicio } = body;
       if (!nombre?.trim()) return send(res, 400, { error: 'Nombre de simulación requerido' });
+      if (!['fase0', 'homogeneo'].includes(modoInicio)) {
+        return send(res, 400, { error: 'modoInicio inválido: debe ser fase0 u homogeneo' });
+      }
+      const modoInicioValidado = modoInicio;
   
       const user = await storage.findUserById(s.userId);
       if (!user) return send(res, 401, { error: 'Sesión inválida. Vuelve a iniciar sesión.' });
@@ -632,7 +636,7 @@ async function route(req, res, body) {
           roundState:   'pending',
           industria:    industriaNombre || 'Calzados_COM540_1_2026_V2',  // metadata para el frontend
         },
-        metadata: { modoInicio: modoInicio || 'fase0' },
+        metadata: { modoInicio: modoInicioValidado },
         // Prioridad: baseSim > plantilla > constants.js (jaboncillos)
         parametros:       baseSim?.parametros        || plantillaCfg?.params             || require('./src/constants').PARAMS,
         tiposProducto:    baseSim?.tipos_producto     || plantillaCfg?.tiposProducto      || require('./src/constants').TIPOS_PRODUCTO,
