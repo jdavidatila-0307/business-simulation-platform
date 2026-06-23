@@ -490,12 +490,13 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
 
   // Capital por equipo: si el equipo tiene capitalInicial propio, deriva cajaInicial (R2: caja = cap − AF)
   // Si no tiene, usa los parámetros globales de la simulación (comportamiento original)
-  const equipoCap  = equipo?.capitalInicial || null;
-  const af         = p.activosFijosIniciales || 80000;
-  const cajaInicial = equipoCap
+  const equipoCap  = equipo?.capitalInicial ?? null;
+  const af         = p.activosFijosIniciales ?? 80000;
+  const cajaInicial = equipoCap != null
     ? Math.max(0, equipoCap - af)
-    : (p.cajaInicial || 50000);
-  const capitalInicial = equipoCap || p.capitalInicial || (af + (p.cajaInicial || 50000));
+    : (p.cajaInicial ?? 50000);
+  const capitalInicial = equipoCap ?? p.capitalInicial ?? (af + (p.cajaInicial ?? 50000));
+  const vendedoresIniciales = p.vendedoresIniciales ?? 2;
 
    const productoBase = {
     productoId: 'prod_1',
@@ -527,7 +528,7 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     // Variables acumulables
     brandEquityInicial: 50,
     reputacionInicial: 50,
-    inventarioInicial: p.inventarioInicialUnid || 0,
+    inventarioInicial: p.inventarioInicialUnid ?? 0,
 
     // Etapa 3.1: Materia prima
     stockMPInicial:    0,
@@ -536,7 +537,7 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     pedidosPendientes: [],   // [{rondaEntrega, cantidad, costoMP}]
 
     // Vendedores (nuevo)
-    vendedoresIniciales: 2,
+    vendedoresIniciales,
     contratarVendedores: 0,
     despedirVendedores: 0,
 
@@ -611,13 +612,13 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     tipoInvestigacion: 'No',
 
     // Estado inicial financiero
-    vendedoresIniciales: p.vendedoresIniciales ?? 2,
+    vendedoresIniciales,
     cajaInicial,                                      // por equipo si eq.capitalInicial, sino global
     capitalInicial,                                   // para que el motor calcule capitalContable correcto
     activosFijosIniciales: af,
-    cxcInicial: p.cxcInicial || 0,
-    deudaInicial: p.deudaInicial || 0,
-    inventarioInicial: p.inventarioInicialUnid || 0,
+    cxcInicial: p.cxcInicial ?? 0,
+    deudaInicial: p.deudaInicial ?? 0,
+    inventarioInicial: p.inventarioInicialUnid ?? 0,
     resultadoAcumuladoAnterior: 0,
 
     // Estado de entrega
