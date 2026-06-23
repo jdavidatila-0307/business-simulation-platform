@@ -353,6 +353,11 @@ async function getRonda(simulacionId, n, ownerId = null) {
 // =============================================================================
 // updateRonda con dual-write
 // =============================================================================
+function fechaEnvioDecision(decision) {
+  if (decision?.submitted !== true) return null;
+  return decision.submittedAt || new Date().toISOString();
+}
+
 async function updateRonda(simulacionId, n, data, ownerId = null) {
   const sim = await getSimulacion(simulacionId, ownerId);
   if (!sim) throw new Error('Simulación no encontrada');
@@ -397,6 +402,7 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
     if (data.decisiones && typeof data.decisiones === 'object') {
       for (const [equipoId, decisionObj] of Object.entries(data.decisiones)) {
         if (!decisionObj) continue;
+        const enviadaAt = fechaEnvioDecision(decisionObj);
 
         const productos = Array.isArray(decisionObj.productos) && decisionObj.productos.length
           ? decisionObj.productos.filter(p => p.activo !== false)
@@ -408,10 +414,10 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
             await pool.query(
               `INSERT INTO sim_decisiones
                  (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
-               VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6::TIMESTAMPTZ)
                ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
-               DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
-              [simulacionId, n, equipoId, productoId, JSON.stringify(prod)]
+               DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
+              [simulacionId, n, equipoId, productoId, JSON.stringify(prod), enviadaAt]
             );
           }
         }
@@ -419,10 +425,10 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
         await pool.query(
           `INSERT INTO sim_decisiones
              (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
-           VALUES ($1, $2, $3, 'prod_1', $4::jsonb, NOW())
+           VALUES ($1, $2, $3, 'prod_1', $4::jsonb, $5::TIMESTAMPTZ)
            ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
-           DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
-          [simulacionId, n, equipoId, JSON.stringify(decisionObj)]
+           DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
+          [simulacionId, n, equipoId, JSON.stringify(decisionObj), enviadaAt]
         );
       }
     }
@@ -439,13 +445,14 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
 // =============================================================================
 async function saveDecision(simulacionId, rondaNumero, equipoId, productoId, decisionData) {
   try {
+    const enviadaAt = fechaEnvioDecision(decisionData);
     await pool.query(
       `INSERT INTO sim_decisiones
          (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::TIMESTAMPTZ)
        ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
-       DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = NOW()`,
-      [simulacionId, rondaNumero, equipoId, productoId || 'prod_1', JSON.stringify(decisionData)]
+       DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
+      [simulacionId, rondaNumero, equipoId, productoId || 'prod_1', JSON.stringify(decisionData), enviadaAt]
     );
   } catch (errNuevo) {
     console.error(`[storage.saveDecision] Error en sim_decisiones:`, errNuevo.message);
