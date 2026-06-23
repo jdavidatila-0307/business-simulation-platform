@@ -48,4 +48,8 @@ function getEstadoInicial(params, fase0, modoInicio) {
   };
 }
 
-module.exports = { getEstadoInicial };
+// FIX 2: lectura centralizada del modo de inicio (default único, sin divergencias).
+const MODO_INICIO_DEFAULT = 'homogeneo';
+function leerModoInicio(sim) { return sim?.metadata?.modoInicio || MODO_INICIO_DEFAULT; }
+
+module.exports = { getEstadoInicial, leerModoInicio, MODO_INICIO_DEFAULT };
