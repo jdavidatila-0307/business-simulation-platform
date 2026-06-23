@@ -847,7 +847,7 @@ async function upsertFase0(simId, equipoId, data) {
     return r.rows[0] || null;
   } catch(e) {
     console.error('[storage.upsertFase0] Error en sim_fase0:', e.message);
-    return null;
+    throw e;   // FIX 1: propagar el error en vez de tragarlo (ya no devuelve null silencioso)
   }
 }
 

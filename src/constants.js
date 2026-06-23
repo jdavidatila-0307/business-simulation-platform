@@ -104,4 +104,18 @@ const COMPETENCIA_EXTERNA = [
   { segmento: 'Cosmético',         nombre: 'Marca líder cosmética', precio: 7.80, calidad: 8, marketing: 9_000, participacionRef: 0.40 },
 ];
 
-module.exports = { PARAMS, TIPOS_PRODUCTO, CANALES, SEGMENTOS, AFINIDAD_MATRIX, COMPETENCIA_EXTERNA };
+// FIX 3: Niveles de planta de Fase 0 (Activos Fijos) — FUENTE CANÓNICA ÚNICA.
+// Capacidad explícita por nivel (no derivada). Override por sim vía params
+// fase0_af_N_{nombre,monto,capacidad}. Nota: el frontend (admin-fase0.js y
+// equipo-fase0.js) mantiene copias por no haber bundler que pueda require() este
+// módulo en el navegador; este array es la referencia autoritativa a sincronizar.
+const NIVELES_PLANTA_FASE0 = [
+  { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300,  operariosMinimos: 2 },
+  { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600,  operariosMinimos: 3 },
+  { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800,  operariosMinimos: 3 },
+  { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150, operariosMinimos: 5 },
+  { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350, operariosMinimos: 6 },
+  { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700, operariosMinimos: 7 },
+];
+
+module.exports = { PARAMS, TIPOS_PRODUCTO, CANALES, SEGMENTOS, AFINIDAD_MATRIX, COMPETENCIA_EXTERNA, NIVELES_PLANTA_FASE0 };

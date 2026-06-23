@@ -22,6 +22,7 @@ inicializarPlantillaDefault();
 const storage  = require('./src/storage');
 const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
+const { leerModoInicio } = require('./src/initializer');   // FIX 2: lectura centralizada de modoInicio
 
 // Mínimo operativo por nivel de planta en Fase 0. La validación se replica en
 // servidor para impedir que una petición directa persista o envíe un valor inválido.
@@ -1078,7 +1079,7 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
-    const modoInicioActivar = sim.metadata?.modoInicio || 'homogeneo';
+    const modoInicioActivar = leerModoInicio(sim);
     if (modoInicioActivar === 'fase0' && sim.config.fase0Activa === true) {
       return send(res, 400, { error: 'No se puede activar la ronda: Fase 0 sigue abierta. Cierra Fase 0 primero (Admin → Fase 0 → Cerrar Fase 0).' });
     }
@@ -1097,7 +1098,7 @@ async function route(req, res, body) {
       const prevRonda = n > 1 ? await storage.getRonda(sim.id, n-1) : null;
       const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
 
-      const modoInicio = sim.metadata?.modoInicio || 'homogeneo';
+      const modoInicio = leerModoInicio(sim);
       const { getEstadoInicial } = require('./src/initializer');
       let fase0PorEquipo = {};
       if (modoInicio === 'fase0') {
@@ -2166,7 +2167,7 @@ async function route(req, res, body) {
       simId: sim.id,
       nivelCompetidoresIA: sim.config?.nivelCompetidoresIA || 'ninguno',
       fase0Activa: sim.config?.fase0Activa ?? false,
-      modoInicio: sim.metadata?.modoInicio || 'fase0',
+      modoInicio: leerModoInicio(sim),
     });
   }
 
@@ -2542,7 +2543,7 @@ async function route(req, res, body) {
     );
     fase0Params.sueldosAdministrativosFijos = sim.parametros?.sueldosAdministrativosFijos ?? 0;
     return send(res, 200, { fase0Activa, registro, equipoId, fase0Params,
-      modoInicio: sim.metadata?.modoInicio || 'fase0' });
+      modoInicio: leerModoInicio(sim) });
   }
 
   if (url === '/api/fase0/guardar' && method === 'POST') {
@@ -2570,7 +2571,12 @@ async function route(req, res, body) {
         return send(res, 400, { error: 'El costo fijo declarado (Bs ' + data.costo_fijo_declarado + ') no puede ser menor al mínimo asignado por el docente (Bs ' + minimo + ')' });
       }
     }
-    const registro = await storage.upsertFase0(sim.id, equipoId, data);
+    let registro;
+    try {
+      registro = await storage.upsertFase0(sim.id, equipoId, data);
+    } catch (e) {
+      return send(res, 500, { ok: false, error: e.message });   // FIX 1: nunca 200 con registro null
+    }
     return send(res, 200, { ok: true, registro });
   }
 
