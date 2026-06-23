@@ -2305,10 +2305,26 @@ async function route(req, res, body) {
       ronda = await storage.ensureRonda(sim.id, n);
     }
     if (!ronda.decisiones) ronda.decisiones = {};
+    let actualizarDecision = false;
     if (!ronda.decisiones[equipoId]) {
       const equipos = await storage.getEquipos(sim.id);
       const eq = equipos.find(e => e.id === equipoId);
       ronda.decisiones[equipoId] = storage.defaultDecision(equipoId, eq?.nombre||equipoId, sim.parametros);
+      actualizarDecision = true;
+    }
+    const fase0 = await storage.getFase0Equipo(sim.id, equipoId);
+    const operariosFase0 = Number(fase0?.operarios_iniciales);
+    const decision = ronda.decisiones[equipoId];
+    const esBorradorDefault = !decision.submitted
+      && (!Number.isFinite(Number(decision.operariosIniciales)) || Number(decision.operariosIniciales) <= 1);
+    if (['enviado', 'cerrado'].includes(fase0?.estado)
+        && Number.isFinite(operariosFase0) && operariosFase0 > 0
+        && esBorradorDefault) {
+      decision.operariosIniciales = operariosFase0;
+      if (decision.productos?.[0]) decision.productos[0].operariosIniciales = operariosFase0;
+      actualizarDecision = true;
+    }
+    if (actualizarDecision) {
       await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     }
     const cfg = {
@@ -2322,7 +2338,7 @@ async function route(req, res, body) {
     return send(res, 200, {
       ronda: n,
       roundState: sim.config.roundState,
-      decision: ronda.decisiones[equipoId],
+      decision,
       referencia: {
         segmentos: cfg.segmentos,
         tiposProducto: Object.keys(cfg.tiposProducto).map(k => ({ nombre:k, costoBase: cfg.tiposProducto[k].costoBase })),
