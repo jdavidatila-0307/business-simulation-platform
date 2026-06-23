@@ -22,7 +22,7 @@ inicializarPlantillaDefault();
 const storage  = require('./src/storage');
 const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
-const { leerModoInicio } = require('./src/initializer');   // FIX 2: lectura centralizada de modoInicio
+const { leerModoInicio, hidratarEstadoInicialR1 } = require('./src/initializer');   // lectura centralizada de inicio Fase 0
 
 // Mínimo operativo por nivel de planta en Fase 0. La validación se replica en
 // servidor para impedir que una petición directa persista o envíe un valor inválido.
@@ -1146,7 +1146,6 @@ async function route(req, res, body) {
       const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
 
       const modoInicio = leerModoInicio(sim);
-      const { getEstadoInicial } = require('./src/initializer');
       let fase0PorEquipo = {};
       if (modoInicio === 'fase0') {
         const registrosFase0 = await storage.getFase0(sim.id);
@@ -1164,21 +1163,8 @@ async function route(req, res, body) {
           console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
           if (modoInicio === 'fase0' && n === 1) {
-            const estadoInicial = getEstadoInicial(
-              sim.parametros, fase0PorEquipo[eq.id] || null, modoInicio
-            );
-            Object.assign(dec, {
-              cajaInicial:           estadoInicial.cajaInicial,
-              activosFijosIniciales: estadoInicial.activosFijosIniciales,
-              deudaInicial:          estadoInicial.deudaInicial,
-              capitalInicial:        estadoInicial.capitalInicial,
-              operariosIniciales:    estadoInicial.operariosIniciales,
-              capacidadMaxProduccion: estadoInicial.capacidadMaxProduccion || undefined,
-            });
-            if (dec.productos && dec.productos[0]) {
-              dec.productos[0].operariosIniciales = estadoInicial.operariosIniciales;
-            }
-            console.log(`[server] ${eq.nombre}: Fase0 caja=${estadoInicial.cajaInicial} AF=${estadoInicial.activosFijosIniciales} deuda=${estadoInicial.deudaInicial} origen=${estadoInicial._origen}`);
+            dec = hidratarEstadoInicialR1(dec, sim.parametros, fase0PorEquipo[eq.id] || null, modoInicio, n);
+            console.log(`[server] ${eq.nombre}: estado inicial R1 hidratado desde Fase 0`);
           } else {
             console.log(`[server] ${eq.nombre}: sin resultado previo — usando defaults`);
           }
@@ -1202,8 +1188,30 @@ async function route(req, res, body) {
       });
       console.log(`[server] Ronda ${n} poblada con ${Object.keys(decisiones).length} decisiones`);
     } else {
-      // Ronda ya tiene decisiones — solo actualizar estado
-      await storage.updateRonda(sim.id, n, { estado: 'open' });
+      // R1 puede tener borradores creados antes de activarse. Rehidratar sólo
+      // los no enviados/no forzados para no perder el Balance Inicial Fase 0.
+      const modoInicio = leerModoInicio(sim);
+      if (modoInicio === 'fase0' && n === 1) {
+        const fase0PorEquipo = {};
+        (await storage.getFase0(sim.id)).forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
+        const equipos = await storage.getEquipos(sim.id);
+        const decisiones = { ...(ronda.decisiones || {}) };
+        let hidratada = false;
+        for (const eq of equipos.filter(e => !e.isBot)) {
+          const key = decisiones[eq.id]
+            ? eq.id
+            : Object.keys(decisiones).find(k => k.startsWith(eq.id + '__'));
+          if (!key) continue;
+          const dec = hidratarEstadoInicialR1(decisiones[key], sim.parametros, fase0PorEquipo[eq.id] || null, modoInicio, n);
+          if (dec !== decisiones[key]) {
+            decisiones[key] = dec;
+            hidratada = true;
+          }
+        }
+        await storage.updateRonda(sim.id, n, hidratada ? { estado: 'open', decisiones } : { estado: 'open' });
+      } else {
+        await storage.updateRonda(sim.id, n, { estado: 'open' });
+      }
     }
     return send(res, 200, { ok: true, currentRound: n });
   }
@@ -2391,15 +2399,13 @@ async function route(req, res, body) {
       actualizarDecision = true;
     }
     const fase0 = await storage.getFase0Equipo(sim.id, equipoId);
-    const operariosFase0 = Number(fase0?.operarios_iniciales);
-    const decision = ronda.decisiones[equipoId];
-    const esBorradorDefault = !decision.submitted
-      && (!Number.isFinite(Number(decision.operariosIniciales)) || Number(decision.operariosIniciales) <= 1);
-    if (['enviado', 'cerrado'].includes(fase0?.estado)
-        && Number.isFinite(operariosFase0) && operariosFase0 > 0
-        && esBorradorDefault) {
-      decision.operariosIniciales = operariosFase0;
-      if (decision.productos?.[0]) decision.productos[0].operariosIniciales = operariosFase0;
+    let decision = ronda.decisiones[equipoId];
+    const decisionHidratada = hidratarEstadoInicialR1(
+      decision, sim.parametros, fase0, leerModoInicio(sim), n
+    );
+    if (decisionHidratada !== decision) {
+      decision = decisionHidratada;
+      ronda.decisiones[equipoId] = decision;
       actualizarDecision = true;
     }
     if (actualizarDecision) {
