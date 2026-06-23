@@ -118,6 +118,12 @@ function hidratarEstadoInicialR1(decision, params, fase0, modoInicio, rondaNumer
 
 // FIX 2: lectura centralizada del modo de inicio (default único, sin divergencias).
 const MODO_INICIO_DEFAULT = 'homogeneo';
-function leerModoInicio(sim) { return sim?.metadata?.modoInicio || MODO_INICIO_DEFAULT; }
+function leerModoInicio(sim) {
+  const modo = sim?.metadata?.modoInicio;
+  if (modo === 'fase0') return 'fase0';
+  if (modo === 'homogeneo') return 'homogeneo';
+  if (modo === undefined || modo === null || modo === '') return MODO_INICIO_DEFAULT;
+  throw new Error(`modoInicio inválido: ${modo}`);
+}
 
 module.exports = { getEstadoInicial, hidratarEstadoInicialR1, leerModoInicio, MODO_INICIO_DEFAULT };

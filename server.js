@@ -1497,7 +1497,7 @@ async function route(req, res, body) {
       competenciaExterna:    sim.competencia_externa,
       demandaBaseAnteriorMap,  // Etapa 2.2: demanda dinámica
       rondaNumero:    n,         // Etapa 3.1: número de ronda para lead time
-      bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
+      bloquearProduccionR1: (leerModoInicio(sim) === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
       proveedores:    sim.proveedores || [],  // Etapa 3.1: catálogo de proveedores
       shock,                   // Shock de mercado: afecta demandaFormal de segmentos
       equipos,                 // Lista de equipos (para reportes Premium/Estratégico)
@@ -1832,7 +1832,7 @@ async function route(req, res, body) {
         competenciaExterna: sim.competencia_externa,
         demandaBaseAnteriorMap,
         rondaNumero:        n,
-        bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
+        bloquearProduccionR1: (leerModoInicio(sim) === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
         proveedores:        proveedores,
         shock:              shockRonda,
         equipos,
