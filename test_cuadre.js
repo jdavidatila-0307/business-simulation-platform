@@ -652,6 +652,110 @@ async function main() {
     else { console.error('  ❌ F5 no detectó condición bloqueante', { deficit, descuadre }); fallados++; }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN F5: ${e.message}`); fallados++; }
 
+  // F6: tasas normativas por activo; cómputo debe usar 25% anual.
+  console.log('\nF6 — Depreciación normativa por activos reales Fase 0');
+  try {
+    const dep = engine.calcularDepreciacionAmortizacion({
+      baseDepreciable: 174650,
+      baseAmortizable: 1400,
+      activosFijosIniciales: 174650,
+      valorVehiculoInicial: 35000,
+      valorMueblesInicial: 16000,
+      valorComputoInicial: 43650,
+      valorPatentesInicial: 1400
+    }, PARAMS_BASE);
+    const ok = dep.depreciacionPlanta === 2500
+      && dep.depreciacionVehiculo === 1750
+      && dep.depreciacionMuebles === 400
+      && dep.depreciacionComputo === 2728.125
+      && dep.amortizacionIntangiblesPeriodo === 87.5
+      && dep.depreciacionPeriodo === 7378.125
+      && dep.gastoDepreciacionAmortizacion === 7465.625
+      && dep.activosFijosNetos === 167271.875
+      && dep.intangiblesNetos === 1312.5;
+    if (ok) { console.log('  ✅ F6 cómputo=2728.125 (25% anual) y patentes=87.5'); pasados++; }
+    else { console.error('  ❌ F6 depreciación normativa inesperada:', dep); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F6: ${e.message}`); fallados++; }
+
+  // F7: sin desglose individual conserva el importe global homogéneo.
+  console.log('\nF7 — No regresión homogénea de depreciación');
+  try {
+    const dep = engine.calcularDepreciacionAmortizacion({ activosFijosIniciales: 80000 }, PARAMS_BASE);
+    const ok = dep.esLegacy === true && dep.depreciacionPeriodo === 2500
+      && dep.amortizacionIntangiblesPeriodo === 0 && dep.activosFijosNetos === 77500;
+    if (ok) { console.log('  ✅ F7 conserva depreciación global Bs 2500'); pasados++; }
+    else { console.error('  ❌ F7 fallback homogéneo inesperado:', dep); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F7: ${e.message}`); fallados++; }
+
+  // F8: no se deprecia ni amortiza más que el saldo disponible.
+  console.log('\nF8 — Límite por saldo depreciable/amortizable');
+  try {
+    const dep = engine.calcularDepreciacionAmortizacion({
+      baseDepreciable: 10, activosFijosIniciales: 10,
+      valorPlantaInicial: 10, depreciacionAcumuladaPlantaInicial: 9.9,
+      baseAmortizable: 1, valorPatentesInicial: 1,
+      amortizacionAcumuladaPatentesInicial: 0.99
+    }, PARAMS_BASE);
+    const ok = Math.abs(dep.depreciacionPeriodo - 0.1) < 1e-9
+      && Math.abs(dep.amortizacionIntangiblesPeriodo - 0.01) < 1e-9
+      && dep.activosFijosNetos === 0 && dep.intangiblesNetos === 0;
+    if (ok) { console.log('  ✅ F8 limita gasto al saldo pendiente'); pasados++; }
+    else { console.error('  ❌ F8 excede saldo disponible:', dep); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F8: ${e.message}`); fallados++; }
+
+  // F9: el gasto contable no se incorpora como pago directo de caja.
+  console.log('\nF9 — Depreciación/amortización sin salida directa de caja');
+  try {
+    const eq = { id: 'eq_f9', nombre: 'F9_FlujoCaja' };
+    const base = decBase({ equipo:eq.id, equipoOriginal:eq.id, equipoNombre:eq.nombre,
+      cajaInicial: 323950, activosFijosIniciales: 174650, capitalInicial: 500000,
+      produccion: 400, precioVenta: 200 });
+    const detallada = {
+      ...base, baseDepreciable:174650, baseAmortizable:1400,
+      valorVehiculoInicial:35000, valorMueblesInicial:16000,
+      valorComputoInicial:43650, valorPatentesInicial:1400
+    };
+    const legado = engine.ejecutarSimulador([base], { ...cfgBase([eq], [base]), params: PARAMS_BASE })
+      .resultados.find(r => r.equipoOriginal === eq.id);
+    const real = engine.ejecutarSimulador([detallada], { ...cfgBase([eq], [detallada]), params: PARAMS_BASE })
+      .resultados.find(r => r.equipoOriginal === eq.id);
+    const ok = real.totalPagos === legado.totalPagos
+      && real.cajaFinal === legado.cajaFinal
+      && real.gastoDepreciacionAmortizacion > legado.gastoDepreciacionAmortizacion;
+    if (ok) { console.log('  ✅ F9 mayor gasto contable sin pago directo adicional'); pasados++; }
+    else { console.error('  ❌ F9 flujo de caja incluyó gasto contable:', { legado, real }); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F9: ${e.message}`); fallados++; }
+
+  // F10: en multiproducto la depreciación/amortización se expone una sola vez.
+  console.log('\nF10 — Multiproducto no duplica depreciación');
+  try {
+    const eq = { id: 'eq_f10', nombre: 'F10_Multiproducto' };
+    const empresa = decBase({
+      equipo:eq.id, equipoOriginal:eq.id, equipoNombre:eq.nombre,
+      cajaInicial:323950, activosFijosIniciales:174650, capitalInicial:500000,
+      baseDepreciable:174650, baseAmortizable:1400,
+      valorVehiculoInicial:35000, valorMueblesInicial:16000,
+      valorComputoInicial:43650, valorPatentesInicial:1400
+    });
+    empresa.productos = [
+      { ...empresa, productoId:'prod_1', producto:'Calzado Deportivo', segmentoObjetivo:'Jóvenes Urbanos', precioVenta:200, produccion:250 },
+      { ...empresa, productoId:'prod_2', producto:'Sneaker Cultural Premium', segmentoObjetivo:'Jóvenes Urbanos', precioVenta:300, produccion:250 }
+    ];
+    const resultados = engine.ejecutarSimulador([empresa], { ...cfgBase([eq], [empresa]), params:PARAMS_BASE })
+      .resultados.filter(r => r.equipoOriginal === eq.id);
+    const principal = resultados.find(r => r.productoId === 'prod_1');
+    const noPrincipal = resultados.find(r => r.productoId === 'prod_2');
+    const sumaDep = resultados.reduce((s, r) => s + (r.depreciacion || 0), 0);
+    const sumaGasto = resultados.reduce((s, r) => s + (r.gastoDepreciacionAmortizacion || 0), 0);
+    const ok = resultados.length === 2
+      && sumaDep === principal.depreciacion
+      && sumaGasto === principal.gastoDepreciacionAmortizacion
+      && noPrincipal.depreciacion === 0
+      && noPrincipal.gastoDepreciacionAmortizacion === 0;
+    if (ok) { console.log('  ✅ F10 depreciación y amortización aparecen una sola vez por empresa'); pasados++; }
+    else { console.error('  ❌ F10 duplicación multiproducto:', resultados); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F10: ${e.message}`); fallados++; }
+
   if (fallados === 0) {
     console.log(`  ✅ TODOS LOS ESCENARIOS CUADRAN (${pasados}/${pasados+fallados})`);
     console.log('  Motor listo para producción. Descuadre ≤ 1 Bs en todos los casos.');

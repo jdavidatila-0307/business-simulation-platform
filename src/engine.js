@@ -8,6 +8,109 @@
 function avg(a, b) { return (a + b) / 2; }
 function roundBs(x) { return Math.round(x * 100) / 100; }
 
+// D.S. 24051 como referencia para activos fijos; patentes usa política interna
+// transitoria, parametrizable cuando se formalice la política de intangibles.
+const TASAS_DEPRECIACION_BOLIVIA = Object.freeze({
+  planta: 0.125,
+  vehiculo: 0.20,
+  muebles: 0.10,
+  computo: 0.25,
+  patentes: 0.25
+});
+
+function numeroNoNegativo(valor) {
+  const numero = Number(valor ?? 0);
+  return Number.isFinite(numero) ? Math.max(0, numero) : 0;
+}
+
+function calcularDepreciacionAmortizacion(d = {}, params = {}) {
+  const tieneDesgloseReal = d.baseDepreciable != null
+    || d.baseAmortizable != null
+    || d.valorVehiculoInicial != null
+    || d.valorMueblesInicial != null
+    || d.valorComputoInicial != null
+    || d.valorPatentesInicial != null;
+
+  if (!tieneDesgloseReal) {
+    const activosFijosIniciales = numeroNoNegativo(d.activosFijosIniciales ?? params.activosFijosIniciales);
+    const depreciacionPeriodo = Math.min(activosFijosIniciales, numeroNoNegativo(params.depreciacionTrimestral));
+    const activosFijosNetos = Math.max(0, activosFijosIniciales - depreciacionPeriodo);
+    return {
+      esLegacy: true,
+      valorPlantaInicial: activosFijosIniciales,
+      valorVehiculoInicial: 0,
+      valorMueblesInicial: 0,
+      valorComputoInicial: 0,
+      valorPatentesInicial: 0,
+      depreciacionPlanta: depreciacionPeriodo,
+      depreciacionVehiculo: 0,
+      depreciacionMuebles: 0,
+      depreciacionComputo: 0,
+      depreciacionPeriodo,
+      amortizacionIntangiblesPeriodo: 0,
+      gastoDepreciacionAmortizacion: depreciacionPeriodo,
+      baseDepreciableFinal: activosFijosIniciales,
+      depreciacionAcumuladaFinal: depreciacionPeriodo,
+      activosFijosNetos,
+      afNetos: activosFijosNetos,
+      baseAmortizableFinal: 0,
+      amortizacionAcumuladaFinal: 0,
+      intangiblesNetos: 0,
+      activosNoCorrientesNetos: activosFijosNetos
+    };
+  }
+
+  const valorVehiculoInicial = numeroNoNegativo(d.valorVehiculoInicial);
+  const valorMueblesInicial = numeroNoNegativo(d.valorMueblesInicial);
+  const valorComputoInicial = numeroNoNegativo(d.valorComputoInicial);
+  const valorPatentesInicial = numeroNoNegativo(d.valorPatentesInicial ?? d.baseAmortizable ?? d.intangiblesIniciales);
+  const activosFijosIniciales = numeroNoNegativo(d.activosFijosIniciales ?? d.baseDepreciable);
+  const valorPlantaInicial = numeroNoNegativo(
+    d.valorPlantaInicial
+    ?? d.activosFijosPlantaInicial
+    ?? Math.max(0, activosFijosIniciales - valorVehiculoInicial - valorMueblesInicial - valorComputoInicial)
+  );
+
+  const saldo = (valor, acumulado) => Math.max(0, valor - numeroNoNegativo(acumulado));
+  const depreciar = (valor, acumulado, tasaAnual) => Math.min(saldo(valor, acumulado), valor * tasaAnual / 4);
+  const depPlanta = depreciar(valorPlantaInicial, d.depreciacionAcumuladaPlantaInicial, TASAS_DEPRECIACION_BOLIVIA.planta);
+  const depVehiculo = depreciar(valorVehiculoInicial, d.depreciacionAcumuladaVehiculoInicial, TASAS_DEPRECIACION_BOLIVIA.vehiculo);
+  const depMuebles = depreciar(valorMueblesInicial, d.depreciacionAcumuladaMueblesInicial, TASAS_DEPRECIACION_BOLIVIA.muebles);
+  const depComputo = depreciar(valorComputoInicial, d.depreciacionAcumuladaComputoInicial, TASAS_DEPRECIACION_BOLIVIA.computo);
+  const amortizacionIntangiblesPeriodo = depreciar(valorPatentesInicial, d.amortizacionAcumuladaPatentesInicial, TASAS_DEPRECIACION_BOLIVIA.patentes);
+  const depreciacionPeriodo = depPlanta + depVehiculo + depMuebles + depComputo;
+  const baseDepreciableFinal = valorPlantaInicial + valorVehiculoInicial + valorMueblesInicial + valorComputoInicial;
+  const depreciacionAcumuladaInicial = numeroNoNegativo(d.depreciacionAcumuladaPlantaInicial)
+    + numeroNoNegativo(d.depreciacionAcumuladaVehiculoInicial)
+    + numeroNoNegativo(d.depreciacionAcumuladaMueblesInicial)
+    + numeroNoNegativo(d.depreciacionAcumuladaComputoInicial);
+  const amortizacionAcumuladaInicial = numeroNoNegativo(d.amortizacionAcumuladaPatentesInicial);
+  const depreciacionAcumuladaFinal = depreciacionAcumuladaInicial + depreciacionPeriodo;
+  const amortizacionAcumuladaFinal = amortizacionAcumuladaInicial + amortizacionIntangiblesPeriodo;
+  const activosFijosNetos = Math.max(0, baseDepreciableFinal - depreciacionAcumuladaFinal);
+  const intangiblesNetos = Math.max(0, valorPatentesInicial - amortizacionAcumuladaFinal);
+
+  return {
+    esLegacy: false,
+    valorPlantaInicial, valorVehiculoInicial, valorMueblesInicial, valorComputoInicial, valorPatentesInicial,
+    depreciacionPlanta: depPlanta,
+    depreciacionVehiculo: depVehiculo,
+    depreciacionMuebles: depMuebles,
+    depreciacionComputo: depComputo,
+    depreciacionPeriodo,
+    amortizacionIntangiblesPeriodo,
+    gastoDepreciacionAmortizacion: depreciacionPeriodo + amortizacionIntangiblesPeriodo,
+    baseDepreciableFinal,
+    depreciacionAcumuladaFinal,
+    activosFijosNetos,
+    afNetos: activosFijosNetos,
+    baseAmortizableFinal: valorPatentesInicial,
+    amortizacionAcumuladaFinal,
+    intangiblesNetos,
+    activosNoCorrientesNetos: activosFijosNetos + intangiblesNetos
+  };
+}
+
 // Capital permanente del equipo: una decisión con estado propio siempre tiene
 // prioridad sobre parámetros globales. El resultado acumulado se mantiene
 // separado y se suma sólo para la verificación de patrimonio.
@@ -628,9 +731,22 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     : modeloCostos === 'directo'
     ? false   // directo: ningún producto paga costos fijos
     : true;   // absorcion: todos los productos pagan costos fijos completos
+  // La depreciación/amortización es un gasto de empresa: nunca debe repetirse
+  // por producto, incluso si otro modelo distribuye otros costos fijos.
+  const esProductoContable = d.productoId === 'prod_1' || !d.productoId;
   const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
   const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
-  const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
+  const depreciacionActivos = calcularDepreciacionAmortizacion(d, params);
+  const gastoDepre      = esProductoContable ? depreciacionActivos.gastoDepreciacionAmortizacion : 0;
+  const depreciacionExpuesta = esProductoContable ? depreciacionActivos : {
+    depreciacionPeriodo: 0,
+    depreciacionPlanta: 0,
+    depreciacionVehiculo: 0,
+    depreciacionMuebles: 0,
+    depreciacionComputo: 0,
+    amortizacionIntangiblesPeriodo: 0,
+    gastoDepreciacionAmortizacion: 0
+  };
   const gastoSueldosAdmin = esProductoPrincipal ? (params.sueldosAdministrativosFijos || 0) : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
@@ -848,15 +964,16 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const deudaPrestamos = roundBs(Math.max(0, (d.deudaInicial || 0) + ingresoPrestamo - amortizacion));
   const deudaFinal     = roundBs(deudaPrestamos + sobregiro + interesSobregiro);
 
-  // Activos fijos netos
-  const afNetos = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
+  // Activos no corrientes netos: depreciación tangible y amortización de patentes.
+  const afNetos = roundBs(depreciacionActivos.activosFijosNetos);
+  const intangiblesNetos = roundBs(depreciacionActivos.intangiblesNetos);
 
   // Balance General — OPCIÓN A: IVA pago diferido (realidad boliviana)
   //   Al cierre del trimestre el IVA neto es un PASIVO (obligación devengada, no pagada aún)
   //   El pago al Estado ocurre en el trimestre siguiente (pagoIVAPeriodoAnterior)
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
-  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
+  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + intangiblesNetos + ivaSaldoAFavor);
   const capitalContable = resolverCapitalContable(d, params);
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
@@ -922,7 +1039,13 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     comisionesNeto, ventasNetasReal,
     gastoAdminFijo:     params.gastoAdminFijo,
     gastoFijoPlanta:    params.gastoFijoPlanta,
-    depreciacion:       params.depreciacionTrimestral,
+    depreciacion:       depreciacionExpuesta.depreciacionPeriodo,
+    depreciacionPlanta: depreciacionExpuesta.depreciacionPlanta,
+    depreciacionVehiculo: depreciacionExpuesta.depreciacionVehiculo,
+    depreciacionMuebles: depreciacionExpuesta.depreciacionMuebles,
+    depreciacionComputo: depreciacionExpuesta.depreciacionComputo,
+    amortizacionIntangibles: depreciacionExpuesta.amortizacionIntangiblesPeriodo,
+    gastoDepreciacionAmortizacion: depreciacionExpuesta.gastoDepreciacionAmortizacion,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro, gastoFinanciero,
     gastosOp, utilidadNeta,
@@ -941,7 +1064,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoAmortizacion,  // reembolso principal — para trazabilidad flujo de caja
 
     // Balance
-    cxcFinal, invFinalValorizado, afNetos,
+    cxcFinal, invFinalValorizado, afNetos, intangiblesNetos,
     totalActivos, deudaFinal, totalPasivos,
     capitalContable, resultadoAcumulado, patrimonio,
 
@@ -967,6 +1090,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // Para propagación
     inventarioFinal, vendedoresFinales: d.vendedoresFinales || d.vendedoresIniciales,
     activosFijosNetos: afNetos,
+    activosNoCorrientesNetos: depreciacionActivos.activosNoCorrientesNetos,
+    valorPlantaInicial: depreciacionActivos.valorPlantaInicial,
+    baseDepreciableFinal: depreciacionActivos.baseDepreciableFinal,
+    depreciacionAcumuladaFinal: depreciacionActivos.depreciacionAcumuladaFinal,
+    baseAmortizableFinal: depreciacionActivos.baseAmortizableFinal,
+    amortizacionAcumuladaFinal: depreciacionActivos.amortizacionAcumuladaFinal,
     costoUnitario, comisionPct,
     brandEquityFinal,
     capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
@@ -1036,8 +1165,19 @@ function ejecutarSimulador(decisiones, cfg) {
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
       const vend     = Math.max(0, d.vendedoresIniciales ?? params.vendedoresIniciales ?? 0);
       const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
-      // Usar parámetros reales de la industria — sin fallbacks hardcodeados
-      const dep      = params.depreciacionTrimestral || 0;
+      // Sin desglose real, conserva el fallback homogéneo/legacy.
+      const depreciacionActivos = calcularDepreciacionAmortizacion(d, params);
+      const esProductoContable = d.productoId === 'prod_1' || !d.productoId;
+      const dep      = esProductoContable ? depreciacionActivos.gastoDepreciacionAmortizacion : 0;
+      const depreciacionExpuesta = esProductoContable ? depreciacionActivos : {
+        depreciacionPeriodo: 0,
+        depreciacionPlanta: 0,
+        depreciacionVehiculo: 0,
+        depreciacionMuebles: 0,
+        depreciacionComputo: 0,
+        amortizacionIntangiblesPeriodo: 0,
+        gastoDepreciacionAmortizacion: 0
+      };
       const gAdmin   = params.gastoAdminFijo         || 0;
       const gPlanta  = params.gastoFijoPlanta         || 0;
       const gVend    = vend * (params.sueldoTrimestralVendedor || 0);
@@ -1059,8 +1199,9 @@ function ejecutarSimulador(decisiones, cfg) {
       const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
       const intSobregiro= Math.round(sobregiro * tasaTrim);
       const deudaFinal  = (d.deudaInicial||0) + sobregiro + intDeuda + intSobregiro;
-      const afNetos     = Math.max(0, (d.activosFijosIniciales||80000) - dep);
-      const totalActivos= cajaFinal + afNetos;
+      const afNetos     = depreciacionActivos.activosFijosNetos;
+      const intangiblesNetos = depreciacionActivos.intangiblesNetos;
+      const totalActivos= cajaFinal + afNetos + intangiblesNetos;
       const utilidadNeta= -(totalGastos + intSobregiro);
       // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
       // NO usar Math.max(0,...): si es negativo es quiebra técnica, dato legítimo
@@ -1079,7 +1220,13 @@ function ejecutarSimulador(decisiones, cfg) {
         gastoFijoPlanta:  gPlanta,
         costoVendedores:  gVend,
         pagoOperarios:    gOper,
-        depreciacion:     dep,
+        depreciacion:     depreciacionExpuesta.depreciacionPeriodo,
+        depreciacionPlanta: depreciacionExpuesta.depreciacionPlanta,
+        depreciacionVehiculo: depreciacionExpuesta.depreciacionVehiculo,
+        depreciacionMuebles: depreciacionExpuesta.depreciacionMuebles,
+        depreciacionComputo: depreciacionExpuesta.depreciacionComputo,
+        amortizacionIntangibles: depreciacionExpuesta.amortizacionIntangiblesPeriodo,
+        gastoDepreciacionAmortizacion: depreciacionExpuesta.gastoDepreciacionAmortizacion,
         costoAlmacenamiento: 0,
         gastosOp:         gFijo,
         gastoFinanciero:  intDeuda + intSobregiro,
@@ -1095,7 +1242,14 @@ function ejecutarSimulador(decisiones, cfg) {
         cxcFinal:         0,
         invFinalValorizado: 0, inventarioFinal: 0,
         activosFijosIniciales: d.activosFijosIniciales || 80000,
-        afNetos,
+        afNetos, intangiblesNetos,
+        activosFijosNetos: afNetos,
+        activosNoCorrientesNetos: depreciacionActivos.activosNoCorrientesNetos,
+        valorPlantaInicial: depreciacionActivos.valorPlantaInicial,
+        baseDepreciableFinal: depreciacionActivos.baseDepreciableFinal,
+        depreciacionAcumuladaFinal: depreciacionActivos.depreciacionAcumuladaFinal,
+        baseAmortizableFinal: depreciacionActivos.baseAmortizableFinal,
+        amortizacionAcumuladaFinal: depreciacionActivos.amortizacionAcumuladaFinal,
         totalActivos,
         capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
         deudaInicial:     d.deudaInicial || 0,
@@ -1556,6 +1710,8 @@ function propagarEstado(decision, resPrev, params = {}) {
 module.exports = {
   ejecutarSimulador,
   propagarEstado,
+  calcularDepreciacionAmortizacion,
+  TASAS_DEPRECIACION_BOLIVIA,
   calcularMercadoSegmentos,
   calcularPreSimulacion,
   calcularPreSimulacionConsolidada,
