@@ -509,6 +509,85 @@ async function main() {
 
   // ── Resultado final ────────────────────────────────────────────────────
   console.log('\n══════════════════════════════════════════════════════');
+  // F1: una decisión proveniente de Fase 0 debe conservar su capital propio.
+  console.log('\nF1 — Capital variable Fase 0 (prioriza decisión sobre parámetros)');
+  try {
+    const eq = { id: 'eq_f1', nombre: 'F1_CapitalVariable' };
+    const paramsF1 = {
+      ...PARAMS_BASE,
+      cajaInicial: 500000,
+      activosFijosIniciales: 80000,
+      capitalInicial: 580000,
+      capitalContable: 580000,
+    };
+    const dec = decBase({
+      equipo: eq.id, equipoOriginal: eq.id, equipoNombre: eq.nombre,
+      rondaNumero: 1,
+      cajaInicial: 300000,
+      activosFijosIniciales: 100000,
+      deudaInicial: 50000,
+      capitalInicial: 350000,
+      precioVenta: 200,
+      produccion: 400,
+    });
+    const r = engine.ejecutarSimulador([dec], { ...cfgBase([eq], [dec]), params: paramsF1, rondaNumero: 1 })
+      .resultados.find(x => x.equipoOriginal === eq.id);
+    const okCapital = r.capitalContable === 350000;
+    const cuadra = verificarCuadre(r, 'F1 capital variable Fase 0');
+    if (okCapital && cuadra) {
+      console.log(`  ✅ capitalContable=${r.capitalContable} (esperado 350000; no 400000 ni 580000)`);
+      pasados++;
+    } else {
+      console.error(`  ❌ capitalContable=${r.capitalContable} (esperado 350000) | cuadra=${cuadra}`);
+      fallados++;
+    }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F1: ${e.message}`); fallados++; }
+
+  // F2: R2 debe reutilizar el capital contable que cerró en R1.
+  console.log('\nF2 — Continuidad R1 → R2 conserva capital propio');
+  try {
+    const eq = { id: 'eq_f2', nombre: 'F2_ContinuidadCapital' };
+    const paramsF2 = {
+      ...PARAMS_BASE,
+      cajaInicial: 500000,
+      activosFijosIniciales: 80000,
+      capitalInicial: 580000,
+      capitalContable: 580000,
+    };
+    const decR1 = decBase({
+      equipo: eq.id, equipoOriginal: eq.id, equipoNombre: eq.nombre,
+      rondaNumero: 1,
+      cajaInicial: 300000,
+      activosFijosIniciales: 100000,
+      deudaInicial: 50000,
+      capitalInicial: 350000,
+      precioVenta: 200,
+      produccion: 400,
+    });
+    const r1 = engine.ejecutarSimulador([decR1], { ...cfgBase([eq], [decR1]), params: paramsF2, rondaNumero: 1 })
+      .resultados.find(x => x.equipoOriginal === eq.id);
+    const baseR2 = decBase({
+      equipo: eq.id, equipoOriginal: eq.id, equipoNombre: eq.nombre,
+      rondaNumero: 2,
+      precioVenta: 200,
+      produccion: 400,
+    });
+    const decR2 = engine.propagarEstado(baseR2, r1, paramsF2);
+    decR2.rondaNumero = 2;
+    const r2 = engine.ejecutarSimulador([decR2], { ...cfgBase([eq], [decR2]), params: paramsF2, rondaNumero: 2 })
+      .resultados.find(x => x.equipoOriginal === eq.id);
+    const okPropagado = decR2.capitalContableInicial === 350000;
+    const okCapital = r2.capitalContable === 350000;
+    const cuadra = verificarCuadre(r2, 'F2 continuidad capital R2');
+    if (okPropagado && okCapital && cuadra) {
+      console.log(`  ✅ capitalContableInicial=${decR2.capitalContableInicial}; R2=${r2.capitalContable} (esperado 350000)`);
+      pasados++;
+    } else {
+      console.error(`  ❌ propagado=${decR2.capitalContableInicial}; R2=${r2.capitalContable}; cuadra=${cuadra}`);
+      fallados++;
+    }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F2: ${e.message}`); fallados++; }
+
   if (fallados === 0) {
     console.log(`  ✅ TODOS LOS ESCENARIOS CUADRAN (${pasados}/${pasados+fallados})`);
     console.log('  Motor listo para producción. Descuadre ≤ 1 Bs en todos los casos.');

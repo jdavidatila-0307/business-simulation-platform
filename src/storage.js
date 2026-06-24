@@ -684,6 +684,7 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             decNueva.cajaInicial                = Math.max(0, resPrev.cajaFinal ?? 0);
             decNueva.cxcInicial                 = Math.max(0, resPrev.cxcFinal ?? 0);
             decNueva.deudaInicial               = Math.max(0, resPrev.deudaFinal ?? 0);
+            decNueva.capitalContableInicial      = resPrev.capitalContable ?? decNueva.capitalContableInicial ?? decNueva.capitalInicial;
             decNueva.activosFijosIniciales      = Math.max(0, resPrev.activosFijosNetos || resPrev.afNetos || 78000);
             decNueva.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
             decNueva.brandEquityInicial         = resPrev.brandEquityFinal ?? 50;

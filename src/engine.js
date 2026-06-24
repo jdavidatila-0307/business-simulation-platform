@@ -8,6 +8,31 @@
 function avg(a, b) { return (a + b) / 2; }
 function roundBs(x) { return Math.round(x * 100) / 100; }
 
+// Capital permanente del equipo: una decisión con estado propio siempre tiene
+// prioridad sobre parámetros globales. El resultado acumulado se mantiene
+// separado y se suma sólo para la verificación de patrimonio.
+function resolverCapitalContable(d, params = {}) {
+  const capitalPropio = d.capitalContableInicial ?? d.capitalInicial;
+  if (capitalPropio != null) return roundBs(capitalPropio);
+
+  const tieneEstadoFinanciero = d.cajaInicial != null
+    || d.activosFijosIniciales != null
+    || d.deudaInicial != null;
+  if (tieneEstadoFinanciero) {
+    return roundBs(
+      Number(d.cajaInicial ?? 0)
+      + Number(d.activosFijosIniciales ?? 0)
+      - Number(d.deudaInicial ?? 0)
+    );
+  }
+
+  return roundBs(
+    params.capitalContable
+    ?? params.capitalInicial
+    ?? ((params.activosFijosIniciales ?? 0) + (params.cajaInicial ?? 0))
+  );
+}
+
    // ══ BLOQUE A — va al ámbito del módulo, antes de calcularMercadoSegmentos() ══
 // (Elimina la copia que estaba anidada dentro de ejecutarSimulador)
 
@@ -832,17 +857,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
   const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
-  // capitalContable = capital PERMANENTE inicial del equipo
-  // R1: usa d.cajaInicial + d.AF (capital real del equipo, soporta capitalInicial por equipo)
-  // R2+: usa params (capital original permanente, no cambia entre rondas)
-  const _isR1 = (d.rondaNumero ?? 1) <= 1;
-  const capitalContable = roundBs(
-    params.capitalContable ||
-    params.capitalInicial  ||
-    (_isR1
-      ? ((d.activosFijosIniciales || 0) + (d.cajaInicial || 0))   // R1: capital real del equipo
-      : ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)))  // R2+: permanente
-  );
+  const capitalContable = resolverCapitalContable(d, params);
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
   const totalPasivos    = roundBs(deudaFinal + ivaAPagar);
@@ -1106,7 +1121,7 @@ function ejecutarSimulador(decisiones, cfg) {
         operariosIniciales:  d.operariosIniciales || oper,
         operariosFinales:    oper,
         // Otros
-        capitalContable:  params.capitalContable || params.capitalInicial || ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)),  // derivado: nunca hardcodeado
+        capitalContable:  resolverCapitalContable(d, params),
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,
@@ -1524,6 +1539,7 @@ function propagarEstado(decision, resPrev, params = {}) {
     cajaInicial:                Math.max(0, resPrev.cajaFinal            ?? 0),
     cxcInicial:                 Math.max(0, resPrev.cxcFinal             ?? 0),
     deudaInicial:               Math.max(0, resPrev.deudaFinal           ?? 0),
+    capitalContableInicial:     resPrev.capitalContable                  ?? decision.capitalContableInicial ?? decision.capitalInicial,
     activosFijosIniciales:      Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? params.activosFijosIniciales ?? 80000),
     brandEquityInicial:         resPrev.brandEquityFinal                 ?? 50,
     vendedoresIniciales:        Math.max(0, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 0),
