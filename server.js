@@ -23,6 +23,7 @@ const storage  = require('./src/storage');
 const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 const { leerModoInicio, hidratarEstadoInicialR1 } = require('./src/initializer');   // lectura centralizada de inicio Fase 0
+const { VALORES_ACTIVOS_COMPLEMENTARIOS, calcularBalanceInicialFase0 } = require('./src/activos-complementarios');
 
 // Mínimo operativo por nivel de planta en Fase 0. La validación se replica en
 // servidor para impedir que una petición directa persista o envíe un valor inválido.
@@ -2741,6 +2742,7 @@ async function route(req, res, body) {
         .filter(([k]) => k.startsWith('fase0_'))
     );
     fase0Params.sueldosAdministrativosFijos = sim.parametros?.sueldosAdministrativosFijos ?? 0;
+    fase0Params.valoresActivosComplementarios = VALORES_ACTIVOS_COMPLEMENTARIOS;
     return send(res, 200, { fase0Activa, registro, equipoId, fase0Params,
       modoInicio: leerModoInicio(sim) });
   }
@@ -2793,19 +2795,38 @@ async function route(req, res, body) {
     const faltantes = requeridos.filter(k => registro[k] === null || registro[k] === undefined || registro[k] === '');
     if (faltantes.length)
       return send(res, 400, { error: 'Faltan campos requeridos: ' + faltantes.join(', ') });
-    const cajaInicial = Math.max(0,
-      Number(registro.caja_inicial_docente || 0)
-      + Number(registro.capital_inversion || 0)
-      - Number(registro.activos_fijos_comprados || 0)
-      + Number(registro.credito_operativo_pre_r1 || 0)
-      + Number(registro.credito_inversion_pre_r1 || 0));
-    const deudaInicial = Number(registro.credito_operativo_pre_r1 || 0)
-      + Number(registro.credito_inversion_pre_r1 || 0);
+    const balanceInicial = calcularBalanceInicialFase0(registro);
+    const detalleComplementarios = {
+      valorVehiculoInicial: balanceInicial.valorVehiculoInicial,
+      valorMueblesInicial: balanceInicial.valorMueblesInicial,
+      valorComputoInicial: balanceInicial.valorComputoInicial,
+      valorPatentesInicial: balanceInicial.valorPatentesInicial
+    };
+    if (balanceInicial.cajaInicialBruta < 0) {
+      return send(res, 400, {
+        error: 'Fase 0 sin caja suficiente para activos iniciales',
+        cajaInicialBruta: balanceInicial.cajaInicialBruta,
+        inversionPlanta: balanceInicial.inversionPlanta,
+        inversionComplementaria: balanceInicial.inversionComplementaria,
+        detalleComplementarios
+      });
+    }
+    if (Math.abs(balanceInicial.deltaCuadreInicial) > 1) {
+      return send(res, 400, {
+        error: 'El balance inicial de Fase 0 no cuadra con el capital otorgado',
+        capitalInicial: balanceInicial.capitalInicial,
+        activosIniciales: balanceInicial.activosIniciales,
+        pasivosIniciales: balanceInicial.deudaInicial,
+        patrimonioInicialCalculado: balanceInicial.patrimonioInicialCalculado,
+        deltaCuadreInicial: balanceInicial.deltaCuadreInicial,
+        detalleComplementarios
+      });
+    }
     await storage.upsertFase0(sim.id, equipoId, {
       estado: 'enviado',
       enviado_at: new Date().toISOString(),
-      caja_inicial: cajaInicial,
-      deuda_inicial: deudaInicial
+      caja_inicial: balanceInicial.cajaInicialBruta,
+      deuda_inicial: balanceInicial.deudaInicial
     });
     return send(res, 200, { ok: true, estado: 'enviado' });
   }

@@ -73,7 +73,7 @@ async function loadEquipoFase0() {
     }
 
     el.innerHTML = f0RenderForm(registro || {}, ref, fase0Params);
-    f0WireForm(registro || {});
+    f0WireForm(registro || {}, fase0Params);
 
   } catch (e) {
     el.innerHTML = '<p style="color:var(--accent4);padding:16px">' + e.message + '</p>';
@@ -116,6 +116,8 @@ function f0RenderReadOnly(r) {
 function f0RenderForm(reg, ref, p) {
   var niveles = f0Niveles(p);
   var sueldoAdminFijo = Number(p.sueldosAdministrativosFijos) || 0;
+  var valoresComplementarios = p.valoresActivosComplementarios || {};
+  var vehiculosComplementarios = valoresComplementarios.vehiculoPorNivel || {};
 
   var segOpts = '<option value="">-- Seleccionar segmento --</option>'
     + ref.segmentos.map(function (s) {
@@ -195,16 +197,16 @@ function f0RenderForm(reg, ref, p) {
     +   '<p style="font-size:.76rem;color:var(--text3);margin:0 0 10px">Vehículos: selecciona un nivel de inversión (0–3), no una cantidad; fortalecen canales logísticos como Distribuidores B2B, Ferias y Eventos o Convenios Institucionales.<br>Muebles y enseres: fortalecen Tienda Propia.<br>Equipos de cómputo: fortalecen Venta Digital.<br>Patentes: potencian la innovación de Proceso. Representan mejoras técnicas protegidas que ayudan a producir con mayor eficiencia y reducir costos; no aumentan directamente el atractivo del producto.</p>'
     +   '<div class="param-row"><label class="param-label" for="f0_vehiculo_nivel">Vehículo</label>'
     +     '<select class="param-input" id="f0_vehiculo_nivel">'
-    +       '<option value="0"' + ((Number(reg.vehiculo_nivel)||0) === 0 ? ' selected' : '') + '>Sin vehículo (Bs 0)</option>'
-    +       '<option value="1"' + ((Number(reg.vehiculo_nivel)||0) === 1 ? ' selected' : '') + '>Moto delivery (Bs 35.000)</option>'
-    +       '<option value="2"' + ((Number(reg.vehiculo_nivel)||0) === 2 ? ' selected' : '') + '>Furgoneta (Bs 243.000)</option>'
-    +       '<option value="3"' + ((Number(reg.vehiculo_nivel)||0) === 3 ? ' selected' : '') + '>Flota completa (Bs 313.000)</option>'
+    +       '<option value="0"' + ((Number(reg.vehiculo_nivel)||0) === 0 ? ' selected' : '') + '>Sin vehículo (' + f0bs(vehiculosComplementarios[0]) + ')</option>'
+    +       '<option value="1"' + ((Number(reg.vehiculo_nivel)||0) === 1 ? ' selected' : '') + '>Moto delivery (' + f0bs(vehiculosComplementarios[1]) + ')</option>'
+    +       '<option value="2"' + ((Number(reg.vehiculo_nivel)||0) === 2 ? ' selected' : '') + '>Furgoneta (' + f0bs(vehiculosComplementarios[2]) + ')</option>'
+    +       '<option value="3"' + ((Number(reg.vehiculo_nivel)||0) === 3 ? ' selected' : '') + '>Flota completa (' + f0bs(vehiculosComplementarios[3]) + ')</option>'
     +     '</select></div>'
-    +   '<div class="param-row"><label class="param-label" for="f0_muebles_comprado">Muebles y Enseres (Bs 16.000)</label>'
+    +   '<div class="param-row"><label class="param-label" for="f0_muebles_comprado">Muebles y Enseres (' + f0bs(valoresComplementarios.muebles) + ')</label>'
     +     '<input type="checkbox" id="f0_muebles_comprado"' + (reg.muebles_comprado ? ' checked' : '') + '/></div>'
-    +   '<div class="param-row"><label class="param-label" for="f0_equipos_computo_comprado">Equipos de Cómputo (Bs 43.650)</label>'
+    +   '<div class="param-row"><label class="param-label" for="f0_equipos_computo_comprado">Equipos de Cómputo (' + f0bs(valoresComplementarios.equiposComputo) + ')</label>'
     +     '<input type="checkbox" id="f0_equipos_computo_comprado"' + (reg.equipos_computo_comprado ? ' checked' : '') + '/></div>'
-    +   '<div class="param-row"><label class="param-label" for="f0_patentes_comprado">Patentes (Bs 1.400)</label>'
+    +   '<div class="param-row"><label class="param-label" for="f0_patentes_comprado">Patentes (' + f0bs(valoresComplementarios.patentes) + ')</label>'
     +     '<input type="checkbox" id="f0_patentes_comprado"' + (reg.patentes_comprado ? ' checked' : '') + '/></div>'
     + '</div>'
     // ── SECCIÓN 3 — Personal ──
@@ -241,6 +243,11 @@ function f0RenderForm(reg, ref, p) {
     +   '<div class="param-row"><span class="param-label">Capital de trabajo (docente)</span><strong id="f0_calc_trabajo">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">Inversión disponible (docente)</span><strong id="f0_calc_inversion">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">(−) Planta elegida</span><strong id="f0_calc_planta">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(−) Vehículo</span><strong id="f0_calc_vehiculo">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(−) Muebles y enseres</span><strong id="f0_calc_muebles">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(−) Equipos de cómputo</span><strong id="f0_calc_computo">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">(−) Patentes</span><strong id="f0_calc_patentes">Bs 0</strong></div>'
+    +   '<div class="param-row"><span class="param-label">Inversión complementaria total</span><strong id="f0_calc_complementarios">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">(+) Crédito operativo</span><strong id="f0_calc_credop">Bs 0</strong></div>'
     +   '<div class="param-row"><span class="param-label">(+) Crédito inversión</span><strong id="f0_calc_credinv">Bs 0</strong></div>'
     +   '<div class="param-row" style="border-top:1px solid var(--border2);padding-top:8px">'
@@ -253,6 +260,7 @@ function f0RenderForm(reg, ref, p) {
     +       '<div style="font-size:.78rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Activos</div>'
     +       '<div class="param-row"><span class="param-label">Caja</span><strong id="f0_bal_caja">Bs 0</strong></div>'
     +       '<div class="param-row"><span class="param-label">Activos Fijos</span><strong id="f0_bal_af">Bs 0</strong></div>'
+    +       '<div class="param-row"><span class="param-label">Intangibles (patentes)</span><strong id="f0_bal_intangibles">Bs 0</strong></div>'
     +       '<div class="param-row" style="border-top:1px solid var(--border2);padding-top:6px"><span class="param-label">Total Activos</span><strong id="f0_bal_total_activos">Bs 0</strong></div>'
     +     '</div>'
     +     '<div>'
@@ -273,9 +281,11 @@ function f0RenderForm(reg, ref, p) {
 }
 
 // ── Cableado de listeners + calculadora en tiempo real ──────────────────────
-function f0WireForm(reg) {
+function f0WireForm(reg, p) {
   var cajaDoc = Number(reg.caja_inicial_docente) || 0;
   var invDoc  = Number(reg.capital_inversion)   || 0;
+  var valores = (p && p.valoresActivosComplementarios) || {};
+  var vehiculos = valores.vehiculoPorNivel || {};
 
   function recalc() {
     var sel = document.querySelector('input[name="f0_nivel"]:checked');
@@ -286,12 +296,22 @@ function f0WireForm(reg) {
 
     var credOp  = Number(f0val('f0_credito_operativo')) || 0;
     var credInv = Number(f0val('f0_credito_inversion')) || 0;
-    var cajaR1 = cajaDoc + (invDoc - planta) + credOp + credInv;
+    var vehiculo = Number(vehiculos[Number(f0val('f0_vehiculo_nivel')) || 0]) || 0;
+    var muebles = f0chk('f0_muebles_comprado') ? (Number(valores.muebles) || 0) : 0;
+    var computo = f0chk('f0_equipos_computo_comprado') ? (Number(valores.equiposComputo) || 0) : 0;
+    var patentes = f0chk('f0_patentes_comprado') ? (Number(valores.patentes) || 0) : 0;
+    var complementarios = vehiculo + muebles + computo + patentes;
+    var cajaR1 = cajaDoc + invDoc - planta - complementarios + credOp + credInv;
     var fijos  = oper * costoOp + sueldoV;
 
     f0setText('f0_calc_trabajo',   f0bs(cajaDoc));
     f0setText('f0_calc_inversion', f0bs(invDoc));
     f0setText('f0_calc_planta',    f0bs(planta));
+    f0setText('f0_calc_vehiculo',  f0bs(vehiculo));
+    f0setText('f0_calc_muebles',   f0bs(muebles));
+    f0setText('f0_calc_computo',   f0bs(computo));
+    f0setText('f0_calc_patentes',  f0bs(patentes));
+    f0setText('f0_calc_complementarios', f0bs(complementarios));
     f0setText('f0_calc_credop',    f0bs(credOp));
     f0setText('f0_calc_credinv',   f0bs(credInv));
     f0setText('f0_calc_caja',      f0bs(cajaR1));
@@ -299,9 +319,10 @@ function f0WireForm(reg) {
     f0setText('f0_calc_semaforo',  cajaR1 < 0 ? '🔴' : (cajaR1 < fijos ? '🟡' : '🟢'));
 
     // ── Balance inicial proyectado ──
-    var caja          = cajaDoc + invDoc - planta + credOp + credInv;
-    var af            = planta;
-    var totalActivos  = caja + af;
+    var caja          = cajaR1;
+    var af            = planta + vehiculo + muebles + computo;
+    var intangibles   = patentes;
+    var totalActivos  = caja + af + intangibles;
     var totalPasivos  = credOp + credInv;
     var capital       = cajaDoc + invDoc;
     var totalPP       = totalPasivos + capital;
@@ -309,6 +330,7 @@ function f0WireForm(reg) {
 
     f0setText('f0_bal_caja',           f0bs(caja));
     f0setText('f0_bal_af',             f0bs(af));
+    f0setText('f0_bal_intangibles',    f0bs(intangibles));
     f0setText('f0_bal_total_activos',  f0bs(totalActivos));
     f0setText('f0_bal_deuda_op',       f0bs(credOp));
     f0setText('f0_bal_deuda_inv',      f0bs(credInv));

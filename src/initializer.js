@@ -9,6 +9,8 @@
 
 'use strict';
 
+const { calcularBalanceInicialFase0 } = require('./activos-complementarios');
+
 /**
  * Construye el estado inicial de apertura para un equipo.
  * @param {Object} params - sim.parametros (valores globales)
@@ -24,11 +26,18 @@ function getEstadoInicial(params, fase0, modoInicio) {
     && fase0.caja_inicial != null;
 
   if (usarFase0) {
+    const balanceInicial = calcularBalanceInicialFase0(fase0);
     return {
       cajaInicial:            Math.max(0, Number(fase0.caja_inicial)),
-      activosFijosIniciales:  Number(fase0.activos_fijos_comprados ?? 0),
-      deudaInicial:           Number(fase0.deuda_inicial ?? 0),
-      capitalInicial:         Number(fase0.capital_total_otorgado ?? 0),
+      activosFijosIniciales:  balanceInicial.activosFijosIniciales,
+      intangiblesIniciales:   balanceInicial.intangiblesIniciales,
+      activosComplementariosIniciales: balanceInicial.inversionComplementaria,
+      valorVehiculoInicial:   balanceInicial.valorVehiculoInicial,
+      valorMueblesInicial:    balanceInicial.valorMueblesInicial,
+      valorComputoInicial:    balanceInicial.valorComputoInicial,
+      valorPatentesInicial:   balanceInicial.valorPatentesInicial,
+      deudaInicial:           balanceInicial.deudaInicial,
+      capitalInicial:         balanceInicial.capitalInicial,
       operariosIniciales:     Number(fase0.operarios_iniciales ?? 1),
       capacidadMaxProduccion: Number(fase0.capacidad_produccion_base ?? 0),
       costoOperario:          Number(fase0.costo_operario ?? p.costoOperario ?? 0),
@@ -37,7 +46,8 @@ function getEstadoInicial(params, fase0, modoInicio) {
       inventarioInicial:      Number(p.inventarioInicialUnid ?? 0),
       stockMPInicial:         0,
       resultadoAcumuladoAnterior: 0,
-      baseDepreciable:        Number(fase0.activos_fijos_comprados ?? 0),
+      baseDepreciable:        balanceInicial.baseDepreciable,
+      baseAmortizable:        balanceInicial.baseAmortizable,
       vehiculo_nivel:         Number(fase0.vehiculo_nivel ?? 0),
       muebles_comprado:       !!fase0.muebles_comprado,
       equipos_computo_comprado: !!fase0.equipos_computo_comprado,
@@ -78,7 +88,14 @@ function hidratarEstadoInicialR1(decision, params, fase0, modoInicio, rondaNumer
   const comunes = {
     cajaInicial: estado.cajaInicial,
     activosFijosIniciales: estado.activosFijosIniciales,
+    intangiblesIniciales: estado.intangiblesIniciales,
+    activosComplementariosIniciales: estado.activosComplementariosIniciales,
+    valorVehiculoInicial: estado.valorVehiculoInicial,
+    valorMueblesInicial: estado.valorMueblesInicial,
+    valorComputoInicial: estado.valorComputoInicial,
+    valorPatentesInicial: estado.valorPatentesInicial,
     baseDepreciable: estado.baseDepreciable,
+    baseAmortizable: estado.baseAmortizable,
     deudaInicial: estado.deudaInicial,
     capitalInicial: estado.capitalInicial,
     resultadoAcumuladoAnterior: estado.resultadoAcumuladoAnterior,

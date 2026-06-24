@@ -18,6 +18,8 @@
 
 // test_cuadre.js no necesita BD — prueba el motor directamente (sin dotenv)
 const engine = require('./src/engine');
+const { calcularBalanceInicialFase0 } = require('./src/activos-complementarios');
+const { getEstadoInicial } = require('./src/initializer');
 
 // ── Parámetros canónicos COM540 ────────────────────────────────────────────
 const PARAMS_BASE = {
@@ -587,6 +589,68 @@ async function main() {
       fallados++;
     }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN F2: ${e.message}`); fallados++; }
+
+  // F3: valuación contable de activos complementarios en el origen Fase 0.
+  console.log('\nF3 — Activos complementarios contables Fase 0');
+  try {
+    const balance = calcularBalanceInicialFase0({
+      caja_inicial_docente: 500000,
+      capital_inversion: 0,
+      credito_operativo_pre_r1: 0,
+      credito_inversion_pre_r1: 0,
+      capital_total_otorgado: 500000,
+      activos_fijos_comprados: 80000,
+      vehiculo_nivel: 1,
+      muebles_comprado: true,
+      equipos_computo_comprado: true,
+      patentes_comprado: true
+    });
+    const ok = balance.inversionComplementaria === 96050
+      && balance.activosFijosIniciales === 174650
+      && balance.intangiblesIniciales === 1400
+      && balance.cajaInicialBruta === 323950
+      && balance.activosIniciales === 500000
+      && balance.deudaInicial === 0
+      && balance.patrimonioInicialCalculado === 500000
+      && balance.deltaCuadreInicial === 0;
+    if (ok) { console.log('  ✅ F3 inversión=96050, AF=174650, intangibles=1400, caja=323950 y balance cuadra'); pasados++; }
+    else { console.error('  ❌ F3 valores contables iniciales inesperados:', balance); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F3: ${e.message}`); fallados++; }
+
+  // F4: el camino homogéneo sigue ignorando Fase 0 y conserva sus parámetros.
+  console.log('\nF4 — No regresión homogénea');
+  try {
+    const estado = getEstadoInicial({
+      cajaInicial: 420000, activosFijosIniciales: 80000, deudaInicial: 0,
+      capitalInicial: 500000, operariosIniciales: 0, capacidadMaxProduccion: 1500,
+      costoOperario: 0, sueldoTrimestralVendedor: 0, vendedoresIniciales: 0
+    }, null, 'homogeneo');
+    const ok = estado._origen === 'homogeneo'
+      && estado.cajaInicial === 420000
+      && estado.activosFijosIniciales === 80000
+      && estado.deudaInicial === 0
+      && estado.capitalInicial === 500000
+      && estado.operariosIniciales === 0
+      && estado.vendedoresIniciales === 0;
+    if (ok) { console.log('  ✅ F4 homogéneo conserva parámetros y ceros válidos'); pasados++; }
+    else { console.error('  ❌ F4 regresión homogénea:', estado); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F4: ${e.message}`); fallados++; }
+
+  // F5: el backend debe bloquear estas condiciones antes de enviar Fase 0.
+  console.log('\nF5 — Rechazo de caja insuficiente / descuadre inicial');
+  try {
+    const deficit = calcularBalanceInicialFase0({
+      caja_inicial_docente: 10000, capital_total_otorgado: 10000,
+      activos_fijos_comprados: 80000, vehiculo_nivel: 1
+    });
+    const descuadre = calcularBalanceInicialFase0({
+      caja_inicial_docente: 500000, capital_total_otorgado: 490000,
+      activos_fijos_comprados: 80000
+    });
+    const ok = deficit.cajaInicialBruta < 0 && descuadre.deltaCuadreInicial !== 0;
+    if (ok) { console.log('  ✅ F5 detecta déficit de caja y descuadre de capital'); pasados++; }
+    else { console.error('  ❌ F5 no detectó condición bloqueante', { deficit, descuadre }); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F5: ${e.message}`); fallados++; }
 
   if (fallados === 0) {
     console.log(`  ✅ TODOS LOS ESCENARIOS CUADRAN (${pasados}/${pasados+fallados})`);
