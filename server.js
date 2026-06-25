@@ -20,7 +20,7 @@ inicializarPlantillaDefault();
 
 
 const storage  = require('./src/storage');
-const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
+const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion, seleccionarResultadoContinuidad } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 const { leerModoInicio, hidratarEstadoInicialR1 } = require('./src/initializer');   // lectura centralizada de inicio Fase 0
 const { VALORES_ACTIVOS_COMPLEMENTARIOS, calcularBalanceInicialFase0 } = require('./src/activos-complementarios');
@@ -1229,9 +1229,7 @@ async function route(req, res, body) {
       const decisiones = {};
       for (const eq of equipos.filter(e => !e.isBot)) {
         let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
-        const resPrev = Object.values(resObj)
-          .filter(v => v && typeof v === 'object' && v.equipoNombre)
-          .find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id));
+        const resPrev = seleccionarResultadoContinuidad(resObj, eq.id);
 
         if (resPrev) {
           dec = propagarEstado(dec, resPrev, sim.parametros);
@@ -1360,9 +1358,7 @@ async function route(req, res, body) {
       const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
       decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
         let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
-        const resPrev = Object.values(resObj).find(r =>
-          r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
-        );
+        const resPrev = seleccionarResultadoContinuidad(resObj, eq.id);
         if (resPrev) dec = propagarEstado(dec, resPrev, sim.parametros);
         return dec;
       });
@@ -1623,7 +1619,7 @@ async function route(req, res, body) {
     const resObjReal = prevRondaReal?.resultados?.resultados || prevRondaReal?.resultados || {};
     let decisiones = equipos
       .filter(eq => decsCombinadas[eq.id])
-      .map(eq => { const dec={...decsCombinadas[eq.id]}; const rp=Object.values(resObjReal).find(r=>r.equipoOriginal===eq.id||r.equipo===eq.id||(r.equipo||String()).startsWith(eq.id)); return rp?propagarEstado(dec,rp,sim.parametros):dec; });
+      .map(eq => { const dec={...decsCombinadas[eq.id]}; const rp=seleccionarResultadoContinuidad(resObjReal, eq.id); return rp?propagarEstado(dec,rp,sim.parametros):dec; });
 
     // Si aún no hay decisiones, generar defaultDecision para todos
     if (!decisiones.length) {
@@ -1631,9 +1627,7 @@ async function route(req, res, body) {
       const resObj2 = prevRonda2?.resultados?.resultados || prevRonda2?.resultados || {};
       decisiones = equipos.filter(eq => !eq.isBot).map(eq => {
         let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
-        const resPrev2 = Object.values(resObj2).find(r =>
-          r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
-        );
+        const resPrev2 = seleccionarResultadoContinuidad(resObj2, eq.id);
         if (resPrev2) dec = propagarEstado(dec, resPrev2, sim.parametros);
         return dec;
       });
@@ -1839,6 +1833,23 @@ async function route(req, res, body) {
           saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
           ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),  // IVA diferido
           ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),  // crédito fiscal acumulado
+          ...(estado.depreciacionPorComponentes === true ? {
+            baseDepreciable: estado.baseDepreciableFinal,
+            depreciacionAcumuladaInicial: estado.depreciacionAcumuladaFinal,
+            baseAmortizable: estado.baseAmortizableFinal,
+            amortizacionAcumuladaInicial: estado.amortizacionAcumuladaFinal,
+            intangiblesIniciales: Math.max(0, estado.intangiblesNetos ?? 0),
+            valorPlantaInicial: estado.valorPlantaInicial,
+            valorVehiculoInicial: estado.valorVehiculoInicial,
+            valorMueblesInicial: estado.valorMueblesInicial,
+            valorComputoInicial: estado.valorComputoInicial,
+            valorPatentesInicial: estado.valorPatentesInicial,
+            depreciacionAcumuladaPlantaInicial: estado.depreciacionAcumuladaPlantaFinal,
+            depreciacionAcumuladaVehiculoInicial: estado.depreciacionAcumuladaVehiculoFinal,
+            depreciacionAcumuladaMueblesInicial: estado.depreciacionAcumuladaMueblesFinal,
+            depreciacionAcumuladaComputoInicial: estado.depreciacionAcumuladaComputoFinal,
+            amortizacionAcumuladaPatentesInicial: estado.amortizacionAcumuladaPatentesFinal
+          } : {}),
         };
 
         // Multiproducto: propagar campos financieros a cada producto[]
@@ -1945,7 +1956,7 @@ async function route(req, res, body) {
         });
 
         for (const [eqId, prods] of Object.entries(porEmpresaRes)) {
-          const p0           = prods[0];
+          const p0           = seleccionarResultadoContinuidad(prods, eqId) || prods[0];
           const utilNeta     = prods.reduce((s,p) => s+(p.utilidadNeta||0), 0);
           const invFinalTotal = prods.reduce((s,p) => s+Math.max(0,p.inventarioFinal||0), 0);
           // Usar resultadoAcumulado del engine (incluye resultadoAcumuladoAnterior correctamente)
@@ -1958,6 +1969,23 @@ async function route(req, res, body) {
             cxcFinal:              p0.cxcFinal     ?? 0,
             deudaFinal:            p0.deudaFinal   ?? 0,
             afNetos:               p0.afNetos      ?? 0,
+            activosFijosNetos:     p0.activosFijosNetos ?? p0.afNetos ?? 0,
+            intangiblesNetos:      p0.intangiblesNetos ?? 0,
+            depreciacionPorComponentes: p0.depreciacionPorComponentes === true,
+            valorPlantaInicial:    p0.valorPlantaInicial,
+            valorVehiculoInicial:  p0.valorVehiculoInicial,
+            valorMueblesInicial:   p0.valorMueblesInicial,
+            valorComputoInicial:   p0.valorComputoInicial,
+            valorPatentesInicial:  p0.valorPatentesInicial,
+            baseDepreciableFinal:  p0.baseDepreciableFinal,
+            depreciacionAcumuladaFinal: p0.depreciacionAcumuladaFinal,
+            depreciacionAcumuladaPlantaFinal: p0.depreciacionAcumuladaPlantaFinal,
+            depreciacionAcumuladaVehiculoFinal: p0.depreciacionAcumuladaVehiculoFinal,
+            depreciacionAcumuladaMueblesFinal: p0.depreciacionAcumuladaMueblesFinal,
+            depreciacionAcumuladaComputoFinal: p0.depreciacionAcumuladaComputoFinal,
+            baseAmortizableFinal: p0.baseAmortizableFinal,
+            amortizacionAcumuladaFinal: p0.amortizacionAcumuladaFinal,
+            amortizacionAcumuladaPatentesFinal: p0.amortizacionAcumuladaPatentesFinal,
             brandEquityFinal:      p0.brandEquityFinal ?? 50,
             vendedoresFinales:     p0.vendedoresFinales ?? 2,
             operariosFinales:      p0.operariosFinales ?? 4,

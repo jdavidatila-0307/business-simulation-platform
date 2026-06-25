@@ -756,6 +756,78 @@ async function main() {
     else { console.error('  ❌ F10 duplicación multiproducto:', resultados); fallados++; }
   } catch(e) { console.error(`  ❌ EXCEPCIÓN F10: ${e.message}`); fallados++; }
 
+  // F11: R2 conserva base bruta y acumulados tangibles por componente.
+  console.log('\nF11 — Continuidad R1 → R2 de depreciación acumulada');
+  try {
+    const r1 = engine.calcularDepreciacionAmortizacion({
+      baseDepreciable:174650, baseAmortizable:1400, activosFijosIniciales:174650,
+      valorVehiculoInicial:35000, valorMueblesInicial:16000,
+      valorComputoInicial:43650, valorPatentesInicial:1400
+    }, PARAMS_BASE);
+    const decR2 = engine.propagarEstado(decBase({ rondaNumero:2 }), {
+      ...r1, cajaFinal:323950, cxcFinal:0, deudaFinal:0,
+      capitalContable:500000, resultadoAcumulado:0, brandEquityFinal:50,
+      vendedoresFinales:0, operariosFinales:4, ivaAPagar:0, saldoIUEfinal:0
+    }, PARAMS_BASE);
+    const r2 = engine.calcularDepreciacionAmortizacion(decR2, PARAMS_BASE);
+    const ok = decR2.baseDepreciable === 174650
+      && decR2.depreciacionAcumuladaComputoInicial === 2728.125
+      && r2.depreciacionAcumuladaFinal === r1.depreciacionAcumuladaFinal + r2.depreciacionPeriodo
+      && r2.activosFijosNetos < r1.activosFijosNetos;
+    if (ok) { console.log('  ✅ F11 R2 conserva base y acumulados tangibles'); pasados++; }
+    else { console.error('  ❌ F11 continuidad tangible inválida:', { r1, decR2, r2 }); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F11: ${e.message}`); fallados++; }
+
+  // F12: patentes no reinician amortización en R2.
+  console.log('\nF12 — Continuidad de intangibles/patentes');
+  try {
+    const r1 = engine.calcularDepreciacionAmortizacion({
+      baseDepreciable:80000, baseAmortizable:1400, activosFijosIniciales:80000,
+      valorPatentesInicial:1400
+    }, PARAMS_BASE);
+    const decR2 = engine.propagarEstado(decBase({ rondaNumero:2 }), {
+      ...r1, cajaFinal:420000, cxcFinal:0, deudaFinal:0,
+      capitalContable:500000, resultadoAcumulado:0, brandEquityFinal:50,
+      vendedoresFinales:0, operariosFinales:4, ivaAPagar:0, saldoIUEfinal:0
+    }, PARAMS_BASE);
+    const r2 = engine.calcularDepreciacionAmortizacion(decR2, PARAMS_BASE);
+    const ok = decR2.baseAmortizable === 1400
+      && decR2.amortizacionAcumuladaPatentesInicial === 87.5
+      && decR2.intangiblesIniciales === 1312.5
+      && r2.amortizacionAcumuladaFinal === 175
+      && r2.intangiblesNetos === 1225;
+    if (ok) { console.log('  ✅ F12 patentes conservan amortización acumulada'); pasados++; }
+    else { console.error('  ❌ F12 continuidad intangible inválida:', { r1, decR2, r2 }); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F12: ${e.message}`); fallados++; }
+
+  // F13: selector prioriza prod_1 aunque el secundario aparezca primero.
+  console.log('\nF13 — Multiproducto continuidad toma prod_1');
+  try {
+    const secundario = { equipoOriginal:'eq_f13', equipo:'eq_f13__prod_2', productoId:'prod_2', baseDepreciableFinal:0 };
+    const principal = { equipoOriginal:'eq_f13', equipo:'eq_f13__prod_1', productoId:'prod_1', baseDepreciableFinal:174650 };
+    const elegido = engine.seleccionarResultadoContinuidad([secundario, principal], 'eq_f13');
+    const ok = elegido === principal && elegido.baseDepreciableFinal === 174650;
+    if (ok) { console.log('  ✅ F13 selecciona prod_1 y no campos cero secundarios'); pasados++; }
+    else { console.error('  ❌ F13 selector multiproducto inválido:', elegido); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F13: ${e.message}`); fallados++; }
+
+  // F14: continuidad homogénea no crea bases o intangibles artificiales.
+  console.log('\nF14 — Homogéneo continuidad sin regresión');
+  try {
+    const decR2 = engine.propagarEstado(decBase({ rondaNumero:2 }), {
+      cajaFinal:420000, cxcFinal:0, deudaFinal:0, afNetos:77500,
+      capitalContable:500000, resultadoAcumulado:0, brandEquityFinal:50,
+      vendedoresFinales:0, operariosFinales:4, ivaAPagar:0, saldoIUEfinal:0,
+      depreciacionPorComponentes:false
+    }, PARAMS_BASE);
+    const ok = decR2.activosFijosIniciales === 77500
+      && decR2.baseDepreciable === undefined
+      && decR2.intangiblesIniciales === undefined
+      && decR2.amortizacionAcumuladaInicial === undefined;
+    if (ok) { console.log('  ✅ F14 homogéneo conserva continuidad legacy'); pasados++; }
+    else { console.error('  ❌ F14 introdujo activos artificiales:', decR2); fallados++; }
+  } catch(e) { console.error(`  ❌ EXCEPCIÓN F14: ${e.message}`); fallados++; }
+
   if (fallados === 0) {
     console.log(`  ✅ TODOS LOS ESCENARIOS CUADRAN (${pasados}/${pasados+fallados})`);
     console.log('  Motor listo para producción. Descuadre ≤ 1 Bs en todos los casos.');

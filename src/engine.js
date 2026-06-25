@@ -37,6 +37,7 @@ function calcularDepreciacionAmortizacion(d = {}, params = {}) {
     const activosFijosNetos = Math.max(0, activosFijosIniciales - depreciacionPeriodo);
     return {
       esLegacy: true,
+      depreciacionPorComponentes: false,
       valorPlantaInicial: activosFijosIniciales,
       valorVehiculoInicial: 0,
       valorMueblesInicial: 0,
@@ -51,10 +52,15 @@ function calcularDepreciacionAmortizacion(d = {}, params = {}) {
       gastoDepreciacionAmortizacion: depreciacionPeriodo,
       baseDepreciableFinal: activosFijosIniciales,
       depreciacionAcumuladaFinal: depreciacionPeriodo,
+      depreciacionAcumuladaPlantaFinal: 0,
+      depreciacionAcumuladaVehiculoFinal: 0,
+      depreciacionAcumuladaMueblesFinal: 0,
+      depreciacionAcumuladaComputoFinal: 0,
       activosFijosNetos,
       afNetos: activosFijosNetos,
       baseAmortizableFinal: 0,
       amortizacionAcumuladaFinal: 0,
+      amortizacionAcumuladaPatentesFinal: 0,
       intangiblesNetos: 0,
       activosNoCorrientesNetos: activosFijosNetos
     };
@@ -87,11 +93,17 @@ function calcularDepreciacionAmortizacion(d = {}, params = {}) {
   const amortizacionAcumuladaInicial = numeroNoNegativo(d.amortizacionAcumuladaPatentesInicial);
   const depreciacionAcumuladaFinal = depreciacionAcumuladaInicial + depreciacionPeriodo;
   const amortizacionAcumuladaFinal = amortizacionAcumuladaInicial + amortizacionIntangiblesPeriodo;
+  const depreciacionAcumuladaPlantaFinal = numeroNoNegativo(d.depreciacionAcumuladaPlantaInicial) + depPlanta;
+  const depreciacionAcumuladaVehiculoFinal = numeroNoNegativo(d.depreciacionAcumuladaVehiculoInicial) + depVehiculo;
+  const depreciacionAcumuladaMueblesFinal = numeroNoNegativo(d.depreciacionAcumuladaMueblesInicial) + depMuebles;
+  const depreciacionAcumuladaComputoFinal = numeroNoNegativo(d.depreciacionAcumuladaComputoInicial) + depComputo;
+  const amortizacionAcumuladaPatentesFinal = numeroNoNegativo(d.amortizacionAcumuladaPatentesInicial) + amortizacionIntangiblesPeriodo;
   const activosFijosNetos = Math.max(0, baseDepreciableFinal - depreciacionAcumuladaFinal);
   const intangiblesNetos = Math.max(0, valorPatentesInicial - amortizacionAcumuladaFinal);
 
   return {
     esLegacy: false,
+    depreciacionPorComponentes: true,
     valorPlantaInicial, valorVehiculoInicial, valorMueblesInicial, valorComputoInicial, valorPatentesInicial,
     depreciacionPlanta: depPlanta,
     depreciacionVehiculo: depVehiculo,
@@ -102,13 +114,27 @@ function calcularDepreciacionAmortizacion(d = {}, params = {}) {
     gastoDepreciacionAmortizacion: depreciacionPeriodo + amortizacionIntangiblesPeriodo,
     baseDepreciableFinal,
     depreciacionAcumuladaFinal,
+    depreciacionAcumuladaPlantaFinal,
+    depreciacionAcumuladaVehiculoFinal,
+    depreciacionAcumuladaMueblesFinal,
+    depreciacionAcumuladaComputoFinal,
     activosFijosNetos,
     afNetos: activosFijosNetos,
     baseAmortizableFinal: valorPatentesInicial,
     amortizacionAcumuladaFinal,
+    amortizacionAcumuladaPatentesFinal,
     intangiblesNetos,
     activosNoCorrientesNetos: activosFijosNetos + intangiblesNetos
   };
+}
+
+function seleccionarResultadoContinuidad(resultados, equipoId) {
+  const lista = (Array.isArray(resultados) ? resultados : Object.values(resultados || {}))
+    .filter(r => r && typeof r === 'object');
+  return lista.find(r => r.equipoOriginal === equipoId && r.productoId === 'prod_1')
+    || lista.find(r => r.equipo === equipoId && (!r.productoId || r.productoId === 'prod_1'))
+    || lista.find(r => r.equipoOriginal === equipoId || r.equipo === equipoId || (r.equipo || '').startsWith(equipoId))
+    || null;
 }
 
 // Capital permanente del equipo: una decisión con estado propio siempre tiene
@@ -205,6 +231,21 @@ function expandirDecisionesMultiproducto(decisiones) {
         cxcInicial:           decisionEmpresa.cxcInicial,
         deudaInicial:         decisionEmpresa.deudaInicial,
         activosFijosIniciales:decisionEmpresa.activosFijosIniciales,
+        baseDepreciable:     decisionEmpresa.baseDepreciable,
+        depreciacionAcumuladaInicial: decisionEmpresa.depreciacionAcumuladaInicial,
+        baseAmortizable:     decisionEmpresa.baseAmortizable,
+        amortizacionAcumuladaInicial: decisionEmpresa.amortizacionAcumuladaInicial,
+        intangiblesIniciales: decisionEmpresa.intangiblesIniciales,
+        valorPlantaInicial:  decisionEmpresa.valorPlantaInicial,
+        valorVehiculoInicial: decisionEmpresa.valorVehiculoInicial,
+        valorMueblesInicial: decisionEmpresa.valorMueblesInicial,
+        valorComputoInicial: decisionEmpresa.valorComputoInicial,
+        valorPatentesInicial: decisionEmpresa.valorPatentesInicial,
+        depreciacionAcumuladaPlantaInicial: decisionEmpresa.depreciacionAcumuladaPlantaInicial,
+        depreciacionAcumuladaVehiculoInicial: decisionEmpresa.depreciacionAcumuladaVehiculoInicial,
+        depreciacionAcumuladaMueblesInicial: decisionEmpresa.depreciacionAcumuladaMueblesInicial,
+        depreciacionAcumuladaComputoInicial: decisionEmpresa.depreciacionAcumuladaComputoInicial,
+        amortizacionAcumuladaPatentesInicial: decisionEmpresa.amortizacionAcumuladaPatentesInicial,
         resultadoAcumuladoAnterior: decisionEmpresa.resultadoAcumuladoAnterior,
       };
 
@@ -1091,11 +1132,21 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     inventarioFinal, vendedoresFinales: d.vendedoresFinales || d.vendedoresIniciales,
     activosFijosNetos: afNetos,
     activosNoCorrientesNetos: depreciacionActivos.activosNoCorrientesNetos,
+    depreciacionPorComponentes: depreciacionActivos.depreciacionPorComponentes,
     valorPlantaInicial: depreciacionActivos.valorPlantaInicial,
+    valorVehiculoInicial: depreciacionActivos.valorVehiculoInicial,
+    valorMueblesInicial: depreciacionActivos.valorMueblesInicial,
+    valorComputoInicial: depreciacionActivos.valorComputoInicial,
+    valorPatentesInicial: depreciacionActivos.valorPatentesInicial,
     baseDepreciableFinal: depreciacionActivos.baseDepreciableFinal,
     depreciacionAcumuladaFinal: depreciacionActivos.depreciacionAcumuladaFinal,
+    depreciacionAcumuladaPlantaFinal: depreciacionActivos.depreciacionAcumuladaPlantaFinal,
+    depreciacionAcumuladaVehiculoFinal: depreciacionActivos.depreciacionAcumuladaVehiculoFinal,
+    depreciacionAcumuladaMueblesFinal: depreciacionActivos.depreciacionAcumuladaMueblesFinal,
+    depreciacionAcumuladaComputoFinal: depreciacionActivos.depreciacionAcumuladaComputoFinal,
     baseAmortizableFinal: depreciacionActivos.baseAmortizableFinal,
     amortizacionAcumuladaFinal: depreciacionActivos.amortizacionAcumuladaFinal,
+    amortizacionAcumuladaPatentesFinal: depreciacionActivos.amortizacionAcumuladaPatentesFinal,
     costoUnitario, comisionPct,
     brandEquityFinal,
     capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
@@ -1245,11 +1296,21 @@ function ejecutarSimulador(decisiones, cfg) {
         afNetos, intangiblesNetos,
         activosFijosNetos: afNetos,
         activosNoCorrientesNetos: depreciacionActivos.activosNoCorrientesNetos,
+        depreciacionPorComponentes: depreciacionActivos.depreciacionPorComponentes,
         valorPlantaInicial: depreciacionActivos.valorPlantaInicial,
+        valorVehiculoInicial: depreciacionActivos.valorVehiculoInicial,
+        valorMueblesInicial: depreciacionActivos.valorMueblesInicial,
+        valorComputoInicial: depreciacionActivos.valorComputoInicial,
+        valorPatentesInicial: depreciacionActivos.valorPatentesInicial,
         baseDepreciableFinal: depreciacionActivos.baseDepreciableFinal,
         depreciacionAcumuladaFinal: depreciacionActivos.depreciacionAcumuladaFinal,
+        depreciacionAcumuladaPlantaFinal: depreciacionActivos.depreciacionAcumuladaPlantaFinal,
+        depreciacionAcumuladaVehiculoFinal: depreciacionActivos.depreciacionAcumuladaVehiculoFinal,
+        depreciacionAcumuladaMueblesFinal: depreciacionActivos.depreciacionAcumuladaMueblesFinal,
+        depreciacionAcumuladaComputoFinal: depreciacionActivos.depreciacionAcumuladaComputoFinal,
         baseAmortizableFinal: depreciacionActivos.baseAmortizableFinal,
         amortizacionAcumuladaFinal: depreciacionActivos.amortizacionAcumuladaFinal,
+        amortizacionAcumuladaPatentesFinal: depreciacionActivos.amortizacionAcumuladaPatentesFinal,
         totalActivos,
         capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
         deudaInicial:     d.deudaInicial || 0,
@@ -1688,6 +1749,24 @@ function calcularPreSimulacionConsolidada(decisiones, cfg) {
  */
 function propagarEstado(decision, resPrev, params = {}) {
   if (!resPrev) return decision;
+  const continuidadActivos = resPrev.depreciacionPorComponentes === true ? {
+    baseDepreciable: resPrev.baseDepreciableFinal,
+    depreciacionAcumuladaInicial: resPrev.depreciacionAcumuladaFinal,
+    activosFijosIniciales: Math.max(0, resPrev.activosFijosNetos ?? resPrev.afNetos ?? 0),
+    baseAmortizable: resPrev.baseAmortizableFinal,
+    amortizacionAcumuladaInicial: resPrev.amortizacionAcumuladaFinal,
+    intangiblesIniciales: Math.max(0, resPrev.intangiblesNetos ?? 0),
+    valorPlantaInicial: resPrev.valorPlantaInicial,
+    valorVehiculoInicial: resPrev.valorVehiculoInicial,
+    valorMueblesInicial: resPrev.valorMueblesInicial,
+    valorComputoInicial: resPrev.valorComputoInicial,
+    valorPatentesInicial: resPrev.valorPatentesInicial,
+    depreciacionAcumuladaPlantaInicial: resPrev.depreciacionAcumuladaPlantaFinal,
+    depreciacionAcumuladaVehiculoInicial: resPrev.depreciacionAcumuladaVehiculoFinal,
+    depreciacionAcumuladaMueblesInicial: resPrev.depreciacionAcumuladaMueblesFinal,
+    depreciacionAcumuladaComputoInicial: resPrev.depreciacionAcumuladaComputoFinal,
+    amortizacionAcumuladaPatentesInicial: resPrev.amortizacionAcumuladaPatentesFinal
+  } : {};
   return {
     ...decision,
     cajaInicial:                Math.max(0, resPrev.cajaFinal            ?? 0),
@@ -1695,6 +1774,7 @@ function propagarEstado(decision, resPrev, params = {}) {
     deudaInicial:               Math.max(0, resPrev.deudaFinal           ?? 0),
     capitalContableInicial:     resPrev.capitalContable                  ?? decision.capitalContableInicial ?? decision.capitalInicial,
     activosFijosIniciales:      Math.max(0, resPrev.afNetos ?? resPrev.activosFijosNetos ?? params.activosFijosIniciales ?? 80000),
+    ...continuidadActivos,
     brandEquityInicial:         resPrev.brandEquityFinal                 ?? 50,
     vendedoresIniciales:        Math.max(0, resPrev.vendedoresFinales    ?? params.vendedoresIniciales ?? 0),
     operariosIniciales:         Math.max(1, resPrev.operariosFinales     ?? params.operariosIniciales  ?? 1),
@@ -1712,6 +1792,7 @@ module.exports = {
   propagarEstado,
   calcularDepreciacionAmortizacion,
   TASAS_DEPRECIACION_BOLIVIA,
+  seleccionarResultadoContinuidad,
   calcularMercadoSegmentos,
   calcularPreSimulacion,
   calcularPreSimulacionConsolidada,

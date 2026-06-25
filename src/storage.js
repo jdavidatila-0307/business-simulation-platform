@@ -5,6 +5,7 @@
  *   - createUser maneja graciosamente la columna password_plain si no existe en BD
  */
 const { Pool } = require('pg');
+const { seleccionarResultadoContinuidad } = require('./engine');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -673,9 +674,7 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
           const resObj = prevRonda.resultados?.resultados || prevRonda.resultados || {};
           const resObjValues = Object.values(resObj).filter(v => v && typeof v === 'object' && v.equipoNombre);
           console.log(`[storage] ensureRonda: eq=${eq.nombre} resObj keys=${Object.keys(resObj).length} validResults=${resObjValues.length}`);
-          const resPrev = resObjValues.find(r =>
-            r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id)
-          );
+          const resPrev = seleccionarResultadoContinuidad(resObjValues, eq.id);
           if (resPrev) console.log(`[storage] encontrado: caja=${resPrev.cajaFinal} vend=${resPrev.vendedoresFinales}`);
           else console.log(`[storage] NO encontrado para ${eq.id}`);
 
@@ -685,7 +684,24 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             decNueva.cxcInicial                 = Math.max(0, resPrev.cxcFinal ?? 0);
             decNueva.deudaInicial               = Math.max(0, resPrev.deudaFinal ?? 0);
             decNueva.capitalContableInicial      = resPrev.capitalContable ?? decNueva.capitalContableInicial ?? decNueva.capitalInicial;
-            decNueva.activosFijosIniciales      = Math.max(0, resPrev.activosFijosNetos || resPrev.afNetos || 78000);
+            decNueva.activosFijosIniciales      = Math.max(0, resPrev.activosFijosNetos ?? resPrev.afNetos ?? 78000);
+            if (resPrev.depreciacionPorComponentes === true) {
+              decNueva.baseDepreciable = resPrev.baseDepreciableFinal;
+              decNueva.depreciacionAcumuladaInicial = resPrev.depreciacionAcumuladaFinal;
+              decNueva.baseAmortizable = resPrev.baseAmortizableFinal;
+              decNueva.amortizacionAcumuladaInicial = resPrev.amortizacionAcumuladaFinal;
+              decNueva.intangiblesIniciales = Math.max(0, resPrev.intangiblesNetos ?? 0);
+              decNueva.valorPlantaInicial = resPrev.valorPlantaInicial;
+              decNueva.valorVehiculoInicial = resPrev.valorVehiculoInicial;
+              decNueva.valorMueblesInicial = resPrev.valorMueblesInicial;
+              decNueva.valorComputoInicial = resPrev.valorComputoInicial;
+              decNueva.valorPatentesInicial = resPrev.valorPatentesInicial;
+              decNueva.depreciacionAcumuladaPlantaInicial = resPrev.depreciacionAcumuladaPlantaFinal;
+              decNueva.depreciacionAcumuladaVehiculoInicial = resPrev.depreciacionAcumuladaVehiculoFinal;
+              decNueva.depreciacionAcumuladaMueblesInicial = resPrev.depreciacionAcumuladaMueblesFinal;
+              decNueva.depreciacionAcumuladaComputoInicial = resPrev.depreciacionAcumuladaComputoFinal;
+              decNueva.amortizacionAcumuladaPatentesInicial = resPrev.amortizacionAcumuladaPatentesFinal;
+            }
             decNueva.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
             decNueva.brandEquityInicial         = resPrev.brandEquityFinal ?? 50;
             decNueva.stockMPInicial             = Math.max(0, resPrev.stockMPFinal ?? 0);
