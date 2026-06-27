@@ -443,6 +443,13 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   const tipoInvOpts  = ['No','Básica','Premium','Estratégico'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
 
   const p = ref.parametros || {};
+
+  // FIX capacidad de producción R1: tope real = MIN(planta del equipo, operarios × productividadBase)
+  const capPlantaEquipo          = decision.capacidadMaxProduccion ?? p.capacidadMaxProduccion ?? 1500;
+  const opIniInicial             = decision.operariosIniciales ?? p.operariosIniciales ?? 0;
+  const capOperariosInicial      = opIniInicial * (p.productividadBase ?? 440);
+  const capMaxProduccionInicial  = Math.min(capPlantaEquipo, capOperariosInicial);
+
   const estadoBadge = roundState==='simulated' ? '<span class="badge badge-simulated">🔒 Simulada</span>'
     : isLocked ? '<span class="badge badge-alert">🔒 Cerrada</span>'
     : decision.submitted ? '<span class="badge badge-sent">✓ Enviada</span>'
@@ -580,8 +587,8 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           </tr>
           <tr>
             <td class="hoja-label">🏭 Producción (unidades)</td>
-            <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${p.capacidadMaxProduccion||1500}" step="100"`)}</td>
-            <td class="hoja-ref">Cantidad que deseas fabricar. La producción real puede ser menor si faltan capacidad de planta, operarios o materia prima.</td>
+            <td>${inp('produccion',productoActivo.produccion,'number',`min="0" max="${capMaxProduccionInicial||1500}" step="100"`)}</td>
+            <td class="hoja-ref">Tope real: ${fmt.num(capMaxProduccionInicial)} u (planta ${fmt.num(capPlantaEquipo)} u · operarios ${opIniInicial}×${p.productividadBase??440}=${fmt.num(capOperariosInicial)} u). La producción real puede ser menor si falta materia prima.</td>
             <td>${ta('produccion','¿Cómo estimaste la demanda?')}</td>
           </tr>
           ${hojaProductoActivo === 0 ? `
@@ -784,6 +791,14 @@ if (isEditable) {
             ? (p?.plazoPrestamoInversion || 40)
             : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
 
+        const opIniLive        = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
+        const opContratarLive  = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value ?? decision.contratarOperarios ?? 0);
+        const opDespedirLive   = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value ?? decision.despedirOperarios ?? 0);
+        const opFinalesLive    = Math.max(0, opIniLive + opContratarLive - opDespedirLive);
+        const capPlantaLive    = decision.capacidadMaxProduccion ?? p?.capacidadMaxProduccion ?? 1500;
+        const capOperariosLive = opFinalesLive * (p?.productividadBase ?? 440);
+        const capMaxProduccionLive = Math.min(capPlantaLive, capOperariosLive);
+
         // ── Límites por campo ─────────────────────────────────────────────
         const LIMITES_CAMPO = {
           calidad:             { min:1,  max:10 },
@@ -793,7 +808,7 @@ if (isEditable) {
           despedirVendedores:  { min:0,  max:10 },
           plazoPrestamo:       { min:1,  max:plazoMaxDinamico },
           precioVenta:         { min:0,  max:9999 },
-          produccion:          { min:0,  max:p?.capacidadMaxProduccion||1500 },
+          produccion:          { min:0,  max:capMaxProduccionLive },
           montoCapacitacion:   { min:0,  max:50000 },
           publicidad:          { min:0,  max:200000 },
           promocion:           { min:0,  max:100000 },
@@ -825,22 +840,17 @@ if (isEditable) {
           }
         }
 
-        // ── Aviso capacidad de producción según operarios ─────────────────
+        // ── Aviso capacidad de producción (planta del equipo ∧ operarios) ─
         if (field === 'produccion') {
-          const opIni       = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
-          const opContratar = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value || 0);
-          const opDespedir  = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value || 0);
-          const opFinales   = Math.max(0, opIni + opContratar - opDespedir);
-          const capEf       = opFinales * (p?.productividadBase ?? 500);
-          const refCell     = el.closest('tr')?.querySelector('.hoja-ref');
+          const refCell = el.closest('tr')?.querySelector('.hoja-ref');
           if (refCell) {
-            if (opFinales === 0) {
+            if (opFinalesLive === 0) {
               refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Sin operarios — debes contratar al menos 1. Cap. efectiva = 0 u.</span>';
-            } else if (v_orig > capEf) {
-              refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Supera cap. efectiva (' + opFinales + ' op. × ' + (p?.productividadBase||500) + ' = ' + capEf + ' u).</span>';
+            } else if (v_orig > capMaxProduccionLive) {
+              refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Supera el tope real (' + fmt.num(capMaxProduccionLive) + ' u = min[planta ' + fmt.num(capPlantaLive) + ', ' + opFinalesLive + ' op.×' + (p?.productividadBase||440) + '=' + fmt.num(capOperariosLive) + ']).</span>';
             } else {
-              const pct = Math.round(v_orig / capEf * 100);
-              refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% de cap. efectiva (' + capEf + ' u con ' + opFinales + ' op.)</span>';
+              const pct = Math.round(v_orig / capMaxProduccionLive * 100);
+              refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% del tope real (' + fmt.num(capMaxProduccionLive) + ' u)</span>';
             }
           }
         }
