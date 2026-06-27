@@ -676,6 +676,10 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             // Propagar dotación de personal (estado real de la empresa, no decisión)
             decNueva.vendedoresIniciales        = Math.max(1, resPrev.vendedoresFinales ?? 2);
             decNueva.operariosIniciales         = Math.max(1, resPrev.operariosFinales ?? 4);
+            // Capacidad de planta por equipo (heredada de Fase 0) — no es resultado financiero,
+            // pero defaultDecision() no la conoce; debe propagarse explícitamente cada ronda.
+            // Mismo patrón que engine.js:1536 usa para su propia continuidad interna.
+            decNueva.capacidadMaxProduccion     = resPrev.capacidadMaxProduccion ?? sim.parametros.capacidadMaxProduccion ?? 1500;
             // Inventario: sumar todos los productos de la empresa
             const todosRes = Object.values(resObj).filter(r =>
               r.equipoOriginal === eq.id || (r.equipo||'').startsWith(eq.id)
