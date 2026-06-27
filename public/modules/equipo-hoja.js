@@ -773,7 +773,7 @@ if (isEditable) {
       el.type === 'checkbox' ? 'change' : 'input',
       () => {
 
-        const v =
+        let v =
           el.type === 'checkbox' ? el.checked
           : el.type === 'number' ? +el.value
           : el.tagName === 'SELECT'
@@ -859,7 +859,7 @@ if (isEditable) {
         if (el.type === 'number' && LIMITES_CAMPO[field]) {
           const lim = LIMITES_CAMPO[field];
           const clamped = Math.min(lim.max, Math.max(lim.min, v));
-          if (clamped !== v) { el.value = clamped; }
+          if (clamped !== v) { el.value = clamped; v = clamped; }
         }
 
         const productFields = [
