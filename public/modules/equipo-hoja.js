@@ -446,8 +446,10 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
 
   // FIX capacidad de producción R1: tope real = MIN(planta del equipo, operarios × productividadBase)
   const capPlantaEquipo          = decision.capacidadMaxProduccion ?? p.capacidadMaxProduccion ?? 1500;
-  const opIniInicial             = decision.operariosIniciales ?? p.operariosIniciales ?? 0;
-  const capOperariosInicial      = opIniInicial * (p.productividadBase ?? 440);
+  const opIniInicial             = decision.operariosIniciales ?? p.operariosIniciales ?? 4;
+  const factorCapInicial         = p.factorCapacitacion ?? 0.05;
+  const montoCapInicial          = decision.montoCapacitacion ?? 0;
+  const capOperariosInicial      = Math.round(opIniInicial * (p.productividadBase ?? 440) * (1 + factorCapInicial * montoCapInicial / 10000));
   const capMaxProduccionInicial  = Math.min(capPlantaEquipo, capOperariosInicial);
 
   const estadoBadge = roundState==='simulated' ? '<span class="badge badge-simulated">🔒 Simulada</span>'
@@ -791,12 +793,14 @@ if (isEditable) {
             ? (p?.plazoPrestamoInversion || 40)
             : Math.max(p?.plazoPrestamoOperativo||20, p?.plazoPrestamoInversion||40);
 
-        const opIniLive        = decision.operariosIniciales ?? p?.operariosIniciales ?? 0;
+        const opIniLive        = decision.operariosIniciales ?? p?.operariosIniciales ?? 4;
         const opContratarLive  = +(cont.querySelector('[data-hoja-field="contratarOperarios"]')?.value ?? decision.contratarOperarios ?? 0);
         const opDespedirLive   = +(cont.querySelector('[data-hoja-field="despedirOperarios"]')?.value ?? decision.despedirOperarios ?? 0);
         const opFinalesLive    = Math.max(0, opIniLive + opContratarLive - opDespedirLive);
         const capPlantaLive    = decision.capacidadMaxProduccion ?? p?.capacidadMaxProduccion ?? 1500;
-        const capOperariosLive = opFinalesLive * (p?.productividadBase ?? 440);
+        const factorCapLive    = p?.factorCapacitacion ?? 0.05;
+        const montoCapLive     = +(cont.querySelector('[data-hoja-field="montoCapacitacion"]')?.value ?? decision.montoCapacitacion ?? 0);
+        const capOperariosLive = Math.round(opFinalesLive * (p?.productividadBase ?? 440) * (1 + factorCapLive * montoCapLive / 10000));
         const capMaxProduccionLive = Math.min(capPlantaLive, capOperariosLive);
 
         // ── Límites por campo ─────────────────────────────────────────────
@@ -838,6 +842,12 @@ if (isEditable) {
                   : 'Op: ' + (p?.plazoPrestamoOperativo||20) + ' trim. · Inv: ' + (p?.plazoPrestamoInversion||40) + ' trim.';
             }
           }
+        }
+
+        // ── Actualizar max del input de producción si cambia capacitación u operarios ──
+        if (['montoCapacitacion','contratarOperarios','despedirOperarios'].includes(field)) {
+          const produccionInput = cont.querySelector('[data-hoja-field="produccion"]');
+          if (produccionInput) produccionInput.max = capMaxProduccionLive;
         }
 
         // ── Aviso capacidad de producción (planta del equipo ∧ operarios) ─
