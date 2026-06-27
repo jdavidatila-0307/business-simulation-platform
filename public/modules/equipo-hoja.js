@@ -444,6 +444,16 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
 
   const p = ref.parametros || {};
 
+  // Hidratación de MP para la hoja: misma regla de arribo que el motor
+  // (engine.js procesarPedidosMP, líneas 203-212). Los pedidos con
+  // rondaEntrega <= n YA llegaron → suman a disponible; solo rondaEntrega > n
+  // sigue en tránsito. Es solo presentación: el motor recalcula igual al ejecutar.
+  const _pedMP         = Array.isArray(decision.pedidosPendientes) ? decision.pedidosPendientes : [];
+  const _mpArriboRonda = _pedMP.filter(pp => (pp.rondaEntrega ?? 0) <= n)
+                               .reduce((s, pp) => s + (pp.cantidad || 0), 0);
+  const _mpEnTransito  = _pedMP.filter(pp => (pp.rondaEntrega ?? 0) >  n);
+  const stockMPVisible = (decision.stockMPInicial ?? 0) + _mpArriboRonda;
+
   // FIX capacidad de producción R1: tope real = MIN(planta del equipo, operarios × productividadBase)
   const capPlantaEquipo          = decision.capacidadMaxProduccion ?? p.capacidadMaxProduccion ?? 1500;
   const opIniInicial             = decision.operariosIniciales ?? p.operariosIniciales ?? 4;
@@ -638,12 +648,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr>
             <td class="hoja-label">📦 Stock MP disponible</td>
-            <td><span class="hoja-value-ro">${fmt.num(decision.stockMPInicial ?? 0)} unid</span></td>
+            <td><span class="hoja-value-ro">${fmt.num(stockMPVisible)} unid</span></td>
             <td class="hoja-ref">Heredado + pedidos recibidos esta ronda</td>
             <td style="font-size:.78rem;color:var(--text3)">
-              Producibles: ${fmt.num(Math.floor((decision.stockMPInicial ?? 0) / (p.unidadesMPporUnidad ?? 1)))} unid
-              ${decision.pedidosPendientes?.length > 0
-                ? ' · <strong style="color:var(--accent3)">Pedidos en tránsito: ' + decision.pedidosPendientes.length + '</strong>'
+              Producibles: ${fmt.num(Math.floor(stockMPVisible / (p.unidadesMPporUnidad ?? 1)))} unid
+              ${_mpEnTransito.length > 0
+                ? ' · <strong style="color:var(--accent3)">Pedidos en tránsito: ' + _mpEnTransito.length + '</strong>'
                 : ''}
             </td>
           </tr>
