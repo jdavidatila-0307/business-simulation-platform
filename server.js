@@ -1296,9 +1296,22 @@ async function route(req, res, body) {
     if (!ronda.decisiones) ronda.decisiones = {};
     const actual = decisionDeEquipo(ronda.decisiones, equipoId);
     if (actual?.submitted && !actual.forcedByAdmin) return send(res, 400, { error: 'El equipo ya envió una decisión normal' });
+    let baseDecision = actual || storage.defaultDecision(equipo.id, equipo.nombre, sim.parametros, equipo);
+    const modoInicio = leerModoInicio(sim);
+    if (!actual && modoInicio === 'fase0' && Number(n) === 1) {
+      const fase0 = await storage.getFase0Equipo(sim.id, equipoId);
+      baseDecision = hidratarEstadoInicialR1(baseDecision, sim.parametros, fase0, modoInicio, n);
+    } else if (!actual && Number(n) >= 2) {
+      const prevRonda = await storage.getRonda(sim.id, n - 1);
+      const resObj = prevRonda?.resultados?.resultados || prevRonda?.resultados || {};
+      const resPrev = Object.values(resObj)
+        .filter(v => v && typeof v === 'object' && v.equipoNombre)
+        .find(r => r.equipoOriginal === equipoId || r.equipo === equipoId || (r.equipo || '').startsWith(equipoId));
+      if (resPrev) baseDecision = propagarEstado(baseDecision, resPrev, sim.parametros);
+    }
     const ahora = new Date().toISOString();
     ronda.decisiones[equipoId] = {
-      ...(actual || storage.defaultDecision(equipo.id, equipo.nombre, sim.parametros)),
+      ...baseDecision,
       equipo: equipoId, submitted: true, submittedAt: ahora,
       forcedByAdmin: true, forcedReason: motivo, forcedAt: ahora
     };

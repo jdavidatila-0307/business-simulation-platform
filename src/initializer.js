@@ -32,21 +32,21 @@ function getEstadoInicial(params, fase0, modoInicio) {
     };
     return {
       cajaInicial:            Math.max(0, Number(fase0.caja_inicial)),
-      activosFijosIniciales:  Number(fase0.activos_fijos_comprados || 0),
-      deudaInicial:           Number(fase0.deuda_inicial || 0),
-      capitalInicial:         Number(fase0.capital_total_otorgado || 0),
-      operariosIniciales:     Number(fase0.operarios_iniciales || 1),
-      capacidadMaxProduccion: Number(fase0.capacidad_produccion_base || 0),
+      activosFijosIniciales:  Number(fase0.activos_fijos_comprados ?? 0),
+      deudaInicial:           Number(fase0.deuda_inicial ?? 0),
+      capitalInicial:         Number(fase0.capital_total_otorgado ?? 0),
+      operariosIniciales:     Number(fase0.operarios_iniciales ?? 1),
+      capacidadMaxProduccion: Number(fase0.capacidad_produccion_base ?? 0),
       costoOperario:          Number(fase0.costo_operario ?? p.costoOperario ?? 0),
       sueldoVendedor:         Number(fase0.sueldo_vendedor ?? p.sueldoTrimestralVendedor ?? 0),
       vendedoresIniciales:    Number(p.vendedoresIniciales ?? 0),
       inventarioInicial:      Number(p.inventarioInicialUnid ?? 0),
       stockMPInicial:         0,
       resultadoAcumuladoAnterior: 0,
-      baseDepreciable:        Number(fase0.activos_fijos_comprados || 0),
+      baseDepreciable:        Number(fase0.activos_fijos_comprados ?? 0),
       // FASE 6C — PP&E: bruto, base de maquinaria y depreciación acumulada inicial (= 0 en R1).
-      activosFijosBrutos:        Number(fase0.activos_fijos_comprados || 0),
-      baseDepreciableMaquinaria: Number(fase0.activos_fijos_comprados || 0),
+      activosFijosBrutos:        Number(fase0.activos_fijos_comprados ?? 0),
+      baseDepreciableMaquinaria: Number(fase0.activos_fijos_comprados ?? 0),
       depreciacionAcumulada:     0,
       vehiculo_nivel:         Number(fase0.vehiculo_nivel || 0),
       muebles_comprado:       !!fase0.muebles_comprado,
@@ -60,14 +60,14 @@ function getEstadoInicial(params, fase0, modoInicio) {
   }
 
   // Modo homogéneo o sin Fase 0 — comportamiento original
-  const af = p.activosFijosIniciales || 80000;
+  const af = p.activosFijosIniciales ?? 80000;
   return {
-    cajaInicial:            p.cajaInicial || 500000,
+    cajaInicial:            p.cajaInicial ?? 500000,
     activosFijosIniciales:  af,
-    deudaInicial:           p.deudaInicial || 0,
-    capitalInicial:         p.capitalInicial || (af + (p.cajaInicial || 500000)),
+    deudaInicial:           p.deudaInicial ?? 0,
+    capitalInicial:         p.capitalInicial ?? (af + (p.cajaInicial ?? 500000)),
     operariosIniciales:     p.operariosIniciales ?? 1,
-    capacidadMaxProduccion: p.capacidadMaxProduccion || 1500,
+    capacidadMaxProduccion: p.capacidadMaxProduccion ?? 1500,
     costoOperario:          p.costoOperario ?? 0,
     sueldoVendedor:         p.sueldoTrimestralVendedor ?? 0,
     vendedoresIniciales:    p.vendedoresIniciales ?? 0,

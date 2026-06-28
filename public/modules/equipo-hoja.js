@@ -1590,7 +1590,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               // Usar valores del engine directamente — no recalcular
-              const capital  = r.capitalContable || 680000;
+              const capital  = r.capitalContable ?? 0;
               const utilidad = r.utilidadNeta    || 0;
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda

@@ -336,7 +336,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               // Usar valores del engine directamente — no recalcular
-              const capital  = Number(r.capitalContable ?? 680000);
+              const capital  = Number(r.capitalContable ?? 0);
               const utilidad = r.utilidadNeta    || 0;
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
@@ -358,7 +358,7 @@ window.mostrarFinanciero = (n) => {
               const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0);
               // FASE 6D-4 — validar las PARTIDAS VISIBLES de patrimonio (capital+resAcumAnt+utilidad)
               // contra A−P. Antes se comparaba el plug A−P contra sí mismo → "cuadra" tautológico.
-              const capital   = Number(r.capitalContable ?? 680000);
+              const capital   = Number(r.capitalContable ?? 0);
               const utilidad  = r.utilidadNeta || 0;
               const acumAnt   = r.resultadoAcumulado != null ? (r.resultadoAcumulado - utilidad) : 0;
               const patVisible= capital + acumAnt + utilidad;

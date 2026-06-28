@@ -1098,22 +1098,24 @@ function ejecutarSimulador(decisiones, cfg) {
       const gFijo       = gAdmin + gPlanta + gVend + gOper + dep + gSueldosAdmin;
       // Intereses sobre deuda existente
       const tasaTrim    = (params.tasaSobregiro||0.055);
-      const intDeuda    = Math.round((d.deudaInicial||0) * tasaTrim);
+      const deudaInicialSD = d.deudaInicial ?? 0;
+      const intDeuda    = Math.round(deudaInicialSD * tasaTrim);
       const totalGastos = gFijo + intDeuda;
       // CONTABILIDAD: depreciación es gasto NO desembolsable
       // Reduce utilidad y activos fijos pero NUNCA sale de caja
       // totalPagosEfectivo excluye depreciación
       const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda + gSueldosAdmin);
-      const cobrosAnterior = d.cxcInicial || 0;
-      const cajaCalc = (d.cajaInicial||0) + cobrosAnterior - totalPagosEfectivo;
+      const cajaInicialSD = d.cajaInicial ?? 0;
+      const cobrosAnterior = d.cxcInicial ?? 0;
+      const cajaCalc = cajaInicialSD + cobrosAnterior - totalPagosEfectivo;
       // Sobregiro si caja negativa
       const sobregiro   = cajaCalc < 0 ? Math.abs(cajaCalc) : 0;
       const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
       const intSobregiro= Math.round(sobregiro * tasaTrim);
-      const deudaFinal  = (d.deudaInicial||0) + sobregiro + intDeuda + intSobregiro;
+      const deudaFinal  = deudaInicialSD + sobregiro + intSobregiro;
       const afNetos     = (d.activosFijosBrutos != null)
         ? Math.max(0, _afBrutoSD - _depAcumSD)
-        : Math.max(0, (d.activosFijosIniciales||80000) - dep);
+        : Math.max(0, (d.activosFijosIniciales ?? params.activosFijosIniciales ?? 0) - dep);
       const totalActivos= cajaFinal + afNetos;
       const utilidadNeta= -(totalGastos + intSobregiro);
       // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
@@ -1144,12 +1146,12 @@ function ejecutarSimulador(decisiones, cfg) {
         totalImpuestos:   0, ivaAPagar: 0, impuestoIT: 0, impuestoIUE: 0,
         utilidadNeta,
         // Balance General
-        cajaInicial:      d.cajaInicial || 0,
+        cajaInicial:      cajaInicialSD,
         cajaFinal,
-        cxcInicial:       d.cxcInicial || 0,
+        cxcInicial:       d.cxcInicial ?? 0,
         cxcFinal:         0,
         invFinalValorizado: 0, inventarioFinal: 0,
-        activosFijosIniciales: d.activosFijosIniciales || 80000,
+        activosFijosIniciales: d.activosFijosIniciales ?? params.activosFijosIniciales ?? 0,
         afNetos,
         activosFijosNetos: afNetos,
         // FASE 6C — PP&E (solo fase0; undefined en homogéneo → omitidos en JSON)
@@ -1160,7 +1162,7 @@ function ejecutarSimulador(decisiones, cfg) {
         depreciacionAcumulada:     _depAcumSD,
         totalActivos,
         capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
-        deudaInicial:     d.deudaInicial || 0,
+        deudaInicial:     deudaInicialSD,
         deudaFinal,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
@@ -1178,12 +1180,12 @@ function ejecutarSimulador(decisiones, cfg) {
         pagoIntereses:    intDeuda + intSobregiro,
         pagoAlmacenamiento: 0,
         // RRHH
-        vendedoresIniciales: d.vendedoresIniciales || vend,
+        vendedoresIniciales: d.vendedoresIniciales ?? vend,
         vendedoresFinales:   vend,
-        operariosIniciales:  d.operariosIniciales || oper,
+        operariosIniciales:  d.operariosIniciales ?? oper,
         operariosFinales:    oper,
         // Otros
-        capitalContable:  params.capitalContable || params.capitalInicial || ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)),  // derivado: nunca hardcodeado
+        capitalContable:  d.capitalContable ?? d.capitalInicial ?? params.capitalContable ?? params.capitalInicial ?? 0,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
         resultadoAcumulado: (d.resultadoAcumuladoAnterior||0) + utilidadNeta,
         brandEquityInicial:  d.brandEquityInicial || 50,

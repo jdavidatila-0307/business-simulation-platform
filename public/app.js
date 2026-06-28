@@ -1086,7 +1086,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
       const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);  // ivaCredito ya compensado
       const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
-      const capital = r.capitalContable||680000;
+      const capital = r.capitalContable ?? 0;
       const utilidad = r.utilidadNeta||0;
       const acumAnt = totalA - totalP - capital - utilidad;
       const cuadra  = Math.abs(totalA - totalP - (capital+acumAnt+utilidad)) < 2;
@@ -3110,7 +3110,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               // Usar valores del engine directamente — no recalcular
-              const capital  = r.capitalContable || 680000;
+              const capital  = r.capitalContable ?? 0;
               const utilidad = r.utilidadNeta    || 0;
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
