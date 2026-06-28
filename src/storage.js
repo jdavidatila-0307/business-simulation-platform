@@ -690,6 +690,16 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             // IVA pago diferido: el ivaAPagar de esta ronda se paga en la siguiente
             decNueva.ivaAPagarAnterior      = Math.max(0, resPrev.ivaAPagar     ?? 0);
             decNueva.ivaSaldoAFavorAnterior = Math.max(0, resPrev.ivaSaldoAFavor ?? 0);  // crédito fiscal acumulado
+            // FASE 4 — arrastre de gastos fijos explícitos de Fase 0 (SOLO modo fase0).
+            // defaultDecision() no los conoce; sin esto R2+ caería a params (regresión del bug).
+            // Fuente: resultado previo (resPrev.gastoSueldosAdmin emite el motor); fallback: decisión previa.
+            // ?? preserva el 0 explícito. En homogéneo NO se inyecta → el motor usa params (live).
+            if (sim?.metadata?.modoInicio === 'fase0') {
+              const prevDec = prevRonda.decisiones?.[eq.id];
+              decNueva.gastoAdminFijo              = resPrev.gastoAdminFijo    ?? prevDec?.gastoAdminFijo;
+              decNueva.gastoFijoPlanta             = resPrev.gastoFijoPlanta   ?? prevDec?.gastoFijoPlanta;
+              decNueva.sueldosAdministrativosFijos = resPrev.gastoSueldosAdmin ?? prevDec?.sueldosAdministrativosFijos;
+            }
           }
 
           rondaBase.decisiones[eq.id] = decNueva;
