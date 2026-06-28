@@ -182,7 +182,7 @@ window.mostrarFinanciero = (n) => {
           // Consolidados de ventas
           const totVentasBrutas = prods ? sumP(p=>p.ventasBrutas||0) : (r.ventasBrutas||0);
           const totIvaDebito    = prods ? sumP(p=>p.ivaDebito||0)    : (r.ivaDebito||0);
-          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado||0);
+          const totTotalFact    = prods ? sumP(p=>p.totalFacturado||((p.ventasBrutas||0)+(p.ivaDebito||0))) : (r.totalFacturado || ((r.ventasBrutas||0)+(r.ivaDebito||0)));
           const totComisNeto    = prods ? sumP(p=>p.comisionesNeto||Math.round((p.comisiones||0)*0.87)) : (r.comisionesNeto||Math.round((r.comisiones||0)*0.87));
           const totVentasNetas  = prods ? sumP(p=>p.ventasNetasReal||p.ventasNetas||0) : (r.ventasNetasReal||r.ventasNetas||0);
           // Costo de ventas detalle
@@ -264,6 +264,7 @@ window.mostrarFinanciero = (n) => {
           <strong style="color:#3B82F6">ⓘ IVA — tributo neutro para la empresa (Ley 843)</strong><br>
           Débito fiscal (ventas): ${fmt.bs(r.ivaDebito||0)}&nbsp;&nbsp;·&nbsp;&nbsp;
           Crédito fiscal (compras + servicios con factura): ${fmt.bs(r.ivaCredito||0)}<br>
+          ${(r.ivaSaldoAFavorAnterior||0) > 0 ? '(−) Saldo a favor anterior: ' + fmt.bs(r.ivaSaldoAFavorAnterior) + '<br>' : ''}
           <strong>IVA neto a pagar al Estado: ${fmt.bs(r.ivaAPagar||0)}</strong><br>
           El IVA no es gasto — la empresa lo cobra al cliente y entrega el neto al Estado.
         </div>

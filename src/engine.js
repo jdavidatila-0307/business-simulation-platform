@@ -815,7 +815,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     interesSobregiro = roundBs(sobregiro * params.tasaSobregiro);
     cajaPreliminar   = 0;
     utilidadNeta     = roundBs(utilidadNeta - interesSobregiro);
-    gastosOp         = roundBs(gastosOp + interesSobregiro);  // para P&L total
+    // FASE 5A: interesSobregiro se reclasifica como gasto financiero (ver emisión gastoFinanciero).
+    // NO se suma a gastosOp para no contaminar EBIT/EBITDA (es un costo financiero, no operativo).
   }
   const cajaFinal = cajaPreliminar;
 
@@ -916,7 +917,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoSueldosAdmin:  gastoSueldosAdmin,
     depreciacion:       params.depreciacionTrimestral,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
-    interesesPrestamo, comisionApertura, interesSobregiro, gastoFinanciero,
+    interesesPrestamo, comisionApertura, interesSobregiro,
+    gastoFinanciero: roundBs(gastoFinanciero + interesSobregiro),  // FASE 5A: incluye interés de sobregiro
     gastosOp, utilidadNeta,
 
     // KPIs calculados
@@ -940,6 +942,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // Etapa 3.3: obligaciones fiscales IVA
     ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
     ivaSaldoAFavor,  // crédito fiscal acumulado (activo corriente cuando ivaCredito > ivaDebito, Ley 843)
+    ivaSaldoAFavorAnterior: ivaSaldoAFavorAnt,  // FASE 5A: saldo a favor consumido este período (desglose IVA en pantalla)
 
     // Etapa 3.4: IT e IUE + compensación IUE→IT (Fase 4)
     impuestoIT, impuestoIUE, provisionIUE, totalImpuestos, pagoIT, pagoIUE,
