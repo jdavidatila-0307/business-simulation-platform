@@ -1821,6 +1821,14 @@ async function route(req, res, body) {
           saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
           ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),  // IVA diferido
           ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),  // crédito fiscal acumulado
+          // FASE 6C — PP&E (fase0): arrastrar bruto/base/acumulada SIN zeroar con estado.afNetos.
+          // R1 toma de decOrig (backfill); R2+ del estado acumulado. Homogéneo: ambos undefined → spread vacío.
+          ...(((estado.activosFijosBrutos ?? decOrig.activosFijosBrutos) != null) ? {
+            activosFijosBrutos:        estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+            baseDepreciable:           estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+            baseDepreciableMaquinaria: estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+            depreciacionAcumulada:     estado.depreciacionAcumulada ?? decOrig.depreciacionAcumulada ?? 0,
+          } : {}),
         };
 
         // Multiproducto: propagar campos financieros a cada producto[]
@@ -1940,6 +1948,8 @@ async function route(req, res, body) {
             cxcFinal:              p0.cxcFinal     ?? 0,
             deudaFinal:            p0.deudaFinal   ?? 0,
             afNetos:               p0.afNetos      ?? 0,
+            activosFijosBrutos:    p0.activosFijosBrutos,        // FASE 6C (undefined en homogéneo)
+            depreciacionAcumulada: p0.depreciacionAcumulada,
             brandEquityFinal:      p0.brandEquityFinal ?? 50,
             vendedoresFinales:     p0.vendedoresFinales ?? 2,
             operariosFinales:      p0.operariosFinales ?? 4,

@@ -5,6 +5,7 @@
  */
 
 // ── Helpers ────────────────────────────────────────────────────
+const { DEPRECIACION_CLASES } = require('./constants');   // FASE 6C — tabla normativa D.S. 24051
 function avg(a, b) { return (a + b) / 2; }
 function roundBs(x) { return Math.round(x * 100) / 100; }
 
@@ -611,7 +612,24 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const sueldosAdministrativosFijosEff = d.sueldosAdministrativosFijos != null ? Number(d.sueldosAdministrativosFijos) : Number(params.sueldosAdministrativosFijos || 0);
   const gastoAdminFijo  = esProductoPrincipal ? gastoAdminFijoEff  : 0;
   const gastoPlantaFijo = esProductoPrincipal ? gastoFijoPlantaEff : 0;
-  const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
+  // FASE 6C — Activos fijos y depreciación. Modelo normativo (D.S. 24051) en fase0
+  // cuando la decisión trae activosFijosBrutos; homogéneo conserva params.depreciacionTrimestral.
+  let _afBrutoEff, _baseDepEff, _baseDepMaqEff, depreciacionMaquinaria, depreciacionAcumuladaFinal;
+  let depreciacionPeriodo, afNetos;
+  if (d.activosFijosBrutos != null) {                              // ── fase0 normativo ──
+    _afBrutoEff    = Number(d.activosFijosBrutos);
+    _baseDepMaqEff = Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? _afBrutoEff);
+    _baseDepEff    = _baseDepMaqEff;
+    depreciacionMaquinaria     = roundBs(_baseDepMaqEff * DEPRECIACION_CLASES.maquinaria.coefTrim);
+    depreciacionPeriodo        = depreciacionMaquinaria;
+    depreciacionAcumuladaFinal = Math.min(_afBrutoEff, (Number(d.depreciacionAcumulada) || 0) + depreciacionPeriodo);
+    afNetos                    = Math.max(0, _afBrutoEff - depreciacionAcumuladaFinal);
+  } else {                                                         // ── homogéneo INTACTO ──
+    depreciacionPeriodo = params.depreciacionTrimestral;
+    afNetos             = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
+    // _afBrutoEff/_baseDep*/depreciacionAcumuladaFinal quedan undefined → no se emiten en homogéneo
+  }
+  const gastoDepre      = esProductoPrincipal ? (depreciacionPeriodo || 0) : 0;
   const gastoSueldosAdmin = esProductoPrincipal ? sueldosAdministrativosFijosEff : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
@@ -830,8 +848,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const deudaPrestamos = roundBs(Math.max(0, (d.deudaInicial || 0) + ingresoPrestamo - amortizacion));
   const deudaFinal     = roundBs(deudaPrestamos + sobregiro + interesSobregiro);
 
-  // Activos fijos netos
-  const afNetos = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
+  // Activos fijos netos: afNetos ya se calculó arriba (FASE 6C: normativo en fase0 / params en homogéneo).
 
   // Balance General — OPCIÓN A: IVA pago diferido (realidad boliviana)
   //   Al cierre del trimestre el IVA neto es un PASIVO (obligación devengada, no pagada aún)
@@ -915,7 +932,13 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoAdminFijo:     gastoAdminFijoEff,
     gastoFijoPlanta:    gastoFijoPlantaEff,
     gastoSueldosAdmin:  gastoSueldosAdmin,
-    depreciacion:       params.depreciacionTrimestral,
+    depreciacion:       depreciacionPeriodo,                          // FASE 6C: normativo (fase0) / param (homogéneo)
+    // FASE 6C — PP&E (solo se emiten en fase0; en homogéneo quedan undefined → omitidos en JSON)
+    activosFijosBrutos:        _afBrutoEff,
+    baseDepreciable:           _baseDepEff,
+    baseDepreciableMaquinaria: _baseDepMaqEff,
+    depreciacionMaquinaria,
+    depreciacionAcumulada:     depreciacionAcumuladaFinal,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro,
     gastoFinanciero: roundBs(gastoFinanciero + interesSobregiro),  // FASE 5A: incluye interés de sobregiro
@@ -1032,7 +1055,18 @@ function ejecutarSimulador(decisiones, cfg) {
       const vend     = Math.max(0, d.vendedoresIniciales ?? params.vendedoresIniciales ?? 0);
       const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
       // Usar parámetros reales de la industria — sin fallbacks hardcodeados
-      const dep      = params.depreciacionTrimestral || 0;
+      // FASE 6C — depreciación normativa en fase0 (presencia de activosFijosBrutos); homogéneo: param.
+      let _afBrutoSD, _baseDepSD, _baseDepMaqSD, _depMaqSD, _depAcumSD, dep;
+      if (d.activosFijosBrutos != null) {
+        _afBrutoSD    = Number(d.activosFijosBrutos);
+        _baseDepMaqSD = Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? _afBrutoSD);
+        _baseDepSD    = _baseDepMaqSD;
+        _depMaqSD     = roundBs(_baseDepMaqSD * DEPRECIACION_CLASES.maquinaria.coefTrim);
+        dep           = _depMaqSD;
+        _depAcumSD    = Math.min(_afBrutoSD, (Number(d.depreciacionAcumulada) || 0) + dep);
+      } else {
+        dep = params.depreciacionTrimestral || 0;
+      }
       // FASE 3 — misma prioridad decision > params (0 explícito válido). Homogéneo: d.* undefined → params.
       const gAdmin   = d.gastoAdminFijo              != null ? Number(d.gastoAdminFijo)              : (params.gastoAdminFijo              || 0);
       const gPlanta  = d.gastoFijoPlanta             != null ? Number(d.gastoFijoPlanta)             : (params.gastoFijoPlanta             || 0);
@@ -1055,7 +1089,9 @@ function ejecutarSimulador(decisiones, cfg) {
       const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
       const intSobregiro= Math.round(sobregiro * tasaTrim);
       const deudaFinal  = (d.deudaInicial||0) + sobregiro + intDeuda + intSobregiro;
-      const afNetos     = Math.max(0, (d.activosFijosIniciales||80000) - dep);
+      const afNetos     = (d.activosFijosBrutos != null)
+        ? Math.max(0, _afBrutoSD - _depAcumSD)
+        : Math.max(0, (d.activosFijosIniciales||80000) - dep);
       const totalActivos= cajaFinal + afNetos;
       const utilidadNeta= -(totalGastos + intSobregiro);
       // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
@@ -1093,6 +1129,13 @@ function ejecutarSimulador(decisiones, cfg) {
         invFinalValorizado: 0, inventarioFinal: 0,
         activosFijosIniciales: d.activosFijosIniciales || 80000,
         afNetos,
+        activosFijosNetos: afNetos,
+        // FASE 6C — PP&E (solo fase0; undefined en homogéneo → omitidos en JSON)
+        activosFijosBrutos:        _afBrutoSD,
+        baseDepreciable:           _baseDepSD,
+        baseDepreciableMaquinaria: _baseDepMaqSD,
+        depreciacionMaquinaria:    _depMaqSD,
+        depreciacionAcumulada:     _depAcumSD,
         totalActivos,
         capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
         deudaInicial:     d.deudaInicial || 0,
@@ -1546,6 +1589,14 @@ function propagarEstado(decision, resPrev, params = {}) {
     pedidosPendientes:          resPrev.pedidosPendientesResta           ?? [],
     inventarioInicial:          resPrev.inventarioFinal                  ?? 0,
     capacidadMaxProduccion:     resPrev.capacidadMaxProduccion           ?? params.capacidadMaxProduccion,
+    // FASE 6C — PP&E (fase0): arrastrar bruto/base/acumulada. En homogéneo resPrev.activosFijosBrutos
+    // es undefined → el spread condicional no agrega nada (comportamiento homogéneo intacto).
+    ...(resPrev.activosFijosBrutos != null ? {
+      activosFijosBrutos:        resPrev.activosFijosBrutos,
+      baseDepreciable:           resPrev.activosFijosBrutos,
+      baseDepreciableMaquinaria: resPrev.activosFijosBrutos,
+      depreciacionAcumulada:     resPrev.depreciacionAcumulada ?? 0,
+    } : {}),
   };
 }
 

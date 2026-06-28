@@ -44,6 +44,10 @@ function getEstadoInicial(params, fase0, modoInicio) {
       stockMPInicial:         0,
       resultadoAcumuladoAnterior: 0,
       baseDepreciable:        Number(fase0.activos_fijos_comprados || 0),
+      // FASE 6C — PP&E: bruto, base de maquinaria y depreciación acumulada inicial (= 0 en R1).
+      activosFijosBrutos:        Number(fase0.activos_fijos_comprados || 0),
+      baseDepreciableMaquinaria: Number(fase0.activos_fijos_comprados || 0),
+      depreciacionAcumulada:     0,
       vehiculo_nivel:         Number(fase0.vehiculo_nivel || 0),
       muebles_comprado:       !!fase0.muebles_comprado,
       equipos_computo_comprado: !!fase0.equipos_computo_comprado,
@@ -88,6 +92,10 @@ function hidratarEstadoInicialR1(decision, params, fase0, modoInicio, rondaNumer
     cajaInicial: estado.cajaInicial,
     activosFijosIniciales: estado.activosFijosIniciales,
     baseDepreciable: estado.baseDepreciable,
+    // FASE 6C — PP&E (R1): bruto, base maquinaria y acumulada → decisión top-level + productos[0].
+    activosFijosBrutos: estado.activosFijosBrutos,
+    baseDepreciableMaquinaria: estado.baseDepreciableMaquinaria,
+    depreciacionAcumulada: estado.depreciacionAcumulada,
     deudaInicial: estado.deudaInicial,
     capitalInicial: estado.capitalInicial,
     resultadoAcumuladoAnterior: estado.resultadoAcumuladoAnterior,

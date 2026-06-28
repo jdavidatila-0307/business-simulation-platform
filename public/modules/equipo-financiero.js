@@ -293,11 +293,11 @@ window.mostrarFinanciero = (n) => {
 
             <div style="height:8px"></div>
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border)">Activo No Corriente</div>
-            ${(r.activosFijosIniciales||0)>0 ? finRow('Activos fijos (valor inicial)', r.activosFijosIniciales, false,'neutral') : ''}
-            ${(r.activosFijosIniciales||0)>0 ? finRow('(-) Depreciación acumulada', -(r.depreciacionAcumulada||r.depreciacion||0), false,'neg') : ''}
-            ${finRow('Activos fijos netos', r.afNetos||0, false,'neutral')}
+            ${((r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0)>0) ? finRow('Activos fijos (valor inicial)', (r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0), false,'neutral') : ''}
+            ${((r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0)>0) ? finRow('(-) Depreciación acumulada', -(r.depreciacionAcumulada||r.depreciacion||0), false,'neg') : ''}
+            ${finRow('Activos fijos netos', (r.afNetos ?? r.activosFijosNetos ?? 0), false,'neutral')}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
-            ${finRowSub('= Total Activo No Corriente', r.afNetos||0, false)}
+            ${finRowSub('= Total Activo No Corriente', (r.afNetos ?? r.activosFijosNetos ?? 0), false)}
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>

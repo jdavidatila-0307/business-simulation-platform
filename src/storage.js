@@ -699,6 +699,14 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
               decNueva.gastoAdminFijo              = resPrev.gastoAdminFijo    ?? prevDec?.gastoAdminFijo;
               decNueva.gastoFijoPlanta             = resPrev.gastoFijoPlanta   ?? prevDec?.gastoFijoPlanta;
               decNueva.sueldosAdministrativosFijos = resPrev.gastoSueldosAdmin ?? prevDec?.sueldosAdministrativosFijos;
+              // FASE 6C — arrastre PP&E (bruto/base/acumulada). NO usar afNetos como fuente del bruto.
+              const _brutoPrev = resPrev.activosFijosBrutos ?? prevDec?.activosFijosBrutos;
+              if (_brutoPrev != null) {
+                decNueva.activosFijosBrutos        = _brutoPrev;
+                decNueva.baseDepreciable           = _brutoPrev;
+                decNueva.baseDepreciableMaquinaria = _brutoPrev;
+                decNueva.depreciacionAcumulada     = resPrev.depreciacionAcumulada ?? prevDec?.depreciacionAcumulada ?? 0;
+              }
             }
           }
 

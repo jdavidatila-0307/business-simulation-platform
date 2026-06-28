@@ -118,4 +118,16 @@ const NIVELES_PLANTA_FASE0 = [
   { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700, operariosMinimos: 7 },
 ];
 
-module.exports = { PARAMS, TIPOS_PRODUCTO, CANALES, SEGMENTOS, AFINIDAD_MATRIX, COMPETENCIA_EXTERNA, NIVELES_PLANTA_FASE0 };
+// FASE 6C — Tabla normativa de depreciación (D.S. 24051, Art. 22 — Anexo).
+// coefAnual = % anual de depreciación recta; coefTrim = coefAnual / 4.
+// Solo 'maquinaria' está ACTIVA en 6C (clasifica activos_fijos_comprados de Fase 0).
+// El resto queda diseñado para fases posteriores (no se usa todavía).
+const DEPRECIACION_CLASES = {
+  maquinaria: { vidaUtilAnios: 8,  coefAnual: 0.125, coefTrim: 0.03125 },  // ACTIVA
+  vehiculos:  { vidaUtilAnios: 5,  coefAnual: 0.20,  coefTrim: 0.05    },  // diseñado, no usado
+  muebles:    { vidaUtilAnios: 10, coefAnual: 0.10,  coefTrim: 0.025   },  // diseñado, no usado
+  computo:    { vidaUtilAnios: 4,  coefAnual: 0.25,  coefTrim: 0.0625  },  // diseñado, no usado
+  // patentes/intangibles: PENDIENTE (24051 sin coef. único) — no implementar
+};
+
+module.exports = { PARAMS, TIPOS_PRODUCTO, CANALES, SEGMENTOS, AFINIDAD_MATRIX, COMPETENCIA_EXTERNA, NIVELES_PLANTA_FASE0, DEPRECIACION_CLASES };
