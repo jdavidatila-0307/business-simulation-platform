@@ -24,6 +24,12 @@ function getEstadoInicial(params, fase0, modoInicio) {
     && fase0.caja_inicial != null;
 
   if (usarFase0) {
+    // FASE 2 — gastos fijos de Fase 0: si falta el dato NO se inyecta 0 ni params (queda undefined
+    // + warning evidente). La obligatoriedad la garantiza la validación previa de FASE 1A.
+    const _gf = (v, label) => {
+      if (v == null) { console.warn(`[initializer] Fase0 sin ${label} — no se inyecta (debe bloquear validación previa)`); return undefined; }
+      return Number(v);
+    };
     return {
       cajaInicial:            Math.max(0, Number(fase0.caja_inicial)),
       activosFijosIniciales:  Number(fase0.activos_fijos_comprados || 0),
@@ -42,6 +48,9 @@ function getEstadoInicial(params, fase0, modoInicio) {
       muebles_comprado:       !!fase0.muebles_comprado,
       equipos_computo_comprado: !!fase0.equipos_computo_comprado,
       patentes_comprado:      !!fase0.patentes_comprado,
+      gastoAdminFijo:              _gf(fase0.gasto_admin_fijo_fase0,              'gasto_admin_fijo_fase0'),
+      gastoFijoPlanta:             _gf(fase0.gasto_fijo_planta_fase0,             'gasto_fijo_planta_fase0'),
+      sueldosAdministrativosFijos: _gf(fase0.sueldos_administrativos_fijos_fase0, 'sueldos_administrativos_fijos_fase0'),
       _origen: 'fase0'
     };
   }
@@ -92,7 +101,11 @@ function hidratarEstadoInicialR1(decision, params, fase0, modoInicio, rondaNumer
     vehiculo_nivel: estado.vehiculo_nivel,
     muebles_comprado: estado.muebles_comprado,
     equipos_computo_comprado: estado.equipos_computo_comprado,
-    patentes_comprado: estado.patentes_comprado
+    patentes_comprado: estado.patentes_comprado,
+    // FASE 2 — gastos fijos explícitos de Fase 0 (solo modo fase0; homogéneo retorna antes en :76)
+    gastoAdminFijo: estado.gastoAdminFijo,
+    gastoFijoPlanta: estado.gastoFijoPlanta,
+    sueldosAdministrativosFijos: estado.sueldosAdministrativosFijos
   };
   const productos = Array.isArray(decision.productos)
     ? decision.productos.map((producto, indice) => ({
