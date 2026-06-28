@@ -336,7 +336,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:16px 20px">
             ${(() => {
               // Usar valores del engine directamente — no recalcular
-              const capital  = r.capitalContable || 680000;
+              const capital  = Number(r.capitalContable ?? 680000);
               const utilidad = r.utilidadNeta    || 0;
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
@@ -356,15 +356,24 @@ window.mostrarFinanciero = (n) => {
             ${(() => {
               const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
               const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0);
-              const patrim   = r.patrimonio || (totalA - totalP);
-              const totalPP  = totalP + patrim;
-              const cuadra   = Math.abs(totalA - totalPP) < 2;
+              // FASE 6D-4 — validar las PARTIDAS VISIBLES de patrimonio (capital+resAcumAnt+utilidad)
+              // contra A−P. Antes se comparaba el plug A−P contra sí mismo → "cuadra" tautológico.
+              const capital   = Number(r.capitalContable ?? 680000);
+              const utilidad  = r.utilidadNeta || 0;
+              const acumAnt   = r.resultadoAcumulado != null ? (r.resultadoAcumulado - utilidad) : 0;
+              const patVisible= capital + acumAnt + utilidad;
+              const totalPP   = totalP + patVisible;     // pasivos + patrimonio VISIBLE
+              const plug      = totalA - totalP;         // patrimonio contable derivado (informativo)
+              const diff      = totalA - totalPP;
+              const cuadra    = Math.abs(diff) < 2;
               return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
                 + '<div style="margin-top:8px;padding:8px 12px;background:'
                 + (cuadra?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)')
                 + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
-                + (cuadra ? '✓ Balance cuadra' : '⚠ Verificar balance')
-                + ' (Activos = ' + fmt.bs(totalA) + ' | P+P = ' + fmt.bs(totalPP) + ')</div>';
+                + (cuadra ? '✓ Balance cuadra' : '⚠ Descuadre ' + fmt.bs(diff))
+                + ' (Activos = ' + fmt.bs(totalA) + ' | P+P visible = ' + fmt.bs(totalPP) + ')'
+                + (cuadra ? '' : '<br>Patrimonio contable derivado (A−P) = ' + fmt.bs(plug))
+                + '</div>';
             })()}
           </div>
         </div>

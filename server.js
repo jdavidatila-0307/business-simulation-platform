@@ -1724,16 +1724,30 @@ async function route(req, res, body) {
     const proveedores      = sim.proveedores || [];
     const unidMP           = sim.parametros?.unidadesMPporUnidad ?? 1;
 
+    // FASE 6D-4 — en modo fase0 la apertura R1 sale de Fase 0, NO de params placeholder.
+    // El seed antiguo (params.cajaInicial=1, activosFijosIniciales=1) clobbeaba la caja real
+    // y disparaba sobregiro/pérdida espurios + capitalContable=2. Homogéneo conserva el seed legacy.
+    const _modoRecalc = leerModoInicio(sim);
+    const _fase0Map = {};
+    if (_modoRecalc === 'fase0') {
+      (await storage.getFase0(sim.id)).forEach(r => { _fase0Map[r.equipo_id] = r; });
+    }
+
     // Estado acumulado por empresa — se propaga ronda a ronda
     const estadoEmpresa = {};
     equipos.forEach(eq => {
+      const _f0   = _fase0Map[eq.id];
+      const _esF0 = _modoRecalc === 'fase0' && _f0;
       estadoEmpresa[eq.id] = {
         resultadoAcumulado:    0,
+        // Capital permanente (invariante R1→Rn) — fase0: aporte real de socios; homogéneo: params.
+        capitalPermanente:     _esF0 ? Number(_f0.capital_total_otorgado)
+                                     : (sim.parametros?.capitalContable ?? sim.parametros?.capitalInicial ?? null),
         // Campos de continuidad financiera para re-simulación
-        cajaFinal:             sim.parametros?.cajaInicial ?? 96000,
+        cajaFinal:             _esF0 ? Number(_f0.caja_inicial)            : (sim.parametros?.cajaInicial ?? 96000),
         cxcFinal:              0,
-        deudaFinal:            0,
-        afNetos:               sim.parametros?.activosFijosIniciales ?? 360000,
+        deudaFinal:            _esF0 ? Number(_f0.deuda_inicial || 0)      : 0,
+        afNetos:               _esF0 ? Number(_f0.activos_fijos_comprados) : (sim.parametros?.activosFijosIniciales ?? 360000),
         brandEquityFinal:      50,
         vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
         operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
@@ -1806,6 +1820,10 @@ async function route(req, res, body) {
         // Solo se reemplazan los campos de continuidad financiera
         const decRepropagada = {
           ...decOrig,
+          // FASE 6D-4 — capital PERMANENTE del equipo (no es continuidad financiera; es invariante).
+          // Se inyecta para que el motor lo lea como capitalContable; fallback a la decisión original.
+          ...(((estado.capitalPermanente ?? decOrig.capitalInicial) != null)
+            ? { capitalInicial: Number(estado.capitalPermanente ?? decOrig.capitalInicial) } : {}),
           // ── Continuidad financiera desde resultados reales ──
           cajaInicial:                Math.max(0, estado.cajaFinal ?? 0),
           cxcInicial:                 Math.max(0, estado.cxcFinal ?? 0),
@@ -1944,6 +1962,8 @@ async function route(req, res, body) {
 
           estadoEmpresa[eqId] = {
             resultadoAcumulado:    resAcumuladoNuevo,
+            // FASE 6D-4 — capital permanente es invariante: se preserva a través de la reasignación.
+            capitalPermanente:     estadoEmpresa[eqId]?.capitalPermanente ?? null,
             cajaFinal:             p0.cajaFinal    ?? 0,
             cxcFinal:              p0.cxcFinal     ?? 0,
             deudaFinal:            p0.deudaFinal   ?? 0,

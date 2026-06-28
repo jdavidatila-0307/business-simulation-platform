@@ -645,6 +645,13 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
     if (n > 1) {
       const prevRonda = await getRonda(simulacionId, n-1, ownerId);
       if (prevRonda) {
+        // FASE 6D-4 — capital permanente por equipo (modo fase0): fuente Fase 0 capital_total_otorgado.
+        // Se precarga una vez; sirve de fallback si la decisión previa no trae capitalInicial.
+        let _fase0Map = null;
+        if (sim?.metadata?.modoInicio === 'fase0') {
+          _fase0Map = {};
+          (await getFase0(simulacionId)).forEach(r => { _fase0Map[r.equipo_id] = r; });
+        }
         for (const eq of equipos) {
           // POLÍTICA: hoja de decisión siempre en blanco al inicio de cada ronda
           // Solo se propagan campos financieros de continuidad (estado real de la empresa)
@@ -696,6 +703,12 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             // ?? preserva el 0 explícito. En homogéneo NO se inyecta → el motor usa params (live).
             if (sim?.metadata?.modoInicio === 'fase0') {
               const prevDec = prevRonda.decisiones?.[eq.id];
+              // FASE 6D-4 — capital PERMANENTE: preservar capitalInicial real R2→R20.
+              // defaultDecision() lo fabrica desde params (AF+caja → Bs 2 en fase0); aquí se sobrescribe
+              // con el aporte real (decisión previa → R1 trae capital_total_otorgado vía hidratar;
+              // fallback: Fase 0). Capital invariante entre rondas → no contamina resultadoAcumulado.
+              const _capPerm = prevDec?.capitalInicial ?? _fase0Map?.[eq.id]?.capital_total_otorgado;
+              if (_capPerm != null) decNueva.capitalInicial = Number(_capPerm);
               decNueva.gastoAdminFijo              = resPrev.gastoAdminFijo    ?? prevDec?.gastoAdminFijo;
               decNueva.gastoFijoPlanta             = resPrev.gastoFijoPlanta   ?? prevDec?.gastoFijoPlanta;
               decNueva.sueldosAdministrativosFijos = resPrev.gastoSueldosAdmin ?? prevDec?.sueldosAdministrativosFijos;

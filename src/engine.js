@@ -79,6 +79,10 @@ function expandirDecisionesMultiproducto(decisiones) {
         deudaInicial:         decisionEmpresa.deudaInicial,
         activosFijosIniciales:decisionEmpresa.activosFijosIniciales,
         resultadoAcumuladoAnterior: decisionEmpresa.resultadoAcumuladoAnterior,
+        // FASE 6D-4 — el capital permanente es de empresa, nunca del producto:
+        // se restaura desde el nivel empresa para que productos[] no aporten un capital stale.
+        capitalInicial:       decisionEmpresa.capitalInicial,
+        capitalContable:      decisionEmpresa.capitalContable,
       };
 
       expandidas.push({
@@ -860,13 +864,31 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // R1: usa d.cajaInicial + d.AF (capital real del equipo, soporta capitalInicial por equipo)
   // R2+: usa params (capital original permanente, no cambia entre rondas)
   const _isR1 = (d.rondaNumero ?? 1) <= 1;
-  const capitalContable = roundBs(
-    params.capitalContable ||
-    params.capitalInicial  ||
-    (_isR1
-      ? ((d.activosFijosIniciales || 0) + (d.cajaInicial || 0))   // R1: capital real del equipo
-      : ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)))  // R2+: permanente
-  );
+  // FASE 6D-4 — origen de capitalContable bifurcado por modo.
+  // Gate fase0 = mismo criterio que la depreciación normativa (d.activosFijosBrutos != null, ~línea 619).
+  // En fase0 el capital es el APORTE PERMANENTE de socios (capital_total_otorgado),
+  // NUNCA AF+caja (eso son activos; incluiría la deuda dentro del patrimonio).
+  const _esFase0 = d.activosFijosBrutos != null;
+  const _capOk   = v => v != null && Number.isFinite(Number(v)) && Number(v) > 0;
+  let capitalContable;
+  if (_esFase0) {
+    if      (_capOk(d.capitalContable)) capitalContable = roundBs(Number(d.capitalContable));
+    else if (_capOk(d.capitalInicial))  capitalContable = roundBs(Number(d.capitalInicial));
+    else {
+      capitalContable = 0;
+      console.warn(`[WARN_CAPITAL] fase0 Equipo=${d.equipo} R=${d.rondaNumero ?? '?'}: ` +
+        `sin capital válido (d.capitalContable/d.capitalInicial) — capitalContable=0, revisar Fase 0`);
+    }
+  } else {
+    // Modo homogéneo — comportamiento legacy INTACTO
+    capitalContable = roundBs(
+      params.capitalContable ||
+      params.capitalInicial  ||
+      (_isR1
+        ? ((d.activosFijosIniciales || 0) + (d.cajaInicial || 0))   // R1: capital real del equipo
+        : ((params.activosFijosIniciales || 0) + (params.cajaInicial || 0)))  // R2+: permanente
+    );
+  }
   const resultadoAcumulado = roundBs((d.resultadoAcumuladoAnterior || 0) + utilidadNeta);
   // totalPasivos incluye ivaAPagar como pasivo corriente pendiente de pago
   const totalPasivos    = roundBs(deudaFinal + ivaAPagar);
