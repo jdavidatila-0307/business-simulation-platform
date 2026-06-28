@@ -52,6 +52,19 @@ function equiposPendientesDecision(equipos, decisiones) {
     .filter(eq => !decisionDeEquipo(decisiones, eq.id)?.submitted);
 }
 
+// FASE 1A — gastos fijos de Fase 0 obligatorios por equipo.
+// Devuelve los NOMBRES de equipos a los que les falta alguno de los 3 campos.
+// Un 0 EXPLÍCITO es válido; solo NULL/undefined/ausente bloquea.
+function faltanGastosFijosFase0(humanos, regPorEquipo) {
+  return humanos.filter(eq => {
+    const r = regPorEquipo[eq.id];
+    return !r
+      || r.gasto_admin_fijo_fase0 == null
+      || r.gasto_fijo_planta_fase0 == null
+      || r.sueldos_administrativos_fijos_fase0 == null;
+  }).map(eq => eq.nombre);
+}
+
 function validarDecisionEstudiante(decision) {
   const productos = Array.isArray(decision?.productos) && decision.productos.length
     ? decision.productos.filter(p => p.activo !== false)
@@ -1025,6 +1038,30 @@ async function route(req, res, body) {
     return send(res, 200, { ok: true, data });
   }
 
+  // FASE 1A — captura admin de gastos fijos de Fase 0 por equipo.
+  // Valida Number.isFinite(x) && x >= 0; acepta 0 explícito; rechaza null/undefined/''/NaN/negativo.
+  if (url === '/admin/fase0/gastos-fijos' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
+    const { equipoId, gastoAdminFijo, gastoFijoPlanta, sueldosAdministrativosFijos } = body;
+    const campos = {
+      gasto_admin_fijo_fase0:              gastoAdminFijo,
+      gasto_fijo_planta_fase0:             gastoFijoPlanta,
+      sueldos_administrativos_fijos_fase0: sueldosAdministrativosFijos,
+    };
+    for (const k of Object.keys(campos)) {
+      const v = campos[k];
+      if (v === null || v === undefined || v === '') return send(res, 400, { error: `Falta el valor de ${k}` });
+      const num = Number(v);
+      if (!Number.isFinite(num) || num < 0) return send(res, 400, { error: `${k} debe ser un número >= 0 (0 explícito permitido)` });
+      campos[k] = num;
+    }
+    const equipos = await storage.getEquipos(sim.id);
+    if (!equipos.find(e => e.id === equipoId)) return send(res, 404, { error: 'Equipo no encontrado' });
+    const data = await storage.upsertFase0(sim.id, equipoId, campos);
+    return send(res, 200, { ok: true, data });
+  }
+
   if (url === '/admin/fase0/habilitar' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Selecciona una simulación primero' });
@@ -1089,6 +1126,13 @@ async function route(req, res, body) {
       return send(res, 400, {
         error: 'Hay equipos que aún no han enviado su Fase 0: ' + pendientes.map(eq => eq.nombre).join(', '),
         pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
+      });
+    }
+    // FASE 1A — bloqueo: los 3 gastos fijos de Fase 0 son obligatorios para cerrar.
+    const faltanGF = faltanGastosFijosFase0(humanos, regPorEquipo);
+    if (faltanGF.length) {
+      return send(res, 400, {
+        error: 'Faltan gastos fijos de Fase 0 para el equipo: ' + faltanGF.join(', ')
       });
     }
     sim.config.fase0Activa = false;
@@ -1452,6 +1496,19 @@ async function route(req, res, body) {
       error: 'No se puede simular: faltan decisiones enviadas o forzadas de ' + pendientes.map(eq => eq.nombre).join(', '),
       pendientes: pendientes.map(eq => ({ id: eq.id, nombre: eq.nombre }))
     });
+
+    // FASE 1A — bloqueo: en modo fase0, R1 no se calcula sin los 3 gastos fijos de Fase 0.
+    if (leerModoInicio(sim) === 'fase0' && n === 1) {
+      const humanosFG = equipos.filter(eq => eq.rol === 'equipo' && !eq.isBot);
+      const regFG = {};
+      (await storage.getFase0(sim.id)).forEach(r => { regFG[r.equipo_id] = r; });
+      const faltanFG = faltanGastosFijosFase0(humanosFG, regFG);
+      if (faltanFG.length) {
+        return send(res, 400, {
+          error: 'Faltan gastos fijos de Fase 0 para el equipo: ' + faltanFG.join(', ')
+        });
+      }
+    }
 
     // Etapa 2.2: construir mapa de demandaBase de la ronda anterior
     const demandaBaseAnteriorMap = {};

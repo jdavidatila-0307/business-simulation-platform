@@ -804,7 +804,9 @@ const FASE0_COLS = [
   'capital_total_otorgado', 'caja_inicial', 'deuda_inicial', 'cuadre_verificado',
   'delta_cuadre', 'observaciones_docente', 'enviado_at', 'aprobado_at',
   'costo_fijo_minimo', 'costo_fijo_declarado',
-  'vehiculo_nivel', 'muebles_comprado', 'equipos_computo_comprado', 'patentes_comprado'
+  'vehiculo_nivel', 'muebles_comprado', 'equipos_computo_comprado', 'patentes_comprado',
+  // FASE 1A — gastos fijos explícitos de Fase 0 (capturados por admin)
+  'gasto_admin_fijo_fase0', 'gasto_fijo_planta_fase0', 'sueldos_administrativos_fijos_fase0'
 ];
 
 async function getFase0(simId) {

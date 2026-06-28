@@ -149,6 +149,11 @@ async function loadAdminFase0() {
       var credInv = f ? (f.credito_inversion_pre_r1  || 0) : 0;
       var tieneCredito = credOp > 0 || credInv > 0;
       var costoFijoMin = f ? (f.costo_fijo_minimo || 0) : 0;
+      // FASE 1A — gastos fijos explícitos de Fase 0 (null = no configurado)
+      var gAdm = (f && f.gasto_admin_fijo_fase0 != null) ? f.gasto_admin_fijo_fase0 : null;
+      var gPla = (f && f.gasto_fijo_planta_fase0 != null) ? f.gasto_fijo_planta_fase0 : null;
+      var gSue = (f && f.sueldos_administrativos_fijos_fase0 != null) ? f.sueldos_administrativos_fijos_fase0 : null;
+      var tieneGF = (gAdm != null && gPla != null && gSue != null);
 
       var nombreEsc = (eq.nombre || '').replace(/'/g, "\\'");
 
@@ -165,7 +170,11 @@ async function loadAdminFase0() {
         : '';
 
       var btnCostoFijo = ' <button class="btn btn-sm btn-ghost" onclick="doAsignarCostoFijo(\'' + eq.id + '\',\'' + nombreEsc + '\')">'
-        + (costoFijoMin > 0 ? '✏️ Editar mín.' : '💰 Costo fijo') + '</button>';
+        + (costoFijoMin > 0 ? '✏️ Editar ref.' : 'ℹ️ Costo fijo (ref.)') + '</button>';
+
+      var btnGastosFijos = ' <button class="btn btn-sm btn-ghost" onclick="doAsignarGastosFijos(\'' + eq.id + '\',\'' + nombreEsc + '\','
+        + (gAdm == null ? 'null' : gAdm) + ',' + (gPla == null ? 'null' : gPla) + ',' + (gSue == null ? 'null' : gSue) + ')">'
+        + (tieneGF ? '✏️ Gastos fijos' : '⚠️ Gastos fijos') + '</button>';
 
       return '<tr>'
         + '<td><strong>' + (eq.nombre || eq.id) + '</strong></td>'
@@ -176,7 +185,7 @@ async function loadAdminFase0() {
         + '<td class="num">' + (credOp  > 0 ? fmt.bs(credOp)  : '—') + '</td>'
         + '<td class="num">' + (credInv > 0 ? fmt.bs(credInv) : '—') + '</td>'
         + '<td class="num">' + (costoFijoMin > 0 ? fmt.bs(costoFijoMin) : '—') + '</td>'
-        + '<td>' + btnCapital + btnHabilitar + btnCredito + btnCostoFijo + '</td>'
+        + '<td>' + btnCapital + btnHabilitar + btnCredito + btnCostoFijo + btnGastosFijos + '</td>'
         + '</tr>';
     }).join('');
 
@@ -292,8 +301,8 @@ window.doAsignarCostoFijo = function(equipoId, nombreEquipo) {
   modal.className = 'modal-overlay';
   modal.innerHTML =
     '<div class="modal-card" style="max-width:420px">'
-    + '<h3>💰 Costo Fijo Mínimo — ' + nombreEsc + '</h3>'
-    + '<p class="param-hint" style="margin-bottom:16px">Monto mínimo (Bs/trimestre) que el equipo debe declarar para alquiler, servicios básicos y mantenimiento — basado en su plan de negocio real.</p>'
+    + '<h3>ℹ️ Costo Fijo Mínimo (referencia) — ' + nombreEsc + '</h3>'
+    + '<p class="param-hint" style="margin-bottom:16px"><strong>Referencia informativa — NO es un gasto contable.</strong> Monto mínimo (Bs/trimestre) sugerido para alquiler, servicios y mantenimiento. Los gastos fijos contables se capturan en el botón "Gastos fijos".</p>'
     + '<div class="param-row"><label class="param-label">Costo Fijo Mínimo (Bs)</label>'
     + '<input class="param-input" type="number" step="any" id="fase0CostoFijoMin" placeholder="0" style="width:140px"/></div>'
     + '<div class="modal-actions" style="margin-top:20px">'
@@ -322,6 +331,62 @@ window.doAsignarCostoFijo = function(equipoId, nombreEquipo) {
       });
       cerrar();
       toast('✓ Costo fijo mínimo asignado', 'success');
+      await loadAdminFase0();
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  });
+};
+
+// FASE 1A — captura de gastos fijos contables de Fase 0 (3 campos obligatorios por equipo).
+// Acepta 0 explícito; rechaza vacío/negativo/NaN. Prefill con valores existentes (null = sin configurar).
+window.doAsignarGastosFijos = function(equipoId, nombreEquipo, gAdm, gPla, gSue) {
+  var nombreEsc = String(nombreEquipo || '').replace(/</g, '&lt;');
+  var existente = document.getElementById('fase0GastosFijosModal');
+  if (existente) existente.remove();
+
+  function val(x) { return (x === null || x === undefined) ? '' : x; }
+
+  var modal = document.createElement('div');
+  modal.id = 'fase0GastosFijosModal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML =
+    '<div class="modal-card" style="max-width:460px">'
+    + '<h3>🧾 Gastos Fijos de Fase 0 — ' + nombreEsc + '</h3>'
+    + '<p class="param-hint" style="margin-bottom:16px">Gastos fijos contables (Bs/trimestre) del equipo en modo Fase 0. Los 3 son <strong>obligatorios</strong> para cerrar/calcular Fase 0. Un <strong>0 explícito</strong> es válido.</p>'
+    + '<div class="param-row"><label class="param-label">Gasto administrativo fijo (Bs)</label>'
+    + '<input class="param-input" type="number" step="any" id="fase0GfAdmin" value="' + val(gAdm) + '" placeholder="0" style="width:140px"/></div>'
+    + '<div class="param-row"><label class="param-label">Gasto fijo de planta (Bs)</label>'
+    + '<input class="param-input" type="number" step="any" id="fase0GfPlanta" value="' + val(gPla) + '" placeholder="0" style="width:140px"/></div>'
+    + '<div class="param-row"><label class="param-label">Sueldos administrativos fijos (Bs)</label>'
+    + '<input class="param-input" type="number" step="any" id="fase0GfSueldos" value="' + val(gSue) + '" placeholder="0" style="width:140px"/></div>'
+    + '<div class="modal-actions" style="margin-top:20px">'
+    + '<button class="btn-secondary" id="fase0GfCancelBtn">Cancelar</button>'
+    + '<button class="btn-primary" id="fase0GfSaveBtn">Guardar</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+
+  function cerrar() { modal.remove(); }
+  document.getElementById('fase0GfCancelBtn').addEventListener('click', cerrar);
+  modal.addEventListener('click', function(e) { if (e.target === modal) cerrar(); });
+
+  document.getElementById('fase0GfSaveBtn').addEventListener('click', async function() {
+    var campos = {
+      gastoAdminFijo:              document.getElementById('fase0GfAdmin').value,
+      gastoFijoPlanta:             document.getElementById('fase0GfPlanta').value,
+      sueldosAdministrativosFijos: document.getElementById('fase0GfSueldos').value,
+    };
+    for (var k in campos) {
+      if (campos[k] === '' || campos[k] === null) { toast('Los 3 gastos fijos son obligatorios (usa 0 si no aplica)', 'error'); return; }
+      var num = Number(campos[k]);
+      if (!Number.isFinite(num) || num < 0) { toast('Cada gasto fijo debe ser un número >= 0', 'error'); return; }
+      campos[k] = num;
+    }
+    try {
+      await api('POST', '/admin/fase0/gastos-fijos', Object.assign({ equipoId: equipoId }, campos));
+      cerrar();
+      toast('✓ Gastos fijos de Fase 0 guardados', 'success');
       await loadAdminFase0();
     } catch(e) {
       toast(e.message, 'error');
