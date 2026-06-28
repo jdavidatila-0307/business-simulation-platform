@@ -907,6 +907,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     comisionesNeto, ventasNetasReal,
     gastoAdminFijo:     params.gastoAdminFijo,
     gastoFijoPlanta:    params.gastoFijoPlanta,
+    gastoSueldosAdmin:  gastoSueldosAdmin,
     depreciacion:       params.depreciacionTrimestral,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro, gastoFinanciero,
@@ -1062,6 +1063,7 @@ function ejecutarSimulador(decisiones, cfg) {
         // Estado de Resultados
         gastoAdminFijo:   gAdmin,
         gastoFijoPlanta:  gPlanta,
+        gastoSueldosAdmin: gSueldosAdmin,
         costoVendedores:  gVend,
         pagoOperarios:    gOper,
         depreciacion:     dep,

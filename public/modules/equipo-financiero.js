@@ -173,6 +173,7 @@ window.mostrarFinanciero = (n) => {
           // Costos fijos comunes — solo prod_1 (Alternativa 3)
           const gAdmin  = r.gastoAdminFijo || 0;
           const gPlanta = r.gastoFijoPlanta || 0;
+          const gSueldosAdmin = r.gastoSueldosAdmin || 0;
           const gAlmac  = prods ? sumP(p=>p.costoAlmacenamiento||0) : (r.costoAlmacenamiento||0);
           const gInnov  = prods ? sumP(p=>p.gastoInnovacionNeto||Math.round((p.gastoInnovacion||0)*0.87))
                                  : (r.gastoInnovacionNeto||Math.round((r.gastoInnovacion||0)*0.87));
@@ -225,6 +226,7 @@ window.mostrarFinanciero = (n) => {
             // ── GASTOS ADMINISTRATIVOS ──────────────────────────
             + secER('(-) Gastos Administrativos')
             + finRow('Gastos administrativos fijos', -gAdmin, false, 'neg')
+            + finRow('Sueldos administrativos fijos', -gSueldosAdmin, false, 'neg')
             // ── GASTOS PLANTA ───────────────────────────────────
             + secER('(-) Gastos Operativos de Planta')
             + finRow('Gasto fijo de planta', -gPlanta, false, 'neg')
