@@ -8,6 +8,48 @@
 const { DEPRECIACION_CLASES } = require('./constants');   // FASE 6C — tabla normativa D.S. 24051
 function avg(a, b) { return (a + b) / 2; }
 function roundBs(x) { return Math.round(x * 100) / 100; }
+function numPos(v) {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+const AMORTIZACION_PATENTES_TRIM = 1 / 20;
+
+function normalizarInversionActivos(d = {}) {
+  if (d.isBot || d.esBot) {
+    return {
+      totalActivosFijos: 0,
+      totalIntangibles: 0,
+      total: 0,
+      incrementoCapacidadDisponible: 0,
+      incrementoCapacidadComprada: 0,
+      detalle: {}
+    };
+  }
+  const inv = d.inversionActivos || {};
+  const nuevaPlanta = numPos(inv.nuevaPlanta?.monto ?? d.montoNuevaPlanta);
+  const ampliacionPlanta = numPos(inv.ampliacionPlanta?.monto ?? d.montoAmpliacionPlanta);
+  const maquinaria = numPos(inv.maquinaria?.monto ?? d.montoMaquinaria);
+  const vehiculos = numPos(inv.vehiculos?.monto ?? inv.vehiculo?.monto ?? d.montoVehiculo);
+  const muebles = numPos(inv.muebles?.monto ?? d.montoMuebles);
+  const computo = numPos(inv.computo?.monto ?? d.montoComputo);
+  const patentes = numPos(inv.patentes?.monto ?? d.montoPatentes);
+  const incrementoCapacidadDisponible = numPos(d.incrementoCapacidadPendiente);
+  const incrementoCapacidadComprada = numPos(inv.nuevaPlanta?.incrementoCapacidad)
+    + numPos(inv.ampliacionPlanta?.incrementoCapacidad)
+    + numPos(inv.maquinaria?.incrementoCapacidad)
+    + numPos(d.incrementoCapacidad);
+  const totalActivosFijos = roundBs(nuevaPlanta + ampliacionPlanta + maquinaria + vehiculos + muebles + computo);
+  const totalIntangibles = roundBs(patentes);
+  return {
+    totalActivosFijos,
+    totalIntangibles,
+    total: roundBs(totalActivosFijos + totalIntangibles),
+    incrementoCapacidadDisponible,
+    incrementoCapacidadComprada,
+    detalle: { nuevaPlanta, ampliacionPlanta, maquinaria, vehiculos, muebles, computo, patentes }
+  };
+}
 
    // ══ BLOQUE A — va al ámbito del módulo, antes de calcularMercadoSegmentos() ══
 // (Elimina la copia que estaba anidada dentro de ejecutarSimulador)
@@ -78,6 +120,19 @@ function expandirDecisionesMultiproducto(decisiones) {
         cxcInicial:           decisionEmpresa.cxcInicial,
         deudaInicial:         decisionEmpresa.deudaInicial,
         activosFijosIniciales:decisionEmpresa.activosFijosIniciales,
+        activosFijosBrutos:   decisionEmpresa.activosFijosBrutos,
+        baseDepreciable:      decisionEmpresa.baseDepreciable,
+        baseDepreciableMaquinaria: decisionEmpresa.baseDepreciableMaquinaria,
+        baseDepreciableVehiculos:  decisionEmpresa.baseDepreciableVehiculos,
+        baseDepreciableMuebles:    decisionEmpresa.baseDepreciableMuebles,
+        baseDepreciableComputo:    decisionEmpresa.baseDepreciableComputo,
+        depreciacionAcumulada:     decisionEmpresa.depreciacionAcumulada,
+        intangiblesBrutos:         decisionEmpresa.intangiblesBrutos,
+        amortizacionAcumulada:     decisionEmpresa.amortizacionAcumulada,
+        inversionActivos:          decisionEmpresa.inversionActivos,
+        incrementoCapacidad:       decisionEmpresa.incrementoCapacidad,
+        incrementoCapacidadPendiente: decisionEmpresa.incrementoCapacidadPendiente,
+        capacidadMaxProduccion:    decisionEmpresa.capacidadMaxProduccion,
         resultadoAcumuladoAnterior: decisionEmpresa.resultadoAcumuladoAnterior,
         // FASE 6D-4 — el capital permanente es de empresa, nunca del producto:
         // se restaura desde el nivel empresa para que productos[] no aporten un capital stale.
@@ -616,24 +671,44 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const sueldosAdministrativosFijosEff = d.sueldosAdministrativosFijos != null ? Number(d.sueldosAdministrativosFijos) : Number(params.sueldosAdministrativosFijos || 0);
   const gastoAdminFijo  = esProductoPrincipal ? gastoAdminFijoEff  : 0;
   const gastoPlantaFijo = esProductoPrincipal ? gastoFijoPlantaEff : 0;
+  const invActivos = esProductoPrincipal ? normalizarInversionActivos(d) : normalizarInversionActivos({ isBot: true });
   // FASE 6C — Activos fijos y depreciación. Modelo normativo (D.S. 24051) en fase0
   // cuando la decisión trae activosFijosBrutos; homogéneo conserva params.depreciacionTrimestral.
   let _afBrutoEff, _baseDepEff, _baseDepMaqEff, depreciacionMaquinaria, depreciacionAcumuladaFinal;
-  let depreciacionPeriodo, afNetos;
-  if (d.activosFijosBrutos != null) {                              // ── fase0 normativo ──
-    _afBrutoEff    = Number(d.activosFijosBrutos);
-    _baseDepMaqEff = Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? _afBrutoEff);
-    _baseDepEff    = _baseDepMaqEff;
+  let _baseDepVehEff, _baseDepMueblesEff, _baseDepComputoEff;
+  let depreciacionVehiculos, depreciacionMuebles, depreciacionComputo;
+  let intangiblesBrutos, amortizacionAcumuladaFinal, amortizacionPatentes;
+  let depreciacionPeriodo, amortizacionPeriodo, afNetos, intangiblesNetos;
+  const _usarTrackingActivos = d.activosFijosBrutos != null || invActivos.totalActivosFijos > 0 || d.intangiblesBrutos != null;
+  if (_usarTrackingActivos) {                              // ── fase0 normativo + compras por ronda ──
+    const afInicial = Number(d.activosFijosBrutos ?? d.activosFijosIniciales ?? params.activosFijosIniciales ?? 0);
+    _afBrutoEff    = roundBs(afInicial + invActivos.totalActivosFijos);
+    _baseDepMaqEff = roundBs(Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? afInicial) +
+      invActivos.detalle.nuevaPlanta + invActivos.detalle.ampliacionPlanta + invActivos.detalle.maquinaria);
+    _baseDepVehEff = roundBs(Number(d.baseDepreciableVehiculos ?? 0) + invActivos.detalle.vehiculos);
+    _baseDepMueblesEff = roundBs(Number(d.baseDepreciableMuebles ?? 0) + invActivos.detalle.muebles);
+    _baseDepComputoEff = roundBs(Number(d.baseDepreciableComputo ?? 0) + invActivos.detalle.computo);
+    _baseDepEff    = roundBs(_baseDepMaqEff + _baseDepVehEff + _baseDepMueblesEff + _baseDepComputoEff);
     depreciacionMaquinaria     = roundBs(_baseDepMaqEff * DEPRECIACION_CLASES.maquinaria.coefTrim);
-    depreciacionPeriodo        = depreciacionMaquinaria;
+    depreciacionVehiculos      = roundBs(_baseDepVehEff * DEPRECIACION_CLASES.vehiculos.coefTrim);
+    depreciacionMuebles        = roundBs(_baseDepMueblesEff * DEPRECIACION_CLASES.muebles.coefTrim);
+    depreciacionComputo        = roundBs(_baseDepComputoEff * DEPRECIACION_CLASES.computo.coefTrim);
+    depreciacionPeriodo        = roundBs(depreciacionMaquinaria + depreciacionVehiculos + depreciacionMuebles + depreciacionComputo);
     depreciacionAcumuladaFinal = Math.min(_afBrutoEff, (Number(d.depreciacionAcumulada) || 0) + depreciacionPeriodo);
     afNetos                    = Math.max(0, _afBrutoEff - depreciacionAcumuladaFinal);
+    intangiblesBrutos          = roundBs(Number(d.intangiblesBrutos ?? 0) + invActivos.totalIntangibles);
+    amortizacionPatentes       = roundBs(intangiblesBrutos * AMORTIZACION_PATENTES_TRIM);
+    amortizacionPeriodo        = amortizacionPatentes;
+    amortizacionAcumuladaFinal = Math.min(intangiblesBrutos, (Number(d.amortizacionAcumulada) || 0) + amortizacionPeriodo);
+    intangiblesNetos           = Math.max(0, intangiblesBrutos - amortizacionAcumuladaFinal);
   } else {                                                         // ── homogéneo INTACTO ──
     depreciacionPeriodo = params.depreciacionTrimestral;
+    amortizacionPeriodo = 0;
     afNetos             = roundBs((d.activosFijosIniciales || params.activosFijosIniciales) - params.depreciacionTrimestral);
     // _afBrutoEff/_baseDep*/depreciacionAcumuladaFinal quedan undefined → no se emiten en homogéneo
   }
   const gastoDepre      = esProductoPrincipal ? (depreciacionPeriodo || 0) : 0;
+  const gastoAmortizacion = esProductoPrincipal ? (amortizacionPeriodo || 0) : 0;
   const gastoSueldosAdmin = esProductoPrincipal ? sueldosAdministrativosFijosEff : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
@@ -641,7 +716,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoPublicidad  + gastoPromocion  + gastoEventos  +
     gastoMktRedes    + gastoRRPP       +
     gastoCostoVend   + gastoOperarios  +
-    gastoAdminFijo   + gastoPlantaFijo + gastoDepre    +
+    gastoAdminFijo   + gastoPlantaFijo + gastoDepre    + gastoAmortizacion +
     gastoSueldosAdmin +
     gastoAlmacen     +
     gastoInnovacionNeto + gastoInvMktNeto
@@ -823,7 +898,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoIVAPeriodoAnterior +  // IVA trimestre anterior
     pagoIT + pagoIUE +
     pagoOperarios    +
-    pagoInvestigacion);
+    pagoInvestigacion +
+    invActivos.total);
 
   const cajaInicial   = d.cajaInicial || 0;
   const ingresoPrestamo = tipoP !== 'Ninguno' ? montoP : 0;
@@ -859,7 +935,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   //   El pago al Estado ocurre en el trimestre siguiente (pagoIVAPeriodoAnterior)
   //   ivaAPagar aparece en Pasivo Corriente del Balance
   //   NO incluir ivaCredito en totalActivos (ya compensado en el asiento de liquidación)
-  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + ivaSaldoAFavor);
+  const totalActivos    = roundBs(cajaFinal + cxcFinal + invFinalValorizado + afNetos + (intangiblesNetos || 0) + ivaSaldoAFavor);
   // capitalContable = capital PERMANENTE inicial del equipo
   // R1: usa d.cajaInicial + d.AF (capital real del equipo, soporta capitalInicial por equipo)
   // R2+: usa params (capital original permanente, no cambia entre rondas)
@@ -955,12 +1031,23 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoFijoPlanta:    gastoFijoPlantaEff,
     gastoSueldosAdmin:  gastoSueldosAdmin,
     depreciacion:       depreciacionPeriodo,                          // FASE 6C: normativo (fase0) / param (homogéneo)
+    amortizacionContable: amortizacionPeriodo,
     // FASE 6C — PP&E (solo se emiten en fase0; en homogéneo quedan undefined → omitidos en JSON)
     activosFijosBrutos:        _afBrutoEff,
     baseDepreciable:           _baseDepEff,
     baseDepreciableMaquinaria: _baseDepMaqEff,
+    baseDepreciableVehiculos:  _baseDepVehEff,
+    baseDepreciableMuebles:    _baseDepMueblesEff,
+    baseDepreciableComputo:    _baseDepComputoEff,
     depreciacionMaquinaria,
+    depreciacionVehiculos,
+    depreciacionMuebles,
+    depreciacionComputo,
     depreciacionAcumulada:     depreciacionAcumuladaFinal,
+    intangiblesBrutos,
+    amortizacionPatentes,
+    amortizacionAcumulada:     amortizacionAcumuladaFinal,
+    intangiblesNetos,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro,
     gastoFinanciero: roundBs(gastoFinanciero + interesSobregiro),  // FASE 5A: incluye interés de sobregiro
@@ -977,6 +1064,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     pagoOperarios, pagoMP,
     pagoInnovacion, pagoAlmacen, pagoIntereses, pagoApertura,
     totalPagos, sobregiro, cajaFinal,
+    inversionActivosTotal: invActivos.total,
+    comprasActivosFijos: invActivos.totalActivosFijos,
+    comprasIntangibles: invActivos.totalIntangibles,
+    flujoInversion: invActivos.total,
+    incrementoCapacidadPeriodo: invActivos.incrementoCapacidadComprada,
+    incrementoCapacidadDisponible: invActivos.incrementoCapacidadDisponible,
     pagoAmortizacion,  // reembolso principal — para trazabilidad flujo de caja
 
     // Balance
@@ -1009,7 +1102,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     activosFijosNetos: afNetos,
     costoUnitario, comisionPct,
     brandEquityFinal,
-    capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
+    capacidadMaxProduccion: roundBs((d.capacidadMaxProduccion ?? params.capacidadMaxProduccion ?? 0) + invActivos.incrementoCapacidadComprada),
+    incrementoCapacidadPendiente: invActivos.incrementoCapacidadComprada,
   };
 }
 
@@ -1076,16 +1170,31 @@ function ejecutarSimulador(decisiones, cfg) {
     if (!d.producto || !d.precioVenta || !d.segmentoObjetivo) {
       const vend     = Math.max(0, d.vendedoresIniciales ?? params.vendedoresIniciales ?? 0);
       const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
+      const invActivosSD = normalizarInversionActivos({ isBot: true });
       // Usar parámetros reales de la industria — sin fallbacks hardcodeados
       // FASE 6C — depreciación normativa en fase0 (presencia de activosFijosBrutos); homogéneo: param.
-      let _afBrutoSD, _baseDepSD, _baseDepMaqSD, _depMaqSD, _depAcumSD, dep;
-      if (d.activosFijosBrutos != null) {
-        _afBrutoSD    = Number(d.activosFijosBrutos);
-        _baseDepMaqSD = Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? _afBrutoSD);
-        _baseDepSD    = _baseDepMaqSD;
+      let _afBrutoSD, _baseDepSD, _baseDepMaqSD, _baseDepVehSD, _baseDepMueblesSD, _baseDepComputoSD;
+      let _depMaqSD, _depVehSD, _depMueblesSD, _depComputoSD, _depAcumSD, dep;
+      let _intangiblesBrutosSD, _amortPatentesSD, _amortAcumSD, _intangiblesNetosSD;
+      if (d.activosFijosBrutos != null || invActivosSD.totalActivosFijos > 0 || d.intangiblesBrutos != null) {
+        const afInicialSD = Number(d.activosFijosBrutos ?? d.activosFijosIniciales ?? params.activosFijosIniciales ?? 0);
+        _afBrutoSD    = roundBs(afInicialSD + invActivosSD.totalActivosFijos);
+        _baseDepMaqSD = roundBs(Number(d.baseDepreciableMaquinaria ?? d.baseDepreciable ?? afInicialSD) +
+          invActivosSD.detalle.nuevaPlanta + invActivosSD.detalle.ampliacionPlanta + invActivosSD.detalle.maquinaria);
+        _baseDepVehSD = roundBs(Number(d.baseDepreciableVehiculos ?? 0) + invActivosSD.detalle.vehiculos);
+        _baseDepMueblesSD = roundBs(Number(d.baseDepreciableMuebles ?? 0) + invActivosSD.detalle.muebles);
+        _baseDepComputoSD = roundBs(Number(d.baseDepreciableComputo ?? 0) + invActivosSD.detalle.computo);
+        _baseDepSD    = roundBs(_baseDepMaqSD + _baseDepVehSD + _baseDepMueblesSD + _baseDepComputoSD);
         _depMaqSD     = roundBs(_baseDepMaqSD * DEPRECIACION_CLASES.maquinaria.coefTrim);
-        dep           = _depMaqSD;
+        _depVehSD     = roundBs(_baseDepVehSD * DEPRECIACION_CLASES.vehiculos.coefTrim);
+        _depMueblesSD = roundBs(_baseDepMueblesSD * DEPRECIACION_CLASES.muebles.coefTrim);
+        _depComputoSD = roundBs(_baseDepComputoSD * DEPRECIACION_CLASES.computo.coefTrim);
+        dep           = roundBs(_depMaqSD + _depVehSD + _depMueblesSD + _depComputoSD);
         _depAcumSD    = Math.min(_afBrutoSD, (Number(d.depreciacionAcumulada) || 0) + dep);
+        _intangiblesBrutosSD = roundBs(Number(d.intangiblesBrutos ?? 0) + invActivosSD.totalIntangibles);
+        _amortPatentesSD = roundBs(_intangiblesBrutosSD * AMORTIZACION_PATENTES_TRIM);
+        _amortAcumSD = Math.min(_intangiblesBrutosSD, (Number(d.amortizacionAcumulada) || 0) + _amortPatentesSD);
+        _intangiblesNetosSD = Math.max(0, _intangiblesBrutosSD - _amortAcumSD);
       } else {
         dep = params.depreciacionTrimestral || 0;
       }
@@ -1100,11 +1209,11 @@ function ejecutarSimulador(decisiones, cfg) {
       const tasaTrim    = (params.tasaSobregiro||0.055);
       const deudaInicialSD = d.deudaInicial ?? 0;
       const intDeuda    = Math.round(deudaInicialSD * tasaTrim);
-      const totalGastos = gFijo + intDeuda;
+      const totalGastos = gFijo + (_amortPatentesSD || 0) + intDeuda;
       // CONTABILIDAD: depreciación es gasto NO desembolsable
       // Reduce utilidad y activos fijos pero NUNCA sale de caja
       // totalPagosEfectivo excluye depreciación
-      const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda + gSueldosAdmin);
+      const totalPagosEfectivo = (gAdmin + gPlanta + gVend + gOper + intDeuda + gSueldosAdmin + invActivosSD.total);
       const cajaInicialSD = d.cajaInicial ?? 0;
       const cobrosAnterior = d.cxcInicial ?? 0;
       const cajaCalc = cajaInicialSD + cobrosAnterior - totalPagosEfectivo;
@@ -1113,10 +1222,10 @@ function ejecutarSimulador(decisiones, cfg) {
       const cajaFinal   = cajaCalc < 0 ? 0 : cajaCalc;
       const intSobregiro= Math.round(sobregiro * tasaTrim);
       const deudaFinal  = deudaInicialSD + sobregiro + intSobregiro;
-      const afNetos     = (d.activosFijosBrutos != null)
+      const afNetos     = (_afBrutoSD != null)
         ? Math.max(0, _afBrutoSD - _depAcumSD)
         : Math.max(0, (d.activosFijosIniciales ?? params.activosFijosIniciales ?? 0) - dep);
-      const totalActivos= cajaFinal + afNetos;
+      const totalActivos= cajaFinal + afNetos + (_intangiblesNetosSD || 0);
       const utilidadNeta= -(totalGastos + intSobregiro);
       // Patrimonio DERIVADO — algebraicamente siempre cuadra (A = P + Pat por construcción)
       // NO usar Math.max(0,...): si es negativo es quiebra técnica, dato legítimo
@@ -1137,6 +1246,7 @@ function ejecutarSimulador(decisiones, cfg) {
         costoVendedores:  gVend,
         pagoOperarios:    gOper,
         depreciacion:     dep,
+        amortizacionContable: _amortPatentesSD || 0,
         costoAlmacenamiento: 0,
         gastosOp:         gFijo,
         gastoFinanciero:  intDeuda + intSobregiro,
@@ -1158,10 +1268,21 @@ function ejecutarSimulador(decisiones, cfg) {
         activosFijosBrutos:        _afBrutoSD,
         baseDepreciable:           _baseDepSD,
         baseDepreciableMaquinaria: _baseDepMaqSD,
+        baseDepreciableVehiculos:  _baseDepVehSD,
+        baseDepreciableMuebles:    _baseDepMueblesSD,
+        baseDepreciableComputo:    _baseDepComputoSD,
         depreciacionMaquinaria:    _depMaqSD,
+        depreciacionVehiculos:     _depVehSD,
+        depreciacionMuebles:       _depMueblesSD,
+        depreciacionComputo:       _depComputoSD,
         depreciacionAcumulada:     _depAcumSD,
+        intangiblesBrutos:         _intangiblesBrutosSD,
+        amortizacionPatentes:      _amortPatentesSD,
+        amortizacionAcumulada:     _amortAcumSD,
+        intangiblesNetos:          _intangiblesNetosSD,
         totalActivos,
-        capacidadMaxProduccion: d.capacidadMaxProduccion ?? params.capacidadMaxProduccion,
+        capacidadMaxProduccion: roundBs((d.capacidadMaxProduccion ?? params.capacidadMaxProduccion ?? 0) + invActivosSD.incrementoCapacidadComprada),
+        incrementoCapacidadPendiente: invActivosSD.incrementoCapacidadComprada,
         deudaInicial:     deudaInicialSD,
         deudaFinal,
         resultadoAcumuladoAnterior: d.resultadoAcumuladoAnterior || 0,
@@ -1171,6 +1292,12 @@ function ejecutarSimulador(decisiones, cfg) {
         cobrosContado:    cobrosAnterior,
         ingresoPrestamo:  sobregiro,
         totalPagos:       totalPagosEfectivo,
+        inversionActivosTotal: invActivosSD.total,
+        comprasActivosFijos: invActivosSD.totalActivosFijos,
+        comprasIntangibles: invActivosSD.totalIntangibles,
+        flujoInversion: invActivosSD.total,
+        incrementoCapacidadPeriodo: invActivosSD.incrementoCapacidadComprada,
+        incrementoCapacidadDisponible: invActivosSD.incrementoCapacidadDisponible,
         pagoProduccion:   0,
         pagoMktTotal:     0,
         pagoGastosAdmin:  gAdmin,
@@ -1617,10 +1744,18 @@ function propagarEstado(decision, resPrev, params = {}) {
     // es undefined → el spread condicional no agrega nada (comportamiento homogéneo intacto).
     ...(resPrev.activosFijosBrutos != null ? {
       activosFijosBrutos:        resPrev.activosFijosBrutos,
-      baseDepreciable:           resPrev.activosFijosBrutos,
-      baseDepreciableMaquinaria: resPrev.activosFijosBrutos,
+      baseDepreciable:           resPrev.baseDepreciable ?? resPrev.activosFijosBrutos,
+      baseDepreciableMaquinaria: resPrev.baseDepreciableMaquinaria ?? resPrev.baseDepreciable ?? resPrev.activosFijosBrutos,
+      baseDepreciableVehiculos:  resPrev.baseDepreciableVehiculos ?? 0,
+      baseDepreciableMuebles:    resPrev.baseDepreciableMuebles ?? 0,
+      baseDepreciableComputo:    resPrev.baseDepreciableComputo ?? 0,
       depreciacionAcumulada:     resPrev.depreciacionAcumulada ?? 0,
     } : {}),
+    ...(resPrev.intangiblesBrutos != null ? {
+      intangiblesBrutos:         resPrev.intangiblesBrutos,
+      amortizacionAcumulada:     resPrev.amortizacionAcumulada ?? 0,
+    } : {}),
+    incrementoCapacidadPendiente: 0,
   };
 }
 

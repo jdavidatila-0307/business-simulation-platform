@@ -618,6 +618,7 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     cxcInicial: p.cxcInicial ?? 0,
     deudaInicial: p.deudaInicial ?? 0,
     inventarioInicial: p.inventarioInicialUnid ?? 0,
+    inversionActivos: {},
     resultadoAcumuladoAnterior: 0,
 
     // Estado de entrega
@@ -675,7 +676,7 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             decNueva.cajaInicial                = Math.max(0, resPrev.cajaFinal ?? 0);
             decNueva.cxcInicial                 = Math.max(0, resPrev.cxcFinal ?? 0);
             decNueva.deudaInicial               = Math.max(0, resPrev.deudaFinal ?? 0);
-            decNueva.activosFijosIniciales      = Math.max(0, resPrev.activosFijosNetos || resPrev.afNetos || 78000);
+            decNueva.activosFijosIniciales      = Math.max(0, resPrev.activosFijosNetos ?? resPrev.afNetos ?? 78000);
             decNueva.resultadoAcumuladoAnterior = resPrev.resultadoAcumulado ?? 0;
             decNueva.brandEquityInicial         = resPrev.brandEquityFinal ?? 50;
             decNueva.stockMPInicial             = Math.max(0, resPrev.stockMPFinal ?? 0);
@@ -697,12 +698,12 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
             // IVA pago diferido: el ivaAPagar de esta ronda se paga en la siguiente
             decNueva.ivaAPagarAnterior      = Math.max(0, resPrev.ivaAPagar     ?? 0);
             decNueva.ivaSaldoAFavorAnterior = Math.max(0, resPrev.ivaSaldoAFavor ?? 0);  // crédito fiscal acumulado
+            const prevDec = prevRonda.decisiones?.[eq.id];
             // FASE 4 — arrastre de gastos fijos explícitos de Fase 0 (SOLO modo fase0).
             // defaultDecision() no los conoce; sin esto R2+ caería a params (regresión del bug).
             // Fuente: resultado previo (resPrev.gastoSueldosAdmin emite el motor); fallback: decisión previa.
             // ?? preserva el 0 explícito. En homogéneo NO se inyecta → el motor usa params (live).
             if (sim?.metadata?.modoInicio === 'fase0') {
-              const prevDec = prevRonda.decisiones?.[eq.id];
               // FASE 6D-4 — capital PERMANENTE: preservar capitalInicial real R2→R20.
               // defaultDecision() lo fabrica desde params (AF+caja → Bs 2 en fase0); aquí se sobrescribe
               // con el aporte real (decisión previa → R1 trae capital_total_otorgado vía hidratar;
@@ -712,15 +713,24 @@ async function ensureRonda(simulacionId, n, ownerId = null) {
               decNueva.gastoAdminFijo              = resPrev.gastoAdminFijo    ?? prevDec?.gastoAdminFijo;
               decNueva.gastoFijoPlanta             = resPrev.gastoFijoPlanta   ?? prevDec?.gastoFijoPlanta;
               decNueva.sueldosAdministrativosFijos = resPrev.gastoSueldosAdmin ?? prevDec?.sueldosAdministrativosFijos;
-              // FASE 6C — arrastre PP&E (bruto/base/acumulada). NO usar afNetos como fuente del bruto.
-              const _brutoPrev = resPrev.activosFijosBrutos ?? prevDec?.activosFijosBrutos;
-              if (_brutoPrev != null) {
-                decNueva.activosFijosBrutos        = _brutoPrev;
-                decNueva.baseDepreciable           = _brutoPrev;
-                decNueva.baseDepreciableMaquinaria = _brutoPrev;
-                decNueva.depreciacionAcumulada     = resPrev.depreciacionAcumulada ?? prevDec?.depreciacionAcumulada ?? 0;
-              }
             }
+            // FASE 6F — arrastre de activos por ronda (fase0 y homogéneo).
+            // NO usar afNetos como fuente del bruto; el resultado previo ya trae bruto/base/acumulada.
+            const _brutoPrev = resPrev.activosFijosBrutos ?? prevDec?.activosFijosBrutos;
+            if (_brutoPrev != null) {
+              decNueva.activosFijosBrutos        = _brutoPrev;
+              decNueva.baseDepreciable           = resPrev.baseDepreciable ?? prevDec?.baseDepreciable ?? _brutoPrev;
+              decNueva.baseDepreciableMaquinaria = resPrev.baseDepreciableMaquinaria ?? prevDec?.baseDepreciableMaquinaria ?? decNueva.baseDepreciable;
+              decNueva.baseDepreciableVehiculos  = resPrev.baseDepreciableVehiculos ?? prevDec?.baseDepreciableVehiculos ?? 0;
+              decNueva.baseDepreciableMuebles    = resPrev.baseDepreciableMuebles ?? prevDec?.baseDepreciableMuebles ?? 0;
+              decNueva.baseDepreciableComputo    = resPrev.baseDepreciableComputo ?? prevDec?.baseDepreciableComputo ?? 0;
+              decNueva.depreciacionAcumulada     = resPrev.depreciacionAcumulada ?? prevDec?.depreciacionAcumulada ?? 0;
+            }
+            if ((resPrev.intangiblesBrutos ?? prevDec?.intangiblesBrutos) != null) {
+              decNueva.intangiblesBrutos         = resPrev.intangiblesBrutos ?? prevDec?.intangiblesBrutos;
+              decNueva.amortizacionAcumulada     = resPrev.amortizacionAcumulada ?? prevDec?.amortizacionAcumulada ?? 0;
+            }
+            decNueva.incrementoCapacidadPendiente = 0;
           }
 
           rondaBase.decisiones[eq.id] = decNueva;
