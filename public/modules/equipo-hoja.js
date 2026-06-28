@@ -17,6 +17,74 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+const INVERSION_ACTIVOS_KEYS = [
+  'nuevaPlanta',
+  'ampliacionPlanta',
+  'maquinaria',
+  'vehiculos',
+  'muebles',
+  'computo',
+  'patentes',
+];
+
+const INVERSION_ACTIVOS_CON_CAPACIDAD = new Set([
+  'nuevaPlanta',
+  'ampliacionPlanta',
+  'maquinaria',
+]);
+
+function normalizarNumeroNoNegativo(valor) {
+  const n = Number(valor ?? 0);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function normalizarInversionActivosDecision(decision = {}) {
+  if (!decision.inversionActivos || typeof decision.inversionActivos !== 'object') {
+    decision.inversionActivos = {};
+  }
+
+  INVERSION_ACTIVOS_KEYS.forEach(tipo => {
+    const actual = decision.inversionActivos[tipo] || {};
+    decision.inversionActivos[tipo] = {
+      monto: normalizarNumeroNoNegativo(actual.monto),
+    };
+    if (INVERSION_ACTIVOS_CON_CAPACIDAD.has(tipo)) {
+      decision.inversionActivos[tipo].incrementoCapacidad =
+        normalizarNumeroNoNegativo(actual.incrementoCapacidad);
+    }
+  });
+
+  return decision.inversionActivos;
+}
+
+function totalesInversionActivos(decision = {}) {
+  const inv = normalizarInversionActivosDecision(decision);
+  return INVERSION_ACTIVOS_KEYS.reduce((acc, tipo) => {
+    acc.total += normalizarNumeroNoNegativo(inv[tipo]?.monto);
+    acc.capacidad += INVERSION_ACTIVOS_CON_CAPACIDAD.has(tipo)
+      ? normalizarNumeroNoNegativo(inv[tipo]?.incrementoCapacidad)
+      : 0;
+    return acc;
+  }, { total: 0, capacidad: 0 });
+}
+
+function sincronizarInversionActivosDesdeDOM(root = document) {
+  if (!state.decisiones) return;
+  const inv = normalizarInversionActivosDecision(state.decisiones);
+
+  root.querySelectorAll('[data-activo-tipo][data-activo-campo]').forEach(el => {
+    const tipo = el.dataset.activoTipo;
+    const campo = el.dataset.activoCampo;
+    if (!INVERSION_ACTIVOS_KEYS.includes(tipo)) return;
+    if (campo !== 'monto' && campo !== 'incrementoCapacidad') return;
+    if (campo === 'incrementoCapacidad' && !INVERSION_ACTIVOS_CON_CAPACIDAD.has(tipo)) return;
+
+    const valor = normalizarNumeroNoNegativo(el.value);
+    if (el.type === 'number' && +el.value !== valor) el.value = valor;
+    inv[tipo][campo] = valor;
+  });
+}
+
 function sincronizarHojaConEstado() {
   // P4 FIX: sincroniza el DOM de la hoja con state.decisiones antes de
   // guardar o enviar, capturando cambios no procesados por el change handler.
@@ -43,10 +111,12 @@ function sincronizarHojaConEstado() {
     }
     state.decisiones[field] = v;
   });
+  sincronizarInversionActivosDesdeDOM(document);
 }
 
 async function guardarDecision() {
   try {
+    sincronizarHojaConEstado();
     await api('POST','/api/decisiones/guardar',{ decision: state.decisiones });
     toast('💾 Decisiones guardadas','success');
   } catch(e) { toast(e.message,'error'); }
@@ -55,6 +125,7 @@ async function guardarDecision() {
 async function enviarDecision() {
   if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
   try {
+    sincronizarHojaConEstado();
     const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));
     await api('POST','/api/decisiones/enviar',{ decision: _d1 });
     toast('✅ Decisiones enviadas correctamente','success');
@@ -125,6 +196,7 @@ function normalizarDecisionMultiproducto(decision) {
   decision.innovacion = p.innovacion;
   decision.tipoInnovacion = p.tipoInnovacion;
   decision.montoInnovacion = p.montoInnovacion;
+  normalizarInversionActivosDecision(decision);
 
   return decision;
 }
@@ -427,6 +499,11 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       ? `<input type="checkbox" data-hoja-field="${field}" ${decision[field]?'checked':''} style="width:16px;height:16px;accent-color:var(--accent)"/> ${label}`
       : `<span class="hoja-value-ro">${decision[field]?'✓ Sí':'✗ No'}</span> ${label}`;
 
+  const inpActivo = (tipo, campo, val, extra='') =>
+    isEditable
+      ? `<input class="hoja-input editable" data-activo-tipo="${tipo}" data-activo-campo="${campo}" type="number" value="${val ?? 0}" min="0" ${extra}/>`
+      : `<span class="hoja-value-ro">${campo === 'monto' ? fmt.bs(val ?? 0) : fmt.num(val ?? 0)}</span>`;
+
     const segOpts = '<option value="">-- Seleccionar segmento --</option>' +
     ref.segmentos.map(s => `<option ${s.nombre === productoActivo.segmentoObjetivo ? 'selected' : ''}>${s.nombre}</option>`).join('');
      const prodOpts = '<option value="">-- Seleccionar producto --</option>' +
@@ -443,6 +520,12 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   const tipoInvOpts  = ['No','Básica','Premium','Estratégico'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
 
   const p = ref.parametros || {};
+  normalizarInversionActivosDecision(decision);
+  const invActivos = decision.inversionActivos;
+  const renderResumenInversionActivos = () => {
+    const t = totalesInversionActivos(decision);
+    return `<strong>Total inversi&oacute;n:</strong> ${fmt.bs(t.total)} &middot; <strong>Capacidad futura agregada:</strong> ${fmt.num(t.capacidad)} unid`;
+  };
 
   // Hidratación de MP para la hoja: misma regla de arribo que el motor
   // (engine.js procesarPedidosMP, líneas 203-212). Los pedidos con
@@ -714,6 +797,66 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
     ` : ''}
 
       <!-- S4: INNOVACIÓN -->
+    ${hojaProductoActivo === 0 ? `
+    <!-- S3.5: INVERSION EN ACTIVOS -->
+    <div class="hoja-section">
+      <div class="hoja-section-title">3.5 &middot; Inversi&oacute;n en activos</div>
+      <table class="hoja-table">
+        <thead><tr><th>Activo</th><th>Monto (Bs)</th><th>Capacidad futura</th><th>Nota contable</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="hoja-label">Nueva planta</td>
+            <td>${inpActivo('nuevaPlanta', 'monto', invActivos.nuevaPlanta.monto, 'step="1000"')}</td>
+            <td>${inpActivo('nuevaPlanta', 'incrementoCapacidad', invActivos.nuevaPlanta.incrementoCapacidad, 'step="100"')} unid</td>
+            <td class="hoja-ref">Lead time 1 ronda: aumenta capacidad desde la siguiente ronda.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">Ampliaci&oacute;n de planta</td>
+            <td>${inpActivo('ampliacionPlanta', 'monto', invActivos.ampliacionPlanta.monto, 'step="1000"')}</td>
+            <td>${inpActivo('ampliacionPlanta', 'incrementoCapacidad', invActivos.ampliacionPlanta.incrementoCapacidad, 'step="100"')} unid</td>
+            <td class="hoja-ref">Lead time 1 ronda: incrementa capacidad futura, no la actual.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">Maquinaria</td>
+            <td>${inpActivo('maquinaria', 'monto', invActivos.maquinaria.monto, 'step="1000"')}</td>
+            <td>${inpActivo('maquinaria', 'incrementoCapacidad', invActivos.maquinaria.incrementoCapacidad, 'step="100"')} unid</td>
+            <td class="hoja-ref">Se capitaliza como activo fijo y deprecia seg&uacute;n reglas del motor.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">Veh&iacute;culos</td>
+            <td>${inpActivo('vehiculos', 'monto', invActivos.vehiculos.monto, 'step="1000"')}</td>
+            <td><span class="hoja-value-ro">0 unid</span></td>
+            <td class="hoja-ref">Lead time 0. No aumenta capacidad productiva.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">Muebles</td>
+            <td>${inpActivo('muebles', 'monto', invActivos.muebles.monto, 'step="1000"')}</td>
+            <td><span class="hoja-value-ro">0 unid</span></td>
+            <td class="hoja-ref">Lead time 0. Se capitaliza, no es gasto operativo.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">C&oacute;mputo</td>
+            <td>${inpActivo('computo', 'monto', invActivos.computo.monto, 'step="1000"')}</td>
+            <td><span class="hoja-value-ro">0 unid</span></td>
+            <td class="hoja-ref">Lead time 0. Se capitaliza como activo fijo.</td>
+          </tr>
+          <tr>
+            <td class="hoja-label">Patentes</td>
+            <td>${inpActivo('patentes', 'monto', invActivos.patentes.monto, 'step="1000"')}</td>
+            <td><span class="hoja-value-ro">0 unid</span></td>
+            <td class="hoja-ref">Intangible: se amortiza contablemente en 20 trimestres.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div id="hojaInversionActivosResumen" style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2)">
+        ${renderResumenInversionActivos()}
+      </div>
+      <div style="padding:8px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
+        La inversi&oacute;n reduce caja, no es gasto operativo ni costo de ventas, y se capitaliza en el balance.
+      </div>
+    </div>
+    ` : ''}
+
     <div class="hoja-section">
       <div class="hoja-section-title">4 · Innovación</div>
       <table class="hoja-table">
@@ -962,6 +1105,22 @@ if (isEditable) {
       }
     );
   });
+
+  cont.querySelectorAll('[data-activo-tipo][data-activo-campo]').forEach(el => {
+    el.addEventListener('input', () => {
+      const valor = normalizarNumeroNoNegativo(el.value);
+      if (+el.value !== valor) el.value = valor;
+
+      sincronizarInversionActivosDesdeDOM(cont);
+      decision = state.decisiones;
+
+      const resumenInv = document.getElementById('hojaInversionActivosResumen');
+      if (resumenInv) resumenInv.innerHTML = renderResumenInversionActivos();
+
+      const resumen = document.getElementById('hojaResumen');
+      if (resumen) resumen.innerHTML = hojaResumenV2(decision);
+    });
+  });
 }
 
   
@@ -976,12 +1135,19 @@ if (isEditable) {
       });
     });
     document.getElementById('btnHojaGuardar')?.addEventListener('click', async () => {
-      try { await api('POST','/api/decisiones/guardar',{decision}); toast('💾 Guardado','success'); }
+      try {
+        sincronizarHojaConEstado();
+        decision = state.decisiones;
+        await api('POST','/api/decisiones/guardar',{decision});
+        toast('💾 Guardado','success');
+      }
       catch(e) { toast(e.message,'error'); }
     });
     document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
       if (!confirm('¿Enviar decisiones?\n\nEl profesor ejecutará la simulación cuando todos los equipos hayan enviado.')) return;
       try {
+        sincronizarHojaConEstado();
+        decision = state.decisiones;
         const _d3 = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
         await api('POST','/api/decisiones/enviar',{decision: _d3});
         toast('✅ Enviado','success');
@@ -993,6 +1159,7 @@ if (isEditable) {
 
 function hojaResumenV2(d) {
   if (!d) return '';
+  const inv = totalesInversionActivos(d);
   const rows = [
     ['Producto',        d.producto],
     ['Segmento',        d.segmentoObjetivo],
@@ -1011,6 +1178,8 @@ function hojaResumenV2(d) {
     ['Préstamo tipo',   d.tipoPrestamo||'Ninguno'],
     ['Monto préstamo',  fmt.bs(d.montoPrestamo??0)],
     ['Amortización',    fmt.bs(d.amortizacion??0)],
+    ['Inversión activos', fmt.bs(inv.total)],
+    ['Capacidad futura +', fmt.num(inv.capacidad)+' unid'],
     ['Innovación',      d.innovacion?`Sí — ${d.tipoInnovacion}`:'No'],
     ['Monto innovación',fmt.bs(d.montoInnovacion??0)],
     ['Investigación',   d.tipoInvestigacion||'No'],
