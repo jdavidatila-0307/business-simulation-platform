@@ -603,10 +603,16 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     : modeloCostos === 'directo'
     ? false   // directo: ningún producto paga costos fijos
     : true;   // absorcion: todos los productos pagan costos fijos completos
-  const gastoAdminFijo  = esProductoPrincipal ? (params.gastoAdminFijo || 0) : 0;
-  const gastoPlantaFijo = esProductoPrincipal ? (params.gastoFijoPlanta || 0) : 0;
+  // FASE 3 — prioridad decision > params. 0 explícito es válido → usar != null, NO ||.
+  // En modo fase0 la decisión trae los gastos fijos hidratados (FASE 2); en homogéneo
+  // d.* es undefined → se usa params (comportamiento homogéneo intacto).
+  const gastoAdminFijoEff              = d.gastoAdminFijo              != null ? Number(d.gastoAdminFijo)              : Number(params.gastoAdminFijo              || 0);
+  const gastoFijoPlantaEff             = d.gastoFijoPlanta             != null ? Number(d.gastoFijoPlanta)             : Number(params.gastoFijoPlanta             || 0);
+  const sueldosAdministrativosFijosEff = d.sueldosAdministrativosFijos != null ? Number(d.sueldosAdministrativosFijos) : Number(params.sueldosAdministrativosFijos || 0);
+  const gastoAdminFijo  = esProductoPrincipal ? gastoAdminFijoEff  : 0;
+  const gastoPlantaFijo = esProductoPrincipal ? gastoFijoPlantaEff : 0;
   const gastoDepre      = esProductoPrincipal ? (params.depreciacionTrimestral || 0) : 0;
-  const gastoSueldosAdmin = esProductoPrincipal ? (params.sueldosAdministrativosFijos || 0) : 0;
+  const gastoSueldosAdmin = esProductoPrincipal ? sueldosAdministrativosFijosEff : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
 
   let gastosOp = roundBs(
@@ -643,8 +649,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoProduccion = 0;  // S7: eliminado — no hay pago único de producción
   const pagoMPbruto    = roundBs((d.costoMPunitario || 0) * (d.produccion || 0)); // S4: MP bruto
   const pagoMktTotal   = gastoTotalMarketing; // ya incluye vendedores
-  const pagoAdmin      = params.gastoAdminFijo;
-  const pagoPlanta     = params.gastoFijoPlanta;
+  const pagoAdmin      = gastoAdminFijoEff;
+  const pagoPlanta     = gastoFijoPlantaEff;
   const pagoSueldosAdmin = gastoSueldosAdmin;
   // Nota: depreciación no es salida de caja
   const pagoInnovacion = gastoInnovacion;
@@ -905,8 +911,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoCostoVend, gastoOperarios,
     // Comisiones netas y ventas netas reales
     comisionesNeto, ventasNetasReal,
-    gastoAdminFijo:     params.gastoAdminFijo,
-    gastoFijoPlanta:    params.gastoFijoPlanta,
+    gastoAdminFijo:     gastoAdminFijoEff,
+    gastoFijoPlanta:    gastoFijoPlantaEff,
     gastoSueldosAdmin:  gastoSueldosAdmin,
     depreciacion:       params.depreciacionTrimestral,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
@@ -1024,11 +1030,12 @@ function ejecutarSimulador(decisiones, cfg) {
       const oper     = Math.max(1, d.operariosIniciales  ?? params.operariosIniciales  ?? 1);
       // Usar parámetros reales de la industria — sin fallbacks hardcodeados
       const dep      = params.depreciacionTrimestral || 0;
-      const gAdmin   = params.gastoAdminFijo         || 0;
-      const gPlanta  = params.gastoFijoPlanta         || 0;
+      // FASE 3 — misma prioridad decision > params (0 explícito válido). Homogéneo: d.* undefined → params.
+      const gAdmin   = d.gastoAdminFijo              != null ? Number(d.gastoAdminFijo)              : (params.gastoAdminFijo              || 0);
+      const gPlanta  = d.gastoFijoPlanta             != null ? Number(d.gastoFijoPlanta)             : (params.gastoFijoPlanta             || 0);
       const gVend    = vend * (params.sueldoTrimestralVendedor || 0);
       const gOper    = oper * (params.costoOperario            || 0);
-      const gSueldosAdmin = params.sueldosAdministrativosFijos || 0;
+      const gSueldosAdmin = d.sueldosAdministrativosFijos != null ? Number(d.sueldosAdministrativosFijos) : (params.sueldosAdministrativosFijos || 0);
       const gFijo       = gAdmin + gPlanta + gVend + gOper + dep + gSueldosAdmin;
       // Intereses sobre deuda existente
       const tasaTrim    = (params.tasaSobregiro||0.055);
