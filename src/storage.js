@@ -494,8 +494,8 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
   const af         = p.activosFijosIniciales ?? 80000;
   const cajaInicial = equipoCap != null
     ? Math.max(0, equipoCap - af)
-    : (p.cajaInicial ?? 50000);
-  const capitalInicial = equipoCap ?? p.capitalInicial ?? (af + (p.cajaInicial ?? 50000));
+    : (p.cajaInicial ?? 500000);
+  const capitalInicial = equipoCap ?? p.capitalInicial ?? (af + cajaInicial);
 
    const productoBase = {
     productoId: 'prod_1',

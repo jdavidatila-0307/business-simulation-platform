@@ -783,7 +783,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
       const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);  // ivaCredito ya compensado
       const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
-      const capital = r.capitalContable||680000;
+      const capital = r.capitalContable ?? 0;
       const utilidad = r.utilidadNeta||0;
       const acumAnt = totalA - totalP - capital - utilidad;
       const cuadra  = Math.abs(totalA - totalP - (capital+acumAnt+utilidad)) < 2;
@@ -1093,7 +1093,7 @@ function buildAdminResultsHTML(rd) {
     + row('Deuda total (préstamos)',      r => r.deudaFinal||0)
     + tot('TOTAL PASIVO',                 r => (r.deudaFinal||0)+(r.ivaAPagar||0), true)
     + sec('C · Patrimonio')
-    + row('Capital contable',             r => r.capitalContable||0)
+    + row('Capital contable',             r => r.capitalContable ?? 0)
     + row('Resultado acumulado',          r => r.resultadoAcumulado||0)
     + tot('TOTAL PATRIMONIO',             r => r.patrimonio||0)
     + (() => {
@@ -1129,7 +1129,7 @@ function buildAdminResultsHTML(rd) {
     + row('(+) Nuevos préstamos',          r => r.ingresoPrestamo||0)
     + tot('Flujo de financiamiento',       r => r.ingresoPrestamo||0)
     + sec('D · Posición de Caja')
-    + row('Saldo inicial de caja',         r => r.cajaInicial||0)
+    + row('Saldo inicial de caja',         r => r.cajaInicial ?? 0)
     + (() => {
         const checks = eqs.map(r => {
           const cf = r.cajaFinal||0;

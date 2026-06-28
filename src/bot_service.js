@@ -15,6 +15,16 @@
 // ══════════════════════════════════════════════════════════════════════════════
 'use strict';
 
+const DEFAULTS_HOMOGENEOS_BOT = Object.freeze({
+  cajaInicial: 500000,
+  activosFijosIniciales: 80000,
+  deudaInicial: 0,
+  operariosIniciales: 1,
+  vendedoresIniciales: 0,
+  productividadBase: 500,
+  capacidadMaxProduccion: 1500
+});
+
 // ── Nombres de empresas bolivianas para disfrazar los bots ───────────────────
 const NOMBRES_EMPRESAS = [
   'Calzados Andinos S.R.L.',
@@ -79,10 +89,10 @@ async function generarDecisionBotIA(segmento, equiposHumanosSim, cfg, rondaNum, 
   const compExt   = cfg.competenciaExterna?.find(c => c.segmento === segmento.nombre);
 
   // Parámetros financieros del bot (igual que humanos)
-  const cajaBot        = params.cajaInicial          || 500000;
-  const opIniciales    = params.operariosIniciales   || 1;
-  const prodBase       = params.productividadBase    || 500;
-  const capMax         = params.capacidadMaxProduccion || 1500;
+  const cajaBot        = params.cajaInicial ?? DEFAULTS_HOMOGENEOS_BOT.cajaInicial;
+  const opIniciales    = params.operariosIniciales ?? DEFAULTS_HOMOGENEOS_BOT.operariosIniciales;
+  const prodBase       = params.productividadBase ?? DEFAULTS_HOMOGENEOS_BOT.productividadBase;
+  const capMax         = params.capacidadMaxProduccion ?? DEFAULTS_HOMOGENEOS_BOT.capacidadMaxProduccion;
   const capEfectiva    = opIniciales * prodBase;
 
   const prompt = `Eres el director estratégico de una empresa de calzado boliviano compitiendo en el mercado de "${segmento.nombre}".
@@ -229,7 +239,7 @@ function decisionFallbackPorSegmento(segmento, cfg, opIniciales, prodBase, capMa
 
   // Estrategia equilibrada por defecto
   const precio = Math.round(costoBase * 1.45);
-  const caja   = params.cajaInicial || 500000;
+  const caja   = params.cajaInicial ?? DEFAULTS_HOMOGENEOS_BOT.cajaInicial;
   const mkt    = Math.round(caja * 0.10);
 
   return {
@@ -266,7 +276,11 @@ function decisionFallbackPorSegmento(segmento, cfg, opIniciales, prodBase, capMa
 
 // ── Construir decisión completa compatible con el motor ───────────────────────
 function construirDecisionBot(botId, botNombre, decIA, params) {
-  const opIniciales = params.operariosIniciales ?? 1;
+  const cajaInicial = params.cajaInicial ?? DEFAULTS_HOMOGENEOS_BOT.cajaInicial;
+  const activosFijosIniciales = params.activosFijosIniciales ?? DEFAULTS_HOMOGENEOS_BOT.activosFijosIniciales;
+  const deudaInicial = params.deudaInicial ?? DEFAULTS_HOMOGENEOS_BOT.deudaInicial;
+  const capitalInicial = params.capitalInicial ?? params.capitalContable ?? (activosFijosIniciales + cajaInicial - deudaInicial);
+  const opIniciales = params.operariosIniciales ?? DEFAULTS_HOMOGENEOS_BOT.operariosIniciales;
   return {
     // Identificación
     equipo:             botId,
@@ -318,7 +332,7 @@ function construirDecisionBot(botId, botNombre, decIA, params) {
     proveedorElegido:   decIA.proveedorElegido     || '',
 
     // RRHH
-    vendedoresIniciales:  params.vendedoresIniciales  ?? 0,
+    vendedoresIniciales:  params.vendedoresIniciales  ?? DEFAULTS_HOMOGENEOS_BOT.vendedoresIniciales,
     contratarVendedores:  0,
     despedirVendedores:   0,
     operariosIniciales:   opIniciales,
@@ -339,11 +353,14 @@ function construirDecisionBot(botId, botNombre, decIA, params) {
     montoInnovacion:    0,
 
     // Estado financiero inicial (mismos que humanos R1)
-    cajaInicial:                params.cajaInicial              ?? 500000,
-    activosFijosIniciales:      params.activosFijosIniciales    ?? 80000,
+    cajaInicial,
+    capitalInicial,
+    activosFijosIniciales,
+    activosFijosBrutos:         params.activosFijosBrutos,
     cxcInicial:                 params.cxcInicial               ?? 0,
-    deudaInicial:               params.deudaInicial             ?? 0,
+    deudaInicial,
     inventarioInicial:          params.inventarioInicialUnid    ?? 0,
+    capacidadMaxProduccion:     params.capacidadMaxProduccion   ?? DEFAULTS_HOMOGENEOS_BOT.capacidadMaxProduccion,
     resultadoAcumuladoAnterior: 0,
     brandEquityInicial:         50,
 
