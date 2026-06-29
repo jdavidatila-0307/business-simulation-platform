@@ -2587,6 +2587,15 @@ async function route(req, res, body) {
           costoContratacionOperario:   cfg.params.costoContratacionOperario   ?? 800,
           costoDespidoOperario:        cfg.params.costoDespidoOperario        ?? 1200,
           factorCapacitacion:          cfg.params.factorCapacitacion          ?? 0.05,
+          // FASE 6F-P2B3 — costos de inversión en activos por ronda (controlados por el profesor)
+          costoPorUnidadCapacidadAmpliacion: cfg.params.costoPorUnidadCapacidadAmpliacion ?? 75,
+          costoPorUnidadCapacidadMaquinaria: cfg.params.costoPorUnidadCapacidadMaquinaria ?? 125,
+          costoVehiculoNivel1:         cfg.params.costoVehiculoNivel1          ?? 35000,
+          costoVehiculoNivel2:         cfg.params.costoVehiculoNivel2          ?? 243000,
+          costoVehiculoNivel3:         cfg.params.costoVehiculoNivel3          ?? 313000,
+          costoMuebles:                cfg.params.costoMuebles                 ?? 16000,
+          costoComputo:                cfg.params.costoComputo                 ?? 43650,
+          costoPatentes:               cfg.params.costoPatentes                ?? 1400,
         },
         // Etapa 3.1: catálogo de proveedores para la hoja de decisión
         // Fallback: si la sim se creó antes de la Etapa 3.1, leer de la plantilla
