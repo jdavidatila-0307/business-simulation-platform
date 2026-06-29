@@ -241,6 +241,7 @@ window.mostrarFinanciero = (n) => {
         <!-- DEPRECIACIÓN -->
         <div style="height:2px"></div>
         ${finRow('(-) Depreciación',           -r.depreciacion,        false,'neg')}
+        ${(r.amortizacionPatentes ?? 0)>0 ? finRow('(-) Amortización de patentes', -(r.amortizacionPatentes ?? 0), false,'neg') : ''}
 
         <!-- EBIT -->
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
@@ -296,12 +297,16 @@ window.mostrarFinanciero = (n) => {
             ${((r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0)>0) ? finRow('Activos fijos (valor inicial)', (r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0), false,'neutral') : ''}
             ${((r.activosFijosBrutos ?? r.activosFijosIniciales ?? 0)>0) ? finRow('(-) Depreciación acumulada', -(r.depreciacionAcumulada||r.depreciacion||0), false,'neg') : ''}
             ${finRow('Activos fijos netos', (r.afNetos ?? r.activosFijosNetos ?? 0), false,'neutral')}
+            ${((r.intangiblesBrutos ?? 0)>0) ? finRow('Activos intangibles (patentes)', (r.intangiblesBrutos ?? 0), false,'neutral') : ''}
+            ${((r.intangiblesBrutos ?? 0)>0) ? finRow('(-) Amortización acumulada', -(r.amortizacionAcumulada ?? 0), false,'neg') : ''}
+            ${((r.intangiblesBrutos ?? 0)>0) ? finRow('Intangibles netos', (r.intangiblesNetos ?? ((r.intangiblesBrutos ?? 0)-(r.amortizacionAcumulada ?? 0))), false,'neutral') : ''}
             <div style="height:4px;border-top:1px dashed var(--border)"></div>
-            ${finRowSub('= Total Activo No Corriente', (r.afNetos ?? r.activosFijosNetos ?? 0), false)}
+            ${finRowSub('= Total Activo No Corriente', (r.afNetos ?? r.activosFijosNetos ?? 0) + (r.intangiblesNetos ?? 0), false)}
 
             <div style="height:8px"></div>
             <div style="height:4px;border-top:2px solid var(--border2)"></div>
             ${finRowSub('= TOTAL ACTIVOS', r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0), true)}
+            ${((r.incrementoCapacidadPeriodo ?? 0)>0 || (r.capacidadMaxProduccion ?? 0)>0) ? `<div style="margin-top:8px;padding:6px 10px;background:var(--bg3);border-radius:6px;font-size:.72rem;color:var(--text3)">Capacidad agregada en la ronda: <strong>${fmt.num(r.incrementoCapacidadPeriodo ?? 0)}</strong> unid &middot; Capacidad disponible pr&oacute;xima ronda: <strong>${fmt.num(r.capacidadMaxProduccion ?? 0)}</strong> unid</div>` : ''}
           </div>
         </div>
       </div>
@@ -441,10 +446,10 @@ window.mostrarFinanciero = (n) => {
         ${finRow('Venta de activos fijos', r.ventaActivosFijos||0, false,'pos')}
         <div style="height:4px"></div>
         <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:4px 0">Salidas de Inversión</div>
-        ${finRow('Compra de activos fijos / maquinaria', -(r.compraActivosFijos||0), false,'neg')}
+        ${finRow('Compra de activos fijos / maquinaria', -(r.inversionActivosTotal ?? 0), false,'neg')}
         ${(r.pagoInnovacionCapital||0)>0 ? finRow('Innovación capitalizable', -(r.pagoInnovacionCapital||0), false,'neg') : ''}
         <div style="height:4px;border-top:1px dashed var(--border)"></div>
-        ${finRowSub('= Flujo Neto de Actividades de Inversión', (r.ventaActivosFijos||0)-(r.compraActivosFijos||0)-(r.pagoInnovacionCapital||0), false)}
+        ${finRowSub('= Flujo Neto de Actividades de Inversión', (r.ventaActivosFijos||0)-(r.inversionActivosTotal ?? 0)-(r.pagoInnovacionCapital||0), false)}
         <div style="height:12px"></div>
 
         <!-- ── ACTIVIDADES DE FINANCIAMIENTO ── -->
@@ -482,7 +487,7 @@ window.mostrarFinanciero = (n) => {
           const entFin = (r.ingresoPrestamo||0)+(r.sobregiro||0);
           const salFin = (r.pagoCapitalPrestamo||0)+(r.pagoIntereses||r.interesesPrestamo||0)+(r.interesSobregiro||0)+(r.comisionApertura||0);
           const entInv = (r.ventaActivosFijos||0);
-          const salInv = (r.compraActivosFijos||0)+(r.pagoInnovacionCapital||0);
+          const salInv = (r.inversionActivosTotal ?? 0)+(r.pagoInnovacionCapital||0);
           const varNeta = (entOp - salOp) + (entInv - salInv) + (entFin - salFin);
           return finRowSub('Aumento / Disminución Neta de Caja', varNeta, false);
         })()}
