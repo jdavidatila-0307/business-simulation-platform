@@ -33,6 +33,67 @@ const INVERSION_ACTIVOS_CON_CAPACIDAD = new Set([
   'maquinaria',
 ]);
 
+// FASE 6F-P2B2 — catálogo real de plantas Fase 0 (espejo de constants.NIVELES_PLANTA_FASE0;
+// override por sim vía params fase0_af_N_{nombre,monto,capacidad}). La capacidad NO es libre.
+const PLANTAS_FASE0_BASE = [
+  { n: 1, nombre: 'Micro',     monto: 25000,  capacidad: 300,  operariosMinimos: 2 },
+  { n: 2, nombre: 'Pequeña',   monto: 50000,  capacidad: 600,  operariosMinimos: 3 },
+  { n: 3, nombre: 'Estándar',  monto: 100000, capacidad: 800,  operariosMinimos: 3 },
+  { n: 4, nombre: 'Mediana',   monto: 190000, capacidad: 1150, operariosMinimos: 5 },
+  { n: 5, nombre: 'Grande',    monto: 260000, capacidad: 1350, operariosMinimos: 6 },
+  { n: 6, nombre: 'Expansiva', monto: 350000, capacidad: 1700, operariosMinimos: 7 },
+];
+function catalogoPlantasFase0(params = {}) {
+  return PLANTAS_FASE0_BASE.map(d => ({
+    n: d.n,
+    nombre: params['fase0_af_' + d.n + '_nombre'] || d.nombre,
+    monto: (params['fase0_af_' + d.n + '_monto'] != null) ? Number(params['fase0_af_' + d.n + '_monto']) : d.monto,
+    capacidad: (params['fase0_af_' + d.n + '_capacidad'] != null) ? Number(params['fase0_af_' + d.n + '_capacidad']) : d.capacidad,
+    operariosMinimos: d.operariosMinimos,
+  }));
+}
+// Paquetes: factor sobre la capacidad ACTUAL (capacidad calculada, no libre).
+const PAQUETES_AMPLIACION = [
+  { key: '',      label: 'Ninguna',                factor: 0 },
+  { key: 'menor', label: 'Ampliación menor (+25%)', factor: 0.25 },
+  { key: 'media', label: 'Ampliación media (+50%)', factor: 0.50 },
+  { key: 'alta',  label: 'Ampliación alta (+75%)',  factor: 0.75 },
+];
+const PAQUETES_MAQUINARIA = [
+  { key: '',         label: 'Ninguna',          factor: 0 },
+  { key: 'basica',   label: 'Básica (+25%)',    factor: 0.25 },
+  { key: 'estandar', label: 'Estándar (+50%)',  factor: 0.50 },
+  { key: 'avanzada', label: 'Avanzada (+100%)', factor: 1.00 },
+];
+function factorPaquete(lista, key) {
+  const f = lista.find(x => x.key === String(key || ''));
+  return f ? f.factor : 0;
+}
+function capacidadActualHoja(decision = {}, params = {}) {
+  return normalizarNumeroNoNegativo(decision.capacidadMaxProduccion ?? params.capacidadMaxProduccion ?? 1500);
+}
+function operariosPlantaSeleccionada(decision = {}, params = {}) {
+  const planta = catalogoPlantasFase0(params)
+    .find(c => String(c.n) === String(decision?.inversionActivos?.nuevaPlanta?.tipoPlanta));
+  return planta ? planta.operariosMinimos : 0;
+}
+// Deriva monto+capacidad NO LIBRES desde la selección de catálogo/paquetes.
+// Nueva planta: monto y capacidad vienen del catálogo. Ampliación/maquinaria:
+// capacidad = capActual × factor; el monto queda EDITABLE (sin parámetro oficial de costo aún).
+function resolverInversionActivos(decision = {}, params = {}) {
+  const inv = normalizarInversionActivosDecision(decision);
+  const cat = catalogoPlantasFase0(params);
+  const capActual = capacidadActualHoja(decision, params);
+
+  const planta = cat.find(c => String(c.n) === String(inv.nuevaPlanta.tipoPlanta));
+  inv.nuevaPlanta.monto = planta ? normalizarNumeroNoNegativo(planta.monto) : 0;
+  inv.nuevaPlanta.incrementoCapacidad = planta ? normalizarNumeroNoNegativo(planta.capacidad) : 0;
+
+  inv.ampliacionPlanta.incrementoCapacidad = Math.round(capActual * factorPaquete(PAQUETES_AMPLIACION, inv.ampliacionPlanta.paquete));
+  inv.maquinaria.incrementoCapacidad      = Math.round(capActual * factorPaquete(PAQUETES_MAQUINARIA, inv.maquinaria.paquete));
+  return inv;
+}
+
 function normalizarNumeroNoNegativo(valor) {
   const n = Number(valor ?? 0);
   return Number.isFinite(n) ? Math.max(0, n) : 0;
@@ -45,13 +106,18 @@ function normalizarInversionActivosDecision(decision = {}) {
 
   INVERSION_ACTIVOS_KEYS.forEach(tipo => {
     const actual = decision.inversionActivos[tipo] || {};
-    decision.inversionActivos[tipo] = {
-      monto: normalizarNumeroNoNegativo(actual.monto),
-    };
+    const norm = { monto: normalizarNumeroNoNegativo(actual.monto) };
     if (INVERSION_ACTIVOS_CON_CAPACIDAD.has(tipo)) {
-      decision.inversionActivos[tipo].incrementoCapacidad =
-        normalizarNumeroNoNegativo(actual.incrementoCapacidad);
+      norm.incrementoCapacidad = normalizarNumeroNoNegativo(actual.incrementoCapacidad);
     }
+    // FASE 6F-P2B2 — trazabilidad de la selección (no libre)
+    if (tipo === 'nuevaPlanta') {
+      norm.tipoPlanta = (actual.tipoPlanta != null && actual.tipoPlanta !== '') ? String(actual.tipoPlanta) : '';
+    }
+    if (tipo === 'ampliacionPlanta' || tipo === 'maquinaria') {
+      norm.paquete = (actual.paquete != null) ? String(actual.paquete) : '';
+    }
+    decision.inversionActivos[tipo] = norm;
   });
 
   return decision.inversionActivos;
@@ -72,17 +138,28 @@ function sincronizarInversionActivosDesdeDOM(root = document) {
   if (!state.decisiones) return;
   const inv = normalizarInversionActivosDecision(state.decisiones);
 
+  const params = state.ref?.parametros || {};
+
   root.querySelectorAll('[data-activo-tipo][data-activo-campo]').forEach(el => {
     const tipo = el.dataset.activoTipo;
     const campo = el.dataset.activoCampo;
     if (!INVERSION_ACTIVOS_KEYS.includes(tipo)) return;
-    if (campo !== 'monto' && campo !== 'incrementoCapacidad') return;
-    if (campo === 'incrementoCapacidad' && !INVERSION_ACTIVOS_CON_CAPACIDAD.has(tipo)) return;
 
-    const valor = normalizarNumeroNoNegativo(el.value);
-    if (el.type === 'number' && +el.value !== valor) el.value = valor;
-    inv[tipo][campo] = valor;
+    if (campo === 'tipoPlanta' && tipo === 'nuevaPlanta') {
+      inv.nuevaPlanta.tipoPlanta = el.value || '';
+    } else if (campo === 'paquete' && (tipo === 'ampliacionPlanta' || tipo === 'maquinaria')) {
+      inv[tipo].paquete = el.value || '';
+    } else if (campo === 'monto') {
+      // nuevaPlanta.monto es DERIVADO del catálogo (read-only) → no se lee del DOM
+      if (tipo === 'nuevaPlanta') return;
+      const valor = normalizarNumeroNoNegativo(el.value);
+      if (el.type === 'number' && +el.value !== valor) el.value = valor;
+      inv[tipo].monto = valor;
+    }
+    // incrementoCapacidad ya NO se captura del DOM: es calculado (no libre).
   });
+
+  resolverInversionActivos(state.decisiones, params);
 }
 
 function sincronizarHojaConEstado() {
@@ -520,8 +597,20 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
   const tipoInvOpts  = ['No','Básica','Premium','Estratégico'].map(t=>`<option ${t===decision.tipoInvestigacion?'selected':''}>${t}</option>`).join('');
 
   const p = ref.parametros || {};
-  normalizarInversionActivosDecision(decision);
+  resolverInversionActivos(decision, p);
   const invActivos = decision.inversionActivos;
+  // FASE 6F-P2B2 — selectores no-libres: catálogo de plantas + paquetes de capacidad
+  const _catPlantas = catalogoPlantasFase0(p);
+  const _capActualHoja = capacidadActualHoja(decision, p);
+  const _plantaOpts = '<option value="">Ninguna</option>' + _catPlantas.map(c =>
+    `<option value="${c.n}" ${String(c.n)===String(invActivos.nuevaPlanta.tipoPlanta)?'selected':''}>Planta ${c.n} · ${c.nombre} — ${fmt.bs(c.monto)} · +${fmt.num(c.capacidad)} unid · mín ${c.operariosMinimos} op</option>`
+  ).join('');
+  const _paqueteOpts = (lista, sel) => lista.map(q =>
+    `<option value="${q.key}" ${q.key===String(sel||'')?'selected':''}>${q.label}</option>`).join('');
+  const selActivo = (tipo, campo, opts, selLabel) => isEditable
+    ? `<select class="hoja-input editable" data-activo-tipo="${tipo}" data-activo-campo="${campo}">${opts}</select>`
+    : `<span class="hoja-value-ro">${selLabel || '—'}</span>`;
+  const _plantaSel = _catPlantas.find(c => String(c.n)===String(invActivos.nuevaPlanta.tipoPlanta));
   const renderResumenInversionActivos = () => {
     const t = totalesInversionActivos(decision);
     return `<strong>Total inversi&oacute;n:</strong> ${fmt.bs(t.total)} &middot; <strong>Capacidad futura agregada:</strong> ${fmt.num(t.capacidad)} unid`;
@@ -806,21 +895,24 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         <tbody>
           <tr>
             <td class="hoja-label">Nueva planta</td>
-            <td>${inpActivo('nuevaPlanta', 'monto', invActivos.nuevaPlanta.monto, 'step="1000"')}</td>
-            <td>${inpActivo('nuevaPlanta', 'incrementoCapacidad', invActivos.nuevaPlanta.incrementoCapacidad, 'step="100"')} unid</td>
-            <td class="hoja-ref">Lead time 1 ronda: aumenta capacidad desde la siguiente ronda.</td>
+            <td>${selActivo('nuevaPlanta', 'tipoPlanta', _plantaOpts, _plantaSel ? `Planta ${_plantaSel.n} · ${_plantaSel.nombre}` : 'Ninguna')}
+                <div class="hoja-ref">Costo: <span id="invNuevaPlantaMonto">${fmt.bs(invActivos.nuevaPlanta.monto)}</span> &middot; Op. m&iacute;n: <span id="invNuevaPlantaOp">${fmt.num(operariosPlantaSeleccionada(decision, p))}</span></div></td>
+            <td><span id="invNuevaPlantaCap" class="hoja-value-ro">${fmt.num(invActivos.nuevaPlanta.incrementoCapacidad)}</span> unid</td>
+            <td class="hoja-ref">Cat&aacute;logo Fase 0. Lead time 1 ronda: capacidad desde la siguiente ronda.</td>
           </tr>
           <tr>
             <td class="hoja-label">Ampliaci&oacute;n de planta</td>
-            <td>${inpActivo('ampliacionPlanta', 'monto', invActivos.ampliacionPlanta.monto, 'step="1000"')}</td>
-            <td>${inpActivo('ampliacionPlanta', 'incrementoCapacidad', invActivos.ampliacionPlanta.incrementoCapacidad, 'step="100"')} unid</td>
-            <td class="hoja-ref">Lead time 1 ronda: incrementa capacidad futura, no la actual.</td>
+            <td>${selActivo('ampliacionPlanta', 'paquete', _paqueteOpts(PAQUETES_AMPLIACION, invActivos.ampliacionPlanta.paquete), invActivos.ampliacionPlanta.paquete || 'Ninguna')}
+                <div style="margin-top:4px">${inpActivo('ampliacionPlanta', 'monto', invActivos.ampliacionPlanta.monto, 'step="1000"')}</div></td>
+            <td><span id="invAmpliacionCap" class="hoja-value-ro">${fmt.num(invActivos.ampliacionPlanta.incrementoCapacidad)}</span> unid</td>
+            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Monto a definir por el equipo.</td>
           </tr>
           <tr>
             <td class="hoja-label">Maquinaria</td>
-            <td>${inpActivo('maquinaria', 'monto', invActivos.maquinaria.monto, 'step="1000"')}</td>
-            <td>${inpActivo('maquinaria', 'incrementoCapacidad', invActivos.maquinaria.incrementoCapacidad, 'step="100"')} unid</td>
-            <td class="hoja-ref">Se capitaliza como activo fijo y deprecia seg&uacute;n reglas del motor.</td>
+            <td>${selActivo('maquinaria', 'paquete', _paqueteOpts(PAQUETES_MAQUINARIA, invActivos.maquinaria.paquete), invActivos.maquinaria.paquete || 'Ninguna')}
+                <div style="margin-top:4px">${inpActivo('maquinaria', 'monto', invActivos.maquinaria.monto, 'step="1000"')}</div></td>
+            <td><span id="invMaquinariaCap" class="hoja-value-ro">${fmt.num(invActivos.maquinaria.incrementoCapacidad)}</span> unid</td>
+            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Se capitaliza y deprecia seg&uacute;n el motor.</td>
           </tr>
           <tr>
             <td class="hoja-label">Veh&iacute;culos</td>
@@ -853,6 +945,10 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       </div>
       <div style="padding:8px 14px;font-size:.76rem;color:var(--text3);font-style:italic">
         La inversi&oacute;n reduce caja, no es gasto operativo ni costo de ventas, y se capitaliza en el balance.
+      </div>
+      <div style="padding:0 14px 8px;font-size:.76rem;color:var(--text3);font-style:italic">
+        La capacidad se calcula autom&aacute;ticamente desde la capacidad actual (no es editable).
+        El monto de ampliaci&oacute;n/maquinaria debe ser definido por el equipo; el profesor a&uacute;n no parametriz&oacute; costo por unidad de capacidad.
       </div>
     </div>
     ` : ''}
@@ -1107,12 +1203,25 @@ if (isEditable) {
   });
 
   cont.querySelectorAll('[data-activo-tipo][data-activo-campo]').forEach(el => {
-    el.addEventListener('input', () => {
-      const valor = normalizarNumeroNoNegativo(el.value);
-      if (+el.value !== valor) el.value = valor;
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, () => {
+      if (el.tagName !== 'SELECT') {
+        const valor = normalizarNumeroNoNegativo(el.value);
+        if (+el.value !== valor) el.value = valor;
+      }
 
       sincronizarInversionActivosDesdeDOM(cont);
       decision = state.decisiones;
+
+      // Refrescar celdas derivadas (monto/capacidad calculados, no libres)
+      const _p2 = state.ref?.parametros || {};
+      const _inv = decision.inversionActivos || {};
+      const _set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+      _set('invNuevaPlantaMonto', fmt.bs(_inv.nuevaPlanta?.monto ?? 0));
+      _set('invNuevaPlantaOp',    fmt.num(operariosPlantaSeleccionada(decision, _p2)));
+      _set('invNuevaPlantaCap',   fmt.num(_inv.nuevaPlanta?.incrementoCapacidad ?? 0));
+      _set('invAmpliacionCap',    fmt.num(_inv.ampliacionPlanta?.incrementoCapacidad ?? 0));
+      _set('invMaquinariaCap',    fmt.num(_inv.maquinaria?.incrementoCapacidad ?? 0));
 
       const resumenInv = document.getElementById('hojaInversionActivosResumen');
       if (resumenInv) resumenInv.innerHTML = renderResumenInversionActivos();
