@@ -51,6 +51,18 @@ const PARAMS = {
   // Innovación
   factorInnovacionProducto:   0.333,  // fracción del (monto/unid) que incrementa CU
   factorInnovacionProceso:    0.333,  // fracción que REDUCE CU
+
+  // FASE 6F-P2B3 — Inversión en activos por ronda (montos controlados por el profesor)
+  // Ampliación/maquinaria: Bs por unidad de capacidad agregada.
+  costoPorUnidadCapacidadAmpliacion:   75,
+  costoPorUnidadCapacidadMaquinaria:  125,
+  // Complementarios: replican los costos hardcodeados de Fase 0 (compra por ronda).
+  costoVehiculoNivel1:   35_000,
+  costoVehiculoNivel2:  243_000,
+  costoVehiculoNivel3:  313_000,
+  costoMuebles:          16_000,
+  costoComputo:          43_650,
+  costoPatentes:          1_400,
 };
 
 // ── 2. Tipos de producto ──────────────────────────────────────

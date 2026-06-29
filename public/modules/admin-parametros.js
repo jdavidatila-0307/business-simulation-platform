@@ -107,6 +107,18 @@ async function loadAdminParametros() {
       </div>
 
       <div class="param-card">
+        <div class="param-card-title">🏗️ Inversión en activos por ronda</div>
+        ${pf('Costo por unidad de ampliación de planta','costoPorUnidadCapacidadAmpliacion','Bs por unidad de capacidad agregada')}
+        ${pf('Costo por unidad de maquinaria','costoPorUnidadCapacidadMaquinaria','Bs por unidad de capacidad agregada')}
+        ${pf('Vehículo nivel 1 (Bs)','costoVehiculoNivel1','Costo compra por ronda')}
+        ${pf('Vehículo nivel 2 (Bs)','costoVehiculoNivel2','Costo compra por ronda')}
+        ${pf('Vehículo nivel 3 (Bs)','costoVehiculoNivel3','Costo compra por ronda')}
+        ${pf('Muebles (Bs)','costoMuebles','Costo compra por ronda')}
+        ${pf('Cómputo (Bs)','costoComputo','Costo compra por ronda')}
+        ${pf('Patentes (Bs)','costoPatentes','Costo compra por ronda')}
+      </div>
+
+      <div class="param-card">
         <div class="param-card-title">🔍 Investigación de Mercado</div>
         ${pf('Reporte Básico (Bs)','costoInvestigacionBasica')}
         ${pf('Reporte Premium (Bs)','costoInvestigacionPremium')}

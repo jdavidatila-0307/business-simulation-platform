@@ -69,6 +69,27 @@ function factorPaquete(lista, key) {
   const f = lista.find(x => x.key === String(key || ''));
   return f ? f.factor : 0;
 }
+// FASE 6F-P2B3 — complementarios por selector (no libre); costo desde params del profesor.
+const INVERSION_ACTIVOS_CON_PAQUETE = new Set([
+  'ampliacionPlanta', 'maquinaria', 'vehiculos', 'muebles', 'computo', 'patentes',
+]);
+const OPCIONES_VEHICULO = [['', 'Ninguno'], ['nivel1', 'Nivel 1'], ['nivel2', 'Nivel 2'], ['nivel3', 'Nivel 3']];
+const OPCIONES_SI_NO    = [['', 'No'], ['si', 'Sí']];
+function montoComplementario(tipo, paquete, params = {}) {
+  const p = params || {};
+  const key = String(paquete || '');
+  if (tipo === 'vehiculos') {
+    if (key === 'nivel1') return normalizarNumeroNoNegativo(p.costoVehiculoNivel1);
+    if (key === 'nivel2') return normalizarNumeroNoNegativo(p.costoVehiculoNivel2);
+    if (key === 'nivel3') return normalizarNumeroNoNegativo(p.costoVehiculoNivel3);
+    return 0;
+  }
+  if (key !== 'si') return 0;
+  if (tipo === 'muebles')  return normalizarNumeroNoNegativo(p.costoMuebles);
+  if (tipo === 'computo')  return normalizarNumeroNoNegativo(p.costoComputo);
+  if (tipo === 'patentes') return normalizarNumeroNoNegativo(p.costoPatentes);
+  return 0;
+}
 function capacidadActualHoja(decision = {}, params = {}) {
   return normalizarNumeroNoNegativo(decision.capacidadMaxProduccion ?? params.capacidadMaxProduccion ?? 1500);
 }
@@ -90,7 +111,14 @@ function resolverInversionActivos(decision = {}, params = {}) {
   inv.nuevaPlanta.incrementoCapacidad = planta ? normalizarNumeroNoNegativo(planta.capacidad) : 0;
 
   inv.ampliacionPlanta.incrementoCapacidad = Math.round(capActual * factorPaquete(PAQUETES_AMPLIACION, inv.ampliacionPlanta.paquete));
-  inv.maquinaria.incrementoCapacidad      = Math.round(capActual * factorPaquete(PAQUETES_MAQUINARIA, inv.maquinaria.paquete));
+  inv.ampliacionPlanta.monto = Math.round(inv.ampliacionPlanta.incrementoCapacidad * normalizarNumeroNoNegativo(params.costoPorUnidadCapacidadAmpliacion));
+
+  inv.maquinaria.incrementoCapacidad = Math.round(capActual * factorPaquete(PAQUETES_MAQUINARIA, inv.maquinaria.paquete));
+  inv.maquinaria.monto = Math.round(inv.maquinaria.incrementoCapacidad * normalizarNumeroNoNegativo(params.costoPorUnidadCapacidadMaquinaria));
+
+  ['vehiculos', 'muebles', 'computo', 'patentes'].forEach(t => {
+    inv[t].monto = montoComplementario(t, inv[t].paquete, params);
+  });
   return inv;
 }
 
@@ -114,7 +142,7 @@ function normalizarInversionActivosDecision(decision = {}) {
     if (tipo === 'nuevaPlanta') {
       norm.tipoPlanta = (actual.tipoPlanta != null && actual.tipoPlanta !== '') ? String(actual.tipoPlanta) : '';
     }
-    if (tipo === 'ampliacionPlanta' || tipo === 'maquinaria') {
+    if (INVERSION_ACTIVOS_CON_PAQUETE.has(tipo)) {
       norm.paquete = (actual.paquete != null) ? String(actual.paquete) : '';
     }
     decision.inversionActivos[tipo] = norm;
@@ -147,16 +175,10 @@ function sincronizarInversionActivosDesdeDOM(root = document) {
 
     if (campo === 'tipoPlanta' && tipo === 'nuevaPlanta') {
       inv.nuevaPlanta.tipoPlanta = el.value || '';
-    } else if (campo === 'paquete' && (tipo === 'ampliacionPlanta' || tipo === 'maquinaria')) {
+    } else if (campo === 'paquete' && INVERSION_ACTIVOS_CON_PAQUETE.has(tipo)) {
       inv[tipo].paquete = el.value || '';
-    } else if (campo === 'monto') {
-      // nuevaPlanta.monto es DERIVADO del catálogo (read-only) → no se lee del DOM
-      if (tipo === 'nuevaPlanta') return;
-      const valor = normalizarNumeroNoNegativo(el.value);
-      if (el.type === 'number' && +el.value !== valor) el.value = valor;
-      inv[tipo].monto = valor;
     }
-    // incrementoCapacidad ya NO se captura del DOM: es calculado (no libre).
+    // monto e incrementoCapacidad ya NO se capturan del DOM: son calculados (no libres).
   });
 
   resolverInversionActivos(state.decisiones, params);
@@ -611,6 +633,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
     ? `<select class="hoja-input editable" data-activo-tipo="${tipo}" data-activo-campo="${campo}">${opts}</select>`
     : `<span class="hoja-value-ro">${selLabel || '—'}</span>`;
   const _plantaSel = _catPlantas.find(c => String(c.n)===String(invActivos.nuevaPlanta.tipoPlanta));
+  const _optCompl = (k, l, tipo) => `<option value="${k}" ${k===String(invActivos[tipo].paquete||'')?'selected':''}>${l}${(k && montoComplementario(tipo,k,p)>0)?` — ${fmt.bs(montoComplementario(tipo,k,p))}`:''}</option>`;
+  const _vehOpts  = OPCIONES_VEHICULO.map(([k,l]) => _optCompl(k,l,'vehiculos')).join('');
+  const _sinoOpts = (tipo) => OPCIONES_SI_NO.map(([k,l]) => _optCompl(k,l,tipo)).join('');
   const renderResumenInversionActivos = () => {
     const t = totalesInversionActivos(decision);
     return `<strong>Total inversi&oacute;n:</strong> ${fmt.bs(t.total)} &middot; <strong>Capacidad futura agregada:</strong> ${fmt.num(t.capacidad)} unid`;
@@ -903,38 +928,42 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
           <tr>
             <td class="hoja-label">Ampliaci&oacute;n de planta</td>
             <td>${selActivo('ampliacionPlanta', 'paquete', _paqueteOpts(PAQUETES_AMPLIACION, invActivos.ampliacionPlanta.paquete), invActivos.ampliacionPlanta.paquete || 'Ninguna')}
-                <div style="margin-top:4px">${inpActivo('ampliacionPlanta', 'monto', invActivos.ampliacionPlanta.monto, 'step="1000"')}</div></td>
+                <div class="hoja-ref">Costo: <span id="invAmpliacionMonto">${fmt.bs(invActivos.ampliacionPlanta.monto)}</span></div></td>
             <td><span id="invAmpliacionCap" class="hoja-value-ro">${fmt.num(invActivos.ampliacionPlanta.incrementoCapacidad)}</span> unid</td>
-            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Monto a definir por el equipo.</td>
+            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Monto calculado desde par&aacute;metros del profesor.</td>
           </tr>
           <tr>
             <td class="hoja-label">Maquinaria</td>
             <td>${selActivo('maquinaria', 'paquete', _paqueteOpts(PAQUETES_MAQUINARIA, invActivos.maquinaria.paquete), invActivos.maquinaria.paquete || 'Ninguna')}
-                <div style="margin-top:4px">${inpActivo('maquinaria', 'monto', invActivos.maquinaria.monto, 'step="1000"')}</div></td>
+                <div class="hoja-ref">Costo: <span id="invMaquinariaMonto">${fmt.bs(invActivos.maquinaria.monto)}</span></div></td>
             <td><span id="invMaquinariaCap" class="hoja-value-ro">${fmt.num(invActivos.maquinaria.incrementoCapacidad)}</span> unid</td>
-            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Se capitaliza y deprecia seg&uacute;n el motor.</td>
+            <td class="hoja-ref">Capacidad = ${fmt.num(_capActualHoja)} actual &times; % paquete. Monto calculado desde par&aacute;metros del profesor.</td>
           </tr>
           <tr>
             <td class="hoja-label">Veh&iacute;culos</td>
-            <td>${inpActivo('vehiculos', 'monto', invActivos.vehiculos.monto, 'step="1000"')}</td>
+            <td>${selActivo('vehiculos', 'paquete', _vehOpts, invActivos.vehiculos.paquete || 'Ninguno')}
+                <div class="hoja-ref">Costo: <span id="invVehiculosMonto">${fmt.bs(invActivos.vehiculos.monto)}</span></div></td>
             <td><span class="hoja-value-ro">0 unid</span></td>
             <td class="hoja-ref">Lead time 0. No aumenta capacidad productiva.</td>
           </tr>
           <tr>
             <td class="hoja-label">Muebles</td>
-            <td>${inpActivo('muebles', 'monto', invActivos.muebles.monto, 'step="1000"')}</td>
+            <td>${selActivo('muebles', 'paquete', _sinoOpts('muebles'), invActivos.muebles.paquete ? 'Sí' : 'No')}
+                <div class="hoja-ref">Costo: <span id="invMueblesMonto">${fmt.bs(invActivos.muebles.monto)}</span></div></td>
             <td><span class="hoja-value-ro">0 unid</span></td>
             <td class="hoja-ref">Lead time 0. Se capitaliza, no es gasto operativo.</td>
           </tr>
           <tr>
             <td class="hoja-label">C&oacute;mputo</td>
-            <td>${inpActivo('computo', 'monto', invActivos.computo.monto, 'step="1000"')}</td>
+            <td>${selActivo('computo', 'paquete', _sinoOpts('computo'), invActivos.computo.paquete ? 'Sí' : 'No')}
+                <div class="hoja-ref">Costo: <span id="invComputoMonto">${fmt.bs(invActivos.computo.monto)}</span></div></td>
             <td><span class="hoja-value-ro">0 unid</span></td>
             <td class="hoja-ref">Lead time 0. Se capitaliza como activo fijo.</td>
           </tr>
           <tr>
             <td class="hoja-label">Patentes</td>
-            <td>${inpActivo('patentes', 'monto', invActivos.patentes.monto, 'step="1000"')}</td>
+            <td>${selActivo('patentes', 'paquete', _sinoOpts('patentes'), invActivos.patentes.paquete ? 'Sí' : 'No')}
+                <div class="hoja-ref">Costo: <span id="invPatentesMonto">${fmt.bs(invActivos.patentes.monto)}</span></div></td>
             <td><span class="hoja-value-ro">0 unid</span></td>
             <td class="hoja-ref">Intangible: se amortiza contablemente en 20 trimestres.</td>
           </tr>
@@ -947,8 +976,8 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
         La inversi&oacute;n reduce caja, no es gasto operativo ni costo de ventas, y se capitaliza en el balance.
       </div>
       <div style="padding:0 14px 8px;font-size:.76rem;color:var(--text3);font-style:italic">
-        La capacidad se calcula autom&aacute;ticamente desde la capacidad actual (no es editable).
-        El monto de ampliaci&oacute;n/maquinaria debe ser definido por el equipo; el profesor a&uacute;n no parametriz&oacute; costo por unidad de capacidad.
+        La capacidad se calcula autom&aacute;ticamente desde la capacidad actual.
+        Monto calculado desde par&aacute;metros del profesor.
       </div>
     </div>
     ` : ''}
@@ -1221,7 +1250,13 @@ if (isEditable) {
       _set('invNuevaPlantaOp',    fmt.num(operariosPlantaSeleccionada(decision, _p2)));
       _set('invNuevaPlantaCap',   fmt.num(_inv.nuevaPlanta?.incrementoCapacidad ?? 0));
       _set('invAmpliacionCap',    fmt.num(_inv.ampliacionPlanta?.incrementoCapacidad ?? 0));
+      _set('invAmpliacionMonto',  fmt.bs(_inv.ampliacionPlanta?.monto ?? 0));
       _set('invMaquinariaCap',    fmt.num(_inv.maquinaria?.incrementoCapacidad ?? 0));
+      _set('invMaquinariaMonto',  fmt.bs(_inv.maquinaria?.monto ?? 0));
+      _set('invVehiculosMonto',   fmt.bs(_inv.vehiculos?.monto ?? 0));
+      _set('invMueblesMonto',     fmt.bs(_inv.muebles?.monto ?? 0));
+      _set('invComputoMonto',     fmt.bs(_inv.computo?.monto ?? 0));
+      _set('invPatentesMonto',    fmt.bs(_inv.patentes?.monto ?? 0));
 
       const resumenInv = document.getElementById('hojaInversionActivosResumen');
       if (resumenInv) resumenInv.innerHTML = renderResumenInversionActivos();
