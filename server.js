@@ -1807,21 +1807,31 @@ async function route(req, res, body) {
       // ── Sanitizar decisiones extremas ──────────────────────────────────
       // Evita que una decisión extrema (ej: 6868 operarios) falle todo el recálculo.
       // Los límites son pedagógicamente imposibles de alcanzar en condiciones normales.
-      const _capMax = sim.parametros?.capacidadMaxProduccion || 1500;
+      // Fallback GLOBAL de capacidad — sólo si la decisión/equipo no trae la suya.
+      // ?? (no ||) para no pisar un 0 explícito con el fallback.
+      const _capMaxGlobal = sim.parametros?.capacidadMaxProduccion ?? 1500;
       function sanitizarDecision(d) {
         if (!d) return d;
         const s = { ...d };
+        // BUG R2-250: el clamp usaba el tope GLOBAL para todos los equipos, ignorando
+        // la capacidad por equipo (capacidadMaxProduccion en la decisión). Ahora se usa
+        // la capacidad del equipo y el global sólo como último fallback.
+        const capMaxEquipo = s.capacidadMaxProduccion ?? _capMaxGlobal;
         if ((s.contratarOperarios || 0) > 100)  { console.warn(`[recalc] sanitize equipo=${d.equipoNombre}: contratarOperarios ${s.contratarOperarios}→100`); s.contratarOperarios = 100; }
         if ((s.despedirOperarios  || 0) > 100)  { s.despedirOperarios  = 100; }
-        if ((s.produccion         || 0) > _capMax) { s.produccion = _capMax; }
+        if ((s.produccion         || 0) > capMaxEquipo) { s.produccion = capMaxEquipo; }
         if ((s.precioVenta || 0) > 0 && (s.precioVenta || 0) < 10) { s.precioVenta = 10; }
         if (Array.isArray(s.productos)) {
-          s.productos = s.productos.map(p => ({
-            ...p,
-            contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
-            despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
-            produccion:         Math.min(p.produccion         || 0, _capMax),
-          }));
+          s.productos = s.productos.map(p => {
+            // Capacidad por producto si existe; si no, la del equipo; global como último recurso.
+            const capMaxProd = p.capacidadMaxProduccion ?? capMaxEquipo;
+            return {
+              ...p,
+              contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
+              despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
+              produccion:         Math.min(p.produccion         || 0, capMaxProd),
+            };
+          });
         }
         return s;
       }
