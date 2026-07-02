@@ -3963,95 +3963,106 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
     return;
   }
 
-  // Build loan ledger from historial
-  const prestamos = [];
-  let deudaAcum = 0;
+  // Datos REALES del backend (bloque resultado.creditos). Sin tasas/comisiones hardcodeadas,
+  // sin cronograma proyectado: se muestra el movimiento real de deuda financiera por ronda.
+  const rondas = historial
+    .map(item => ({ ronda: item.ronda, c: item.resultado?.creditos }))
+    .filter(x => x.c);
 
-  historial.forEach(item => {
-    const d = item.decision;
-    const r = item.resultado;
-    if (!d || !r) return;
-
-    if (d.tipoPrestamo && d.tipoPrestamo !== 'Ninguno' && d.montoPrestamo > 0) {
-      const tasa = d.tipoPrestamo === 'Operativo' ? 0.04 : 0.03;
-      const plazo = d.plazoPrestamo || (d.tipoPrestamo === 'Operativo' ? 2 : 4);
-      const cuota = Math.round(d.montoPrestamo / plazo * 100) / 100;
-      prestamos.push({
-        rondaOrigen: item.ronda,
-        tipo: d.tipoPrestamo,
-        monto: d.montoPrestamo,
-        tasa,
-        plazo,
-        cuota,
-        comision: Math.round(d.montoPrestamo * 0.01 * 100) / 100,
-      });
-    }
-
-    // Track sobregiro
-    if (r.sobregiro > 0) {
-      prestamos.push({
-        rondaOrigen: item.ronda,
-        tipo: 'Sobregiro',
-        monto: r.sobregiro,
-        tasa: 0.06,
-        plazo: 1,
-        cuota: r.sobregiro,
-        comision: 0,
-        interes: r.interesSobregiro,
-      });
-    }
-  });
-
-  if (!prestamos.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>Sin préstamos ni sobregiros registrados.</p></div>`;
+  if (!rondas.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🏦</div><p>Sin datos de crédito disponibles.</p></div>`;
     return;
   }
 
-  const cards = prestamos.map(p => {
-    const intTotal = Math.round(p.monto * p.tasa * p.plazo * 100) / 100;
-    const totalAPagar = Math.round((p.monto + intTotal + p.comision) * 100) / 100;
-    const rows = Array.from({length: p.plazo}, (_,i) => {
-      const ronda = p.rondaOrigen + i + 1;
-      const pagado = ronda <= currentRound;
-      return `<tr style="${pagado?'color:var(--text3)':''}">
-        <td style="text-align:center;font-family:var(--font-mono)">${ronda}</td>
-        <td class="num">${fmt.bs(p.cuota)}</td>
-        <td class="num">${fmt.bs(Math.round(p.monto * p.tasa * 100)/100)}</td>
-        <td class="num">${fmt.bs(Math.round((p.cuota + p.monto * p.tasa)*100)/100)}</td>
-        <td style="text-align:center">${pagado ? '<span class="badge badge-ok">✓ Pagado</span>' : '<span class="badge badge-pending">⏳ Pendiente</span>'}</td>
-      </tr>`;
-    }).join('');
+  const pct = (x) => (x == null ? '—' : fmt.pct(x));
+  const ult = rondas[rondas.length - 1].c;
+  const costoAcum = rondas.reduce((s, x) => s + (Number(x.c.costoFinancieroTotal) || 0), 0);
+  const hayActividad = rondas.some(x => (x.c.desembolsoCredito > 0) || (x.c.sobregiroUtilizado > 0) || (x.c.deudaFinancieraFinal > 0));
 
-    const colorTipo = p.tipo === 'Sobregiro' ? 'var(--accent4)' : p.tipo === 'Operativo' ? 'var(--accent2)' : 'var(--accent3)';
+  if (!hayActividad) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>Sin deuda financiera, préstamos ni sobregiros registrados.</p></div>`;
+    return;
+  }
+
+  // ── Tabla de movimiento real por ronda ──
+  const movRows = rondas.map(({ ronda, c }) => {
+    const flag = c.movInconsistente ? ' <span title="La identidad de deuda no cuadra" style="color:var(--accent4)">⚠</span>' : '';
+    return `<tr>
+      <td style="text-align:center;font-family:var(--font-mono);color:var(--accent3)">R${ronda}</td>
+      <td class="num">${fmt.bs(c.deudaInicial)}</td>
+      <td class="num" style="color:var(--accent2)">${fmt.bs(c.desembolsoCredito)}</td>
+      <td class="num" style="color:var(--accent4)">${fmt.bs(c.sobregiroUtilizado)}</td>
+      <td class="num" style="color:var(--accent4)">${fmt.bs(c.interesSobregiro)}</td>
+      <td class="num">${fmt.bs(c.pagoCapital)}</td>
+      <td class="num" style="font-weight:700">${fmt.bs(c.deudaFinancieraFinal)}${flag}</td>
+    </tr>`;
+  }).join('');
+
+  // ── Tarjetas de detalle por ronda con actividad ──
+  const cards = rondas.filter(x => (x.c.desembolsoCredito > 0) || (x.c.sobregiroUtilizado > 0)).map(({ ronda, c }) => {
+    const box = (label, val, color) =>
+      `<div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">${label}</div>` +
+      `<div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px${color?';color:'+color:''}">${val}</div></div>`;
+
+    // A. Crédito ordinario (si hubo desembolso o queda saldo ordinario)
+    let ordinario = '';
+    if (c.desembolsoCredito > 0 || c.saldoCreditoOrdinarioFinal > 0) {
+      ordinario = `
+        <div style="font-size:.7rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:10px 16px 4px">Crédito ordinario</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border-bottom:1px solid var(--border)">
+          ${box('Tipo', c.tipoCredito || '—')}
+          ${box('Monto solicitado', fmt.bs(c.nuevoCreditoSolicitado))}
+          ${box('Desembolso real', fmt.bs(c.desembolsoCredito), 'var(--accent2)')}
+          ${box('Tasa', pct(c.tasaCredito) + (c.tasaCredito!=null? ' ' + (c.periodoTasa||'') : ''), 'var(--accent3)')}
+          ${box('Plazo', (c.plazoCredito!=null? c.plazoCredito + ' ' + (c.unidadPlazo||'') : '—'))}
+          ${box('Comisión apertura', fmt.bs(c.comisionApertura), 'var(--accent4)')}
+          ${box('Interés pagado', fmt.bs(c.pagoIntereses), 'var(--accent4)')}
+          ${box('Capital pagado', fmt.bs(c.pagoCapital))}
+          ${box('Saldo ordinario (cierre)', fmt.bs(c.saldoCreditoOrdinarioFinal))}
+        </div>`;
+    }
+
+    // B. Sobregiro de la ronda
+    let sobregiro = '';
+    if (c.sobregiroUtilizado > 0) {
+      sobregiro = `
+        <div style="font-size:.7rem;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;padding:10px 16px 4px">Sobregiro de la ronda</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border-bottom:1px solid var(--border)">
+          ${box('Sobregiro utilizado', fmt.bs(c.sobregiroUtilizado), 'var(--accent4)')}
+          ${box('Tasa', pct(c.tasaSobregiro) + (c.tasaSobregiro!=null? ' ' + (c.periodoTasa||'') : ''), 'var(--accent3)')}
+          ${box('Interés generado', fmt.bs(c.interesSobregiro), 'var(--accent4)')}
+          ${box('Saldo sobregiro', fmt.bs(c.saldoSobregiroActual))}
+        </div>`;
+    }
+
     return `
       <div class="result-round-card" style="margin-bottom:16px">
         <div class="result-round-header">
-          <h3>💳 Préstamo ${p.tipo} — Ronda ${p.rondaOrigen}</h3>
-          <span class="badge" style="background:rgba(108,99,255,.1);color:${colorTipo}">${p.tipo}</span>
+          <h3>💳 Financiamiento — Ronda ${ronda}</h3>
+          <span class="badge" style="background:rgba(108,99,255,.1);color:var(--accent3)">${c.estadoCredito || ''}</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0;border-bottom:1px solid var(--border)">
-          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Monto</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px">${fmt.bs(p.monto)}</div></div>
-          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Tasa trimestral</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent3)">${fmt.pct(p.tasa)}</div></div>
-          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Plazo</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px">${p.plazo} trim.</div></div>
-          <div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Comisión apertura</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent4)">${fmt.bs(p.comision)}</div></div>
-          <div style="padding:12px 16px"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Total a pagar</div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px;color:var(--accent4)">${fmt.bs(totalAPagar)}</div></div>
-        </div>
-        <div class="table-wrap" style="border-radius:0">
-          <table>
-            <thead><tr><th>Ronda</th><th>Amortización</th><th>Interés</th><th>Cuota total</th><th>Estado</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
+        ${ordinario}
+        ${sobregiro}
+        <div style="padding:10px 16px;font-size:.78rem;color:var(--text3)">
+          Movimiento: deuda inicial ${fmt.bs(c.deudaInicial)} + desembolso ${fmt.bs(c.desembolsoCredito)}
+          + sobregiro ${fmt.bs(c.sobregiroUtilizado)} + int. sobregiro ${fmt.bs(c.interesSobregiro)}
+          − capital pagado ${fmt.bs(c.pagoCapital)} = <b>deuda final ${fmt.bs(c.deudaFinancieraFinal)}</b>
+          ${c.movInconsistente ? '<div style="margin-top:6px;color:var(--accent4)">⚠ La identidad de deuda no cuadra dentro de la tolerancia de redondeo.</div>' : ''}
         </div>
       </div>`;
   }).join('');
 
-  // Summary
-  const deudaTotal = historial[historial.length-1]?.resultado?.deudaFinal || 0;
   el.innerHTML = `
-    <div class="stat-grid" style="margin-bottom:20px">
-      <div class="stat-card"><div class="stat-label">Préstamos registrados</div><div class="stat-value" style="color:var(--accent2)">${prestamos.length}</div></div>
-      <div class="stat-card"><div class="stat-label">Deuda total actual</div><div class="stat-value" style="color:${deudaTotal>0?'var(--accent4)':'var(--accent5)'}">${fmt.bs(deudaTotal)}</div></div>
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat-card"><div class="stat-label">Deuda financiera actual</div><div class="stat-value" style="color:${ult.deudaFinancieraFinal>0?'var(--accent4)':'var(--accent5)'}">${fmt.bs(ult.deudaFinancieraFinal)}</div></div>
+      <div class="stat-card"><div class="stat-label">Costo financiero acumulado</div><div class="stat-value" style="color:var(--accent4)">${fmt.bs(costoAcum)}</div></div>
     </div>
+    <div style="font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:4px 0 8px">🏦 Movimiento de deuda financiera por ronda</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Ronda</th><th>Deuda inicial</th><th>Desembolso</th><th>Sobregiro</th><th>Int. sobregiro</th><th>Capital pagado</th><th>Deuda final</th></tr></thead>
+      <tbody>${movRows}</tbody>
+    </table></div>
+    <div style="margin:8px 0 16px;font-size:.74rem;color:var(--text3);font-style:italic">ⓘ ${ult.notaContinuidad || ''} La "deuda financiera" es sólo deuda bancaria/sobregiro (resultado.deudaFinal); NO incluye IVA ni otras obligaciones (esos van en Pasivos totales del Balance).</div>
     ${cards}`;
 }
 

@@ -2772,6 +2772,7 @@ async function route(req, res, body) {
     const _unidMP = sim.parametros?.unidadesMPporUnidad ?? 1;
     const _rnd2   = (x) => Math.round((Number(x) || 0) * 100) / 100;
     let _prevInvMap = {};  // productoId → { inventarioFinal, stockMPFinal } de la ronda simulada anterior (continuidad canónica)
+    let _prevDeuda  = null;  // deudaFinal de la ronda simulada anterior (continuidad de deuda financiera)
     for (let i = 1; i <= sim.config.currentRound; i++) {
       const r = await storage.getRonda(sim.id, i);
       if (!r || !['simulated','calculada'].includes(r.estado)) continue;
@@ -2867,6 +2868,57 @@ async function route(req, res, body) {
         consolidado.productos      = todosProductos; // array completo para el desglose
         resultado = consolidado;
       }
+
+      // ── Bloque "creditos" a nivel EMPRESA (una vez por ronda, datos reales del motor) ──
+      // La deuda financiera sale de resultado.deudaFinal (NUNCA totalPasivos, que incluye IVA).
+      // Continuidad: deudaInicial(n) = deudaFinal(n−1); R1 = decision.deudaInicial (Fase 0/homogéneo).
+      // El sobregiro rodado de rondas previas queda incorporado en deudaInicial y NO es separable
+      // históricamente con los campos persistidos → notaContinuidad lo advierte. ?? preserva ceros.
+      {
+        const emp        = todosProductos[0] || {};
+        const tipoCred   = _decInv?.tipoPrestamo ?? 'Ninguno';
+        const tasaCred   = tipoCred === 'Operativo' ? (sim.parametros?.tasaPrestamoOperativo ?? null)
+                         : tipoCred === 'Inversión' ? (sim.parametros?.tasaPrestamoInversion ?? null)
+                         : null;
+        const sobregiroU = emp.sobregiro ?? 0;
+        const intSob     = emp.interesSobregiro ?? 0;
+        const deudaFin   = emp.deudaFinal ?? 0;
+        const saldoOrd   = _rnd2(deudaFin - sobregiroU - intSob);
+        const desemb     = emp.ingresoPrestamo ?? 0;
+        const pagoCap    = emp.pagoAmortizacion ?? 0;
+        const comisApert = emp.comisionApertura ?? 0;
+        const deudaIni   = (_prevDeuda != null) ? _prevDeuda : (_decInv?.deudaInicial ?? 0);
+        let estado = (desemb > 0) ? 'Nuevo' : (saldoOrd > 0 ? 'Vigente' : 'Sin crédito ordinario');
+        if (sobregiroU > 0) estado += ' · Con sobregiro';
+        // Identidad de movimiento: deudaFin = deudaIni + desembolso + sobregiro + intSobregiro − capital
+        const _movDelta = _rnd2(deudaFin - (deudaIni + desemb + sobregiroU + intSob - pagoCap));
+        resultado.creditos = {
+          deudaInicial:               deudaIni,
+          tipoCredito:                tipoCred,
+          nuevoCreditoSolicitado:     _decInv?.montoPrestamo ?? 0,
+          desembolsoCredito:          desemb,
+          tasaCredito:                tasaCred,
+          periodoTasa:                'por trimestre',
+          plazoCredito:               _decInv?.plazoPrestamo ?? null,
+          unidadPlazo:                'trimestres',
+          comisionApertura:           comisApert,
+          pagoCapital:                pagoCap,
+          pagoIntereses:              emp.pagoIntereses ?? emp.interesesPrestamo ?? 0,
+          gastoFinancieroCredito:     _rnd2((emp.interesesPrestamo ?? 0) + comisApert),
+          saldoCreditoOrdinarioFinal: saldoOrd,
+          sobregiroUtilizado:         sobregiroU,
+          tasaSobregiro:              sim.parametros?.tasaSobregiro ?? null,
+          interesSobregiro:           intSob,
+          saldoSobregiroActual:       _rnd2(sobregiroU + intSob),
+          deudaFinancieraFinal:       deudaFin,
+          costoFinancieroTotal:       emp.gastoFinanciero ?? 0,
+          estadoCredito:              estado,
+          notaContinuidad:            'La deuda inicial puede incluir saldos financieros de rondas anteriores (incl. sobregiro rodado); no es separable históricamente con los campos actuales.',
+          movInconsistente:           Math.abs(_movDelta) > 0.5,
+        };
+        _prevDeuda = deudaFin;
+      }
+
       historial.push({ ronda:i, ejecutadaAt:r.ejecutadaAt, resultado,
         decision: r.decisiones?.[equipoId]||null, reportes: r.reportes?.[equipoId]||{} });
     }
