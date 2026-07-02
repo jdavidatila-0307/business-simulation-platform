@@ -1742,6 +1742,11 @@ function propagarEstado(decision, resPrev, params = {}) {
     ivaAPagarAnterior:          Math.max(0, resPrev.ivaAPagar            ?? 0),
     saldoIUEcompensable:        Math.max(0, resPrev.saldoIUEfinal        ?? 0),
     pedidosPendientes:          resPrev.pedidosPendientesResta           ?? [],
+    // Continuidad de materia prima: el stock inicial de R(n) es el stock final REAL de R(n−1).
+    // Faltaba aquí — solo estaba en el recálculo (server.js ~1869) y en ensureRonda (storage.js ~682) —
+    // por lo que el cálculo normal/presimulación usaba el stockMPInicial de la decisión (posible stale)
+    // y perdía paridad con el recálculo (producción 0 espuria, pérdida de MP). ?? preserva el 0 válido.
+    stockMPInicial:             Math.max(0, resPrev.stockMPFinal          ?? 0),
     inventarioInicial:          resPrev.inventarioFinal                  ?? 0,
     capacidadMaxProduccion:     resPrev.capacidadMaxProduccion           ?? params.capacidadMaxProduccion,
     // FASE 6C — PP&E (fase0): arrastrar bruto/base/acumulada. En homogéneo resPrev.activosFijosBrutos
