@@ -1862,8 +1862,17 @@ async function route(req, res, body) {
           deudaInicial:               Math.max(0, estado.deudaFinal ?? 0),
           activosFijosIniciales:      Math.max(0, estado.afNetos ?? 78000),
           brandEquityInicial:         estado.brandEquityFinal ?? 50,
-          vendedoresIniciales:        Math.max(0, estado.vendedoresFinales ?? 0),
-          operariosIniciales:         Math.max(0, estado.operariosFinales ?? 0),
+          // BUG operarios/vendedores (R3 mostraba 1): en el recálculo, para R1 el "estado" es el
+          // SEED GLOBAL (params.operariosIniciales), no un resultado real → pisaba la dotación por
+          // equipo (Fase 0 / decisión, p.ej. 3 operarios) y la colapsaba a 1, propagándose a R2+.
+          // Regla: R1 → decisión original (Fase 0) primero; R>1 → estado real de la ronda previa,
+          // con fallback a la decisión. Nunca el seed global si hay dato por equipo.
+          vendedoresIniciales:        Math.max(0, (n <= 1
+                                        ? (decOrig.vendedoresIniciales ?? estado.vendedoresFinales)
+                                        : (estado.vendedoresFinales ?? decOrig.vendedoresIniciales)) ?? 0),
+          operariosIniciales:         Math.max(0, (n <= 1
+                                        ? (decOrig.operariosIniciales ?? estado.operariosFinales)
+                                        : (estado.operariosFinales ?? decOrig.operariosIniciales)) ?? 0),
           capacidadMaxProduccion:     estado.capacidadMaxProduccion ?? decOrig.capacidadMaxProduccion ?? sim.parametros?.capacidadMaxProduccion,
           inventarioInicial:          Math.max(0, estado.inventarioFinal ?? 0),
           stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
