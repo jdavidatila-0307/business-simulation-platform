@@ -2562,6 +2562,34 @@ async function route(req, res, body) {
       ronda.decisiones[equipoId] = decision;
       actualizarDecision = true;
     }
+    // Rehidratar borradores NO enviados de rondas n>1 desde el resultado real de R(n-1).
+    // hidratarEstadoInicialR1 solo cubre Fase0/R1; para n>1 el borrador puede quedar stale
+    // (p.ej. creado antes de un recálculo) mostrando operarios/caja/dotación viejos.
+    // Solo toca borradores NO enviados y rondas NO calculadas; nunca borra ni pisa envíos.
+    if (Number(n) > 1
+        && !decision.submitted && !decision.forcedByAdmin
+        && ronda.estado !== 'calculada' && ronda.estado !== 'simulated') {
+      const prevRondaHid = await storage.getRonda(sim.id, Number(n) - 1);
+      const resObjHid = prevRondaHid?.resultados?.resultados || prevRondaHid?.resultados || {};
+      const resPrevHid = Object.values(resObjHid)
+        .filter(v => v && typeof v === 'object' && v.equipoNombre)
+        .find(r => r.equipoOriginal === equipoId || r.equipo === equipoId || (r.equipo || '').startsWith(equipoId));
+      if (resPrevHid) {
+        const decRehid = propagarEstado(decision, resPrevHid, sim.parametros);
+        // Sincronizar la dotación/capacidad repropagada en cada producto (raíz ↔ productos[])
+        if (Array.isArray(decRehid.productos)) {
+          decRehid.productos = decRehid.productos.map(p => ({
+            ...p,
+            operariosIniciales:     decRehid.operariosIniciales,
+            vendedoresIniciales:    decRehid.vendedoresIniciales,
+            capacidadMaxProduccion: decRehid.capacidadMaxProduccion,
+          }));
+        }
+        decision = decRehid;
+        ronda.decisiones[equipoId] = decision;
+        actualizarDecision = true;
+      }
+    }
     if (actualizarDecision) {
       await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     }
