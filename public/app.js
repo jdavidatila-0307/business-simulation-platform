@@ -3844,128 +3844,102 @@ async function loadEquipoInventarios() {
     return;
   }
 
-  // Construir kardex por producto a partir del historial
+  // Kardex por producto usando EXCLUSIVAMENTE el bloque "inventarios" del backend (datos reales).
   const historial = data.historial;
-  const productoMap = {}; // productoId → { nombre, rondas[] }
-
+  const productoMap = {}; // productoId → { nombre, rondas:[{ronda, inv}] }
   historial.forEach(h => {
     const r = h.resultado;
     if (!r) return;
     const prods = r.productos?.length > 1 ? r.productos : [r];
-    prods.forEach((p, idx) => {
+    prods.forEach(p => {
       const pid  = p.productoId || 'prod_1';
       const pnom = p.producto   || 'Producto Principal';
       if (!productoMap[pid]) productoMap[pid] = { nombre: pnom, rondas: [] };
-      productoMap[pid].rondas.push({
-        ronda:       h.ronda,
-        invInicial:  p.inventarioInicial ?? 0,
-        produccion:  p.produccion        ?? 0,
-        ventas:      p.ventasReales       ?? 0,
-        invFinal:    p.inventarioFinal    ?? 0,
-        cuVar:       p.cuVar || p.costoUnitario || 0,
-        invValor:    p.invFinalValorizado  ?? 0,
-        costoAlmac:  p.costoAlmacenamiento ?? 0,
-      });
+      productoMap[pid].rondas.push({ ronda: h.ronda, inv: p.inventarios || {} });
     });
   });
 
-  const ALERTAS = (cobertura) => {
-    if (cobertura <= 0)   return { color: 'var(--accent2)', txt: '✅ Sin stock' };
-    if (cobertura <= 1)   return { color: 'var(--accent2)', txt: '✅ Óptimo' };
-    if (cobertura <= 3)   return { color: 'var(--ambar,#F59E0B)', txt: '⚠ Stock alto' };
-    return { color: 'var(--accent4)', txt: '🔴 Crítico — riesgo obsolescencia' };
-  };
-
+  const num = (x) => (Number(x) || 0).toLocaleString('es');           // unidades físicas
+  const bs  = (x) => 'Bs ' + Math.round(Number(x) || 0).toLocaleString('es');  // valor monetario
   const secH = (titulo) =>
     '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;' +
     'letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:16px 0 8px">' + titulo + '</div>';
+  const th = (arr) => '<thead><tr style="background:rgba(255,255,255,.04)">' + arr.map(t =>
+    '<th style="padding:5px 8px;text-align:right;font-size:.62rem;color:var(--text3);text-transform:uppercase">' + t + '</th>'
+    ).join('') + '</tr></thead>';
+  const td = (v, extra) => '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)' + (extra||'') + '">' + v + '</td>';
 
   let html = '<div style="padding:16px 20px">';
 
-  // ── Kardex Productos Terminados ──────────────────────────────
-  html += secH('🏭 Kardex — Inventario de Productos Terminados');
-
   Object.entries(productoMap).forEach(([pid, prod]) => {
-    const ultRonda = prod.rondas[prod.rondas.length - 1];
-    const invFinalUlt = ultRonda?.invFinal ?? 0;
-    const ventasUlt   = ultRonda?.ventas  ?? 1;
-    const cobertura   = ventasUlt > 0 ? (invFinalUlt / ventasUlt).toFixed(1) : '—';
-    const alerta      = ALERTAS(parseFloat(cobertura) || 0);
-    const rotacion    = invFinalUlt > 0 ? (ventasUlt / ((invFinalUlt + (ultRonda?.invInicial??0)) / 2)).toFixed(2) : '—';
-    const diasInv     = rotacion !== '—' ? Math.round(90 / rotacion) : '—';
+    const ult = prod.rondas[prod.rondas.length - 1]?.inv || {};
+    const inconsistente = prod.rondas.some(rr => rr.inv?.mpInconsistente);
 
-    html += '<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);' +
-      'padding:12px 16px;margin-bottom:12px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-      '<span style="font-weight:700;font-size:.82rem">' + prod.nombre + '</span>' +
-      '<span style="font-size:.75rem;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.06);color:' +
-      alerta.color + '">' + alerta.txt + '</span></div>';
+    html += '<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:16px">';
+    html += '<div style="font-weight:700;font-size:.82rem;margin-bottom:6px">' + prod.nombre + '</div>';
 
-    // Tabla kardex
+    // ── Sección A: Producto Terminado ──
+    html += secH('🏭 Producto Terminado (unidades)');
     html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">';
-    html += '<thead><tr style="background:rgba(255,255,255,.04)">' +
-      ['Ronda','Inv.Inicial','Producción','Ventas','Inv.Final','Valor (Bs)','Almac.(Bs)'].map(h =>
-        '<th style="padding:5px 8px;text-align:right;font-size:.62rem;color:var(--text3);text-transform:uppercase">' + h + '</th>'
-      ).join('') + '</tr></thead><tbody>';
-
-    let invAcum = 0;
+    html += th(['Ronda','Inv. inicial','Producción','Ventas','Inv. final','Valor final','Almacenam.']) + '<tbody>';
     prod.rondas.forEach(rr => {
-      const color = rr.invFinal > rr.ventas * 2 ? 'var(--accent4)' : 'var(--text1)';
+      const inv = rr.inv;
+      const color = (Number(inv.inventarioPTFinal)||0) > (Number(inv.ventas)||0) * 2 ? ';color:var(--accent4)' : '';
       html += '<tr style="border-bottom:1px solid var(--border)">' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">R' + rr.ronda + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">' + rr.invInicial.toLocaleString('es') + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent2)">' + rr.produccion.toLocaleString('es') + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">' + rr.ventas.toLocaleString('es') + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-weight:700;color:' + color + '">' + rr.invFinal.toLocaleString('es') + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">' + Math.round(rr.invValor).toLocaleString('es') + '</td>' +
-        '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent4)">' + Math.round(rr.costoAlmac).toLocaleString('es') + '</td>' +
+        td('R' + rr.ronda, ';color:var(--accent3)') +
+        td(num(inv.inventarioPTInicial)) +
+        td(num(inv.produccion), ';color:var(--accent2)') +
+        td(num(inv.ventas)) +
+        td(num(inv.inventarioPTFinal), ';font-weight:700' + color) +
+        td(bs(inv.valorInventarioPT)) +
+        td(bs(inv.costoAlmacenamiento), ';color:var(--accent4)') +
         '</tr>';
     });
-
     html += '</tbody></table></div>';
 
-    // KPIs de inventario
-    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:.75rem">' +
-      '<span style="color:var(--text3)">Rotación: <b>' + rotacion + '</b></span>' +
-      '<span style="color:var(--text3)">Días inv.: <b>' + diasInv + '</b></span>' +
-      '<span style="color:var(--text3)">Cobertura: <b>' + cobertura + ' rondas</b></span>' +
-      '<span style="color:var(--text3)">Stock actual: <b>' + invFinalUlt.toLocaleString('es') + ' u.</b></span>' +
-      '<span style="color:var(--text3)">Valor: <b>Bs ' + Math.round(ultRonda?.invValor??0).toLocaleString('es') + '</b></span>' +
-      '</div>';
+    // ── Sección B: Materia Prima ──
+    html += secH('🧱 Materia Prima (unidades)');
+    html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">';
+    html += th(['Ronda','Stock inicial','Entregas recib.','Compras','Consumo','Stock final','Valor stock']) + '<tbody>';
+    prod.rondas.forEach(rr => {
+      const inv = rr.inv;
+      const flag = inv.mpInconsistente ? ' <span title="La identidad de MP no cuadra" style="color:var(--accent4)">⚠</span>' : '';
+      html += '<tr style="border-bottom:1px solid var(--border)">' +
+        td('R' + rr.ronda, ';color:var(--accent3)') +
+        td(num(inv.stockMPInicial)) +
+        td(num(inv.entregasMPRecibidas), ';color:var(--accent2)') +
+        td(num(inv.comprasMPRealizadas)) +
+        td(num(inv.consumoMP)) +
+        td(num(inv.stockMPFinal) + flag, ';font-weight:700') +
+        td(bs(inv.valorStockMP)) +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+
+    // Pedidos de MP en tránsito (de la última ronda)
+    const peds = Array.isArray(ult.pedidosPendientes) ? ult.pedidosPendientes : [];
+    html += '<div style="margin-top:8px;font-size:.75rem;color:var(--text3)">';
+    if (peds.length) {
+      html += '📦 Pedidos de MP en tránsito: ' + peds.map(pd =>
+        '<b>' + num(pd.cantidad) + ' u</b> → llega R' + pd.rondaEntrega +
+        ((Number(pd.costoMP)||0) > 0 ? ' (' + bs(pd.costoMP) + ')' : '')
+      ).join(' · ');
+    } else {
+      html += 'Sin pedidos pendientes.';
+    }
+    html += '</div>';
+
+    // Aviso de inconsistencia (solo si la identidad MP no cuadra en alguna ronda)
+    if (inconsistente) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(255,107,107,.08);border-radius:var(--r);' +
+        'font-size:.74rem;color:var(--accent4)">⚠ Inconsistencia de continuidad de MP detectada en alguna ronda ' +
+        '(stock final no coincide con stock inicial + entregas − consumo). Revisar recálculo.</div>';
+    }
+
+    html += '<div style="margin-top:10px;font-size:.75rem;color:var(--text3)">Stock MP actual: <b>' +
+      num(ult.stockMPFinal) + ' u.</b> · Valor: <b>' + bs(ult.valorStockMP) + '</b></div>';
     html += '</div>';
   });
-
-  // ── Kardex Materia Prima ─────────────────────────────────────
-  html += secH('🧱 Kardex — Materia Prima');
-  html += '<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 16px">';
-  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.78rem">';
-  html += '<thead><tr style="background:rgba(255,255,255,.04)">' +
-    ['Ronda','Stock Ini (u)','Compras (u)','Consumo (u)','Stock Final (u)','Costo MP (Bs)'].map(h =>
-      '<th style="padding:5px 8px;text-align:right;font-size:.62rem;color:var(--text3);text-transform:uppercase">' + h + '</th>'
-    ).join('') + '</tr></thead><tbody>';
-
-  historial.forEach(h => {
-    const r = h.resultado;
-    if (!r) return;
-    const prods = r.productos?.length > 1 ? r.productos : [r];
-    // Sumar MP de todos los productos
-    const compras   = prods.reduce((s,p) => s+(p.pagoMPbruto||0), 0);
-    const consumo   = prods.reduce((s,p) => s+((p.costoMPunitario||0)*(p.produccion||0)), 0);
-    const costoMP   = prods.reduce((s,p) => s+(p.pagoMPbruto||0), 0);
-    html += '<tr style="border-bottom:1px solid var(--border)">' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent3)">R' + h.ronda + '</td>' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">0</td>' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--accent2)">' + Math.round(compras/119.2).toLocaleString('es') + '</td>' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">' + Math.round(consumo/119.2).toLocaleString('es') + '</td>' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">0</td>' +
-      '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono)">Bs ' + Math.round(costoMP).toLocaleString('es') + '</td>' +
-      '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-  html += '<div style="margin-top:8px;font-size:.74rem;color:var(--text3);font-style:italic">' +
-    'ⓘ Modelo Justo a Tiempo: la MP se compra y consume en el mismo período. Sin stock de MP entre rondas.</div>';
-  html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;

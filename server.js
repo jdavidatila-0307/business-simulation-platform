@@ -2769,6 +2769,9 @@ async function route(req, res, body) {
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const equipoId = s.userId;
     const historial = [];
+    const _unidMP = sim.parametros?.unidadesMPporUnidad ?? 1;
+    const _rnd2   = (x) => Math.round((Number(x) || 0) * 100) / 100;
+    let _prevInvMap = {};  // productoId → { inventarioFinal, stockMPFinal } de la ronda simulada anterior (continuidad canónica)
     for (let i = 1; i <= sim.config.currentRound; i++) {
       const r = await storage.getRonda(sim.id, i);
       if (!r || !['simulated','calculada'].includes(r.estado)) continue;
@@ -2779,6 +2782,52 @@ async function route(req, res, body) {
         || (res.equipo || '').startsWith(equipoId)
       );
       if (!todosProductos.length) continue;
+
+      // ── Bloque "inventarios" por producto (Producto Terminado + Materia Prima) ──
+      // Datos REALES para "Mis Inventarios" (calculados en backend, no en frontend):
+      //   PT inicial  = inventarioFinal de R(n−1) (continuidad canónica; R1 = 0).
+      //   stock MP inicial = stockMPFinal de R(n−1) (R1 = decision.stockMPInicial / Fase 0).
+      //   consumoMP   = produccion × unidadesMPporUnidad.
+      //   entregas    = derivadas por identidad: stockMPFinal = stockMPInicial + entregas − consumo.
+      // ?? preserva ceros válidos. Multiproducto: por producto (NO consolidar inventarios físicos).
+      const _decInv = r.decisiones?.[equipoId] || null;
+      const _decProd = {};
+      if (Array.isArray(_decInv?.productos)) {
+        _decInv.productos.forEach(dp => { _decProd[dp.productoId || 'prod_1'] = dp; });
+      }
+      const _curInvMap = {};
+      todosProductos.forEach(p => {
+        const pid       = p.productoId || 'prod_1';
+        const prevP     = _prevInvMap[pid] || null;
+        const ptIni     = prevP ? (prevP.inventarioFinal ?? 0) : 0;
+        const mpIni     = prevP ? (prevP.stockMPFinal ?? 0) : (_decInv?.stockMPInicial ?? 0);
+        const prod      = p.produccion ?? 0;
+        const consumoMP = _rnd2(prod * _unidMP);
+        const mpFin     = p.stockMPFinal ?? 0;
+        const entregas  = _rnd2(mpFin - mpIni + consumoMP);
+        const cuMP      = p.costoMPunitario ?? 0;
+        const compras   = (_decProd[pid]?.cantidadMPpedida)
+                            ?? (todosProductos.length === 1 ? (_decInv?.cantidadMPpedida ?? 0) : 0);
+        p.inventarios = {
+          inventarioPTInicial: ptIni,
+          produccion:          prod,
+          ventas:              p.ventasReales ?? 0,
+          inventarioPTFinal:   p.inventarioFinal ?? 0,
+          valorInventarioPT:   p.invFinalValorizado ?? 0,
+          costoAlmacenamiento: p.costoAlmacenamiento ?? 0,
+          stockMPInicial:      mpIni,
+          entregasMPRecibidas: entregas,
+          comprasMPRealizadas: compras,
+          consumoMP,
+          stockMPFinal:        mpFin,
+          costoUnitarioMP:     cuMP,
+          valorStockMP:        _rnd2(mpFin * cuMP),
+          pedidosPendientes:   Array.isArray(p.pedidosPendientesResta) ? p.pedidosPendientesResta : [],
+          mpInconsistente:     entregas < -0.01,  // identidad de MP no cuadra → dato dudoso
+        };
+        _curInvMap[pid] = { inventarioFinal: p.inventarioFinal ?? 0, stockMPFinal: mpFin };
+      });
+      _prevInvMap = _curInvMap;
 
       // Si hay 1 producto: compatibilidad legado (resultado = objeto)
       // Si hay N productos: resultado = array + consolidado
