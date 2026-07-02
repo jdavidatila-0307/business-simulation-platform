@@ -711,6 +711,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const gastoAmortizacion = esProductoPrincipal ? (amortizacionPeriodo || 0) : 0;
   const gastoSueldosAdmin = esProductoPrincipal ? sueldosAdministrativosFijosEff : 0;
   const gastoAlmacen    = costoAlmacenamiento;       // bodega (con factura, pero pequeño)
+  // S10: gasto de calidad — DEBE reconocerse en el ER porque sale de caja como pagoCalidad.
+  // Antes se omitía (cuVarCalid=0 en costoVentas y ausente de gastosOp) → utilidad sobrevaluada
+  // y descuadre patrimonial = pagoCalidad. Base = producción (idéntica a pagoCalidad, línea ~866).
+  const gastoCalidad    = roundBs((d.costoCalidadUnit || 0) * (d.produccion || 0));
 
   let gastosOp = roundBs(
     gastoPublicidad  + gastoPromocion  + gastoEventos  +
@@ -718,7 +722,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     gastoCostoVend   + gastoOperarios  +
     gastoAdminFijo   + gastoPlantaFijo + gastoDepre    + gastoAmortizacion +
     gastoSueldosAdmin +
-    gastoAlmacen     +
+    gastoAlmacen     + gastoCalidad    +
     gastoInnovacionNeto + gastoInvMktNeto
     // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
   );
@@ -863,7 +867,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // pagoCalidad: componente de calidad sobre 5 × unidades producidas
   // Se calcula desde costoCalidadUnit que viene del resultado (ya tiene tiposProducto)
   const _pctCalPago    = params?.pctCostoCalidad ?? 0.08;
-  const pagoCalidad    = roundBs((d.costoCalidadUnit || 0) * (d.produccion || 0)); // S10: calidad
+  const pagoCalidad    = gastoCalidad; // S10: calidad — misma base que el gasto de calidad del ER (simetría caja↔ER)
   const pagoComisiones = comisiones;             // S3: comisión sale de caja
   const pagoMP         = pagoMPbruto;            // S4: MP bruto sale de caja
 
