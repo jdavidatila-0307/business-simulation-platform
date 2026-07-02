@@ -2893,16 +2893,19 @@ async function route(req, res, body) {
         // Identidad de movimiento: deudaFin = deudaIni + desembolso + sobregiro + intSobregiro − capital
         const _movDelta = _rnd2(deudaFin - (deudaIni + desemb + sobregiroU + intSob - pagoCap));
         resultado.creditos = {
-          deudaInicial:               deudaIni,
+          // Semántica honesta: el motor NO cobra cuota automática; pagoAmortizacion = decisión libre
+          // del equipo y plazoPrestamo solo se hace eco (no genera cuota ni cronograma). Ver engine.js:888,932.
+          deudaFinancieraInicial:     deudaIni,
           tipoCredito:                tipoCred,
           nuevoCreditoSolicitado:     _decInv?.montoPrestamo ?? 0,
           desembolsoCredito:          desemb,
           tasaCredito:                tasaCred,
           periodoTasa:                'por trimestre',
-          plazoCredito:               _decInv?.plazoPrestamo ?? null,
+          plazoSolicitado:            _decInv?.plazoPrestamo ?? null,
+          plazoEsInformativo:         true,
           unidadPlazo:                'trimestres',
           comisionApertura:           comisApert,
-          pagoCapital:                pagoCap,
+          pagoVoluntarioCapital:      pagoCap,
           pagoIntereses:              emp.pagoIntereses ?? emp.interesesPrestamo ?? 0,
           gastoFinancieroCredito:     _rnd2((emp.interesesPrestamo ?? 0) + comisApert),
           saldoCreditoOrdinarioFinal: saldoOrd,
@@ -2913,8 +2916,14 @@ async function route(req, res, body) {
           deudaFinancieraFinal:       deudaFin,
           costoFinancieroTotal:       emp.gastoFinanciero ?? 0,
           estadoCredito:              estado,
+          amortizacionEsManual:       true,
+          notaAmortizacion:           'El pago de capital fue definido por el equipo. El simulador no genera cuotas automáticas.',
           notaContinuidad:            'La deuda inicial puede incluir saldos financieros de rondas anteriores (incl. sobregiro rodado); no es separable históricamente con los campos actuales.',
           movInconsistente:           Math.abs(_movDelta) > 0.5,
+          // Compatibilidad legacy (por si otros consumidores los usan)
+          deudaInicial:               deudaIni,
+          plazoCredito:               _decInv?.plazoPrestamo ?? null,
+          pagoCapital:                pagoCap,
         };
         _prevDeuda = deudaFin;
       }

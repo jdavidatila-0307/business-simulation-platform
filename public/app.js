@@ -1516,7 +1516,7 @@ async function loadDecisionForm() {
         <div class="form-grid">
           <div class="form-group"><label class="form-label">💵 Caja inicial</label><input class="form-input" value="${fmt.bs(d.cajaInicial)}" readonly/></div>
           <div class="form-group"><label class="form-label">📈 Préstamo nuevo (Bs)</label>${inp('prestamoNuevo',d.prestamoNuevo,'type="number" min="0" step="1000"')}</div>
-          <div class="form-group"><label class="form-label">📉 Amortización (Bs)</label>${inp('amortizacion',d.amortizacion,'type="number" min="0" step="1000"')}</div>
+          <div class="form-group"><label class="form-label">📉 Pago voluntario adicional de capital (Bs)</label>${inp('amortizacion',d.amortizacion,'type="number" min="0" step="1000"')}<span class="form-hint">Este monto es decidido por el equipo y reduce la deuda financiera. No corresponde a una cuota automática calculada según el plazo.</span></div>
           <div class="form-group"><label class="form-label">% Ventas a crédito</label>${inp('pctVentasCredito',d.pctVentasCredito,'type="number" min="0" max="1" step="0.05"')}</div>
           <div class="form-group"><label class="form-label">% Compras a crédito</label>${inp('pctComprasCredito',d.pctComprasCredito,'type="number" min="0" max="1" step="0.05"')}</div>
         </div>
@@ -2252,9 +2252,9 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
                 Math.max(p.plazoPrestamoOperativo||20, p.plazoPrestamoInversion||40)
               }" step="1"`)}</td>
               <td class="hoja-ref">Op: ${p.plazoPrestamoOperativo||20} trim. · Inv: ${p.plazoPrestamoInversion||40} trim. <span style="color:var(--accent3);font-size:.75rem">⚠ cambia según tipo</span></td><td></td></tr>
-          <tr><td class="hoja-label">📉 Amortización (Bs)</td>
+          <tr><td class="hoja-label">📉 Pago voluntario adicional de capital (Bs)</td>
               <td>${inp('amortizacion',decision.amortizacion,'number','min="0" step="1000"')}</td>
-              <td class="hoja-ref">Pago de deuda existente. No exceder deuda total.</td><td></td></tr>
+              <td class="hoja-ref">Decidido por el equipo; reduce la deuda financiera. No es una cuota automática por plazo. No exceder la deuda total.</td><td></td></tr>
         </tbody>
       </table>
       <div style="padding:8px 14px;background:var(--bg3);font-size:.78rem;color:var(--text2)">
@@ -2567,7 +2567,7 @@ function hojaResumenV2(d) {
     ['Despedir vend.',  d.despedirVendedores??0],
     ['Préstamo tipo',   d.tipoPrestamo||'Ninguno'],
     ['Monto préstamo',  fmt.bs(d.montoPrestamo??0)],
-    ['Amortización',    fmt.bs(d.amortizacion??0)],
+    ['Pago voluntario de capital', fmt.bs(d.amortizacion??0)],
     ['Innovación',      d.innovacion?`Sí — ${d.tipoInnovacion}`:'No'],
     ['Monto innovación',fmt.bs(d.montoInnovacion??0)],
     ['Investigación',   d.tipoInvestigacion||'No'],
@@ -3984,19 +3984,40 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
     return;
   }
 
+  // Accesores con nombres nuevos + fallback legacy
+  const dIni = (c) => c.deudaFinancieraInicial ?? c.deudaInicial ?? 0;
+  const pCap = (c) => c.pagoVoluntarioCapital ?? c.pagoCapital ?? 0;
+  const plz  = (c) => c.plazoSolicitado ?? c.plazoCredito ?? null;
+
   // ── Tabla de movimiento real por ronda ──
   const movRows = rondas.map(({ ronda, c }) => {
     const flag = c.movInconsistente ? ' <span title="La identidad de deuda no cuadra" style="color:var(--accent4)">⚠</span>' : '';
     return `<tr>
       <td style="text-align:center;font-family:var(--font-mono);color:var(--accent3)">R${ronda}</td>
-      <td class="num">${fmt.bs(c.deudaInicial)}</td>
+      <td class="num">${fmt.bs(dIni(c))}</td>
       <td class="num" style="color:var(--accent2)">${fmt.bs(c.desembolsoCredito)}</td>
       <td class="num" style="color:var(--accent4)">${fmt.bs(c.sobregiroUtilizado)}</td>
       <td class="num" style="color:var(--accent4)">${fmt.bs(c.interesSobregiro)}</td>
-      <td class="num">${fmt.bs(c.pagoCapital)}</td>
+      <td class="num">${fmt.bs(pCap(c))}</td>
       <td class="num" style="font-weight:700">${fmt.bs(c.deudaFinancieraFinal)}${flag}</td>
     </tr>`;
   }).join('');
+
+  // ── Alertas pedagógicas por ronda ──
+  const alertas = [];
+  rondas.forEach(({ ronda, c }) => {
+    const deudaDisp = dIni(c) + (Number(c.desembolsoCredito) || 0);
+    if (plz(c) > 0 && pCap(c) === 0 && (dIni(c) > 0 || c.desembolsoCredito > 0)) {
+      alertas.push(`R${ronda}: No se realizó pago voluntario de capital en esta ronda.`);
+    }
+    if (pCap(c) > deudaDisp + 0.5) {
+      alertas.push(`⚠ R${ronda}: El pago de capital (${fmt.bs(pCap(c))}) supera la deuda disponible (${fmt.bs(deudaDisp)}).`);
+    }
+  });
+  const alertasHtml = alertas.length
+    ? `<div style="margin:4px 0 16px;padding:8px 12px;background:rgba(245,158,11,.08);border-radius:var(--r);font-size:.74rem;color:var(--text2)">`
+      + alertas.map(a => '• ' + a).join('<br>') + '</div>'
+    : '';
 
   // ── Tarjetas de detalle por ronda con actividad ──
   const cards = rondas.filter(x => (x.c.desembolsoCredito > 0) || (x.c.sobregiroUtilizado > 0)).map(({ ronda, c }) => {
@@ -4004,21 +4025,21 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
       `<div style="padding:12px 16px;border-right:1px solid var(--border)"><div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">${label}</div>` +
       `<div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:4px${color?';color:'+color:''}">${val}</div></div>`;
 
-    // A. Crédito ordinario (si hubo desembolso o queda saldo ordinario)
+    // A. Crédito nuevo (si hubo desembolso o queda saldo ordinario)
     let ordinario = '';
     if (c.desembolsoCredito > 0 || c.saldoCreditoOrdinarioFinal > 0) {
       ordinario = `
-        <div style="font-size:.7rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:10px 16px 4px">Crédito ordinario</div>
+        <div style="font-size:.7rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:10px 16px 4px">Crédito nuevo</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border-bottom:1px solid var(--border)">
           ${box('Tipo', c.tipoCredito || '—')}
           ${box('Monto solicitado', fmt.bs(c.nuevoCreditoSolicitado))}
           ${box('Desembolso real', fmt.bs(c.desembolsoCredito), 'var(--accent2)')}
-          ${box('Tasa', pct(c.tasaCredito) + (c.tasaCredito!=null? ' ' + (c.periodoTasa||'') : ''), 'var(--accent3)')}
-          ${box('Plazo', (c.plazoCredito!=null? c.plazoCredito + ' ' + (c.unidadPlazo||'') : '—'))}
+          ${box('Tasa aplicada', pct(c.tasaCredito) + (c.tasaCredito!=null? ' ' + (c.periodoTasa||'') : ''), 'var(--accent3)')}
+          ${box('Plazo solicitado', (plz(c)!=null? plz(c) + ' ' + (c.unidadPlazo||'') + ' (informativo)' : '—'))}
           ${box('Comisión apertura', fmt.bs(c.comisionApertura), 'var(--accent4)')}
-          ${box('Interés pagado', fmt.bs(c.pagoIntereses), 'var(--accent4)')}
-          ${box('Capital pagado', fmt.bs(c.pagoCapital))}
-          ${box('Saldo ordinario (cierre)', fmt.bs(c.saldoCreditoOrdinarioFinal))}
+          ${box('Interés cobrado', fmt.bs(c.pagoIntereses), 'var(--accent4)')}
+          ${box('Pago voluntario de capital', fmt.bs(pCap(c)))}
+          ${box('Saldo financiero ordinario (cierre)', fmt.bs(c.saldoCreditoOrdinarioFinal))}
         </div>`;
     }
 
@@ -4044,9 +4065,9 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
         ${ordinario}
         ${sobregiro}
         <div style="padding:10px 16px;font-size:.78rem;color:var(--text3)">
-          Movimiento: deuda inicial ${fmt.bs(c.deudaInicial)} + desembolso ${fmt.bs(c.desembolsoCredito)}
+          Movimiento: deuda inicial ${fmt.bs(dIni(c))} + desembolso ${fmt.bs(c.desembolsoCredito)}
           + sobregiro ${fmt.bs(c.sobregiroUtilizado)} + int. sobregiro ${fmt.bs(c.interesSobregiro)}
-          − capital pagado ${fmt.bs(c.pagoCapital)} = <b>deuda final ${fmt.bs(c.deudaFinancieraFinal)}</b>
+          − pago voluntario de capital ${fmt.bs(pCap(c))} = <b>deuda financiera final ${fmt.bs(c.deudaFinancieraFinal)}</b>
           ${c.movInconsistente ? '<div style="margin-top:6px;color:var(--accent4)">⚠ La identidad de deuda no cuadra dentro de la tolerancia de redondeo.</div>' : ''}
         </div>
       </div>`;
@@ -4057,12 +4078,16 @@ function renderCreditosEquipo(el, historial, currentRound, roundState) {
       <div class="stat-card"><div class="stat-label">Deuda financiera actual</div><div class="stat-value" style="color:${ult.deudaFinancieraFinal>0?'var(--accent4)':'var(--accent5)'}">${fmt.bs(ult.deudaFinancieraFinal)}</div></div>
       <div class="stat-card"><div class="stat-label">Costo financiero acumulado</div><div class="stat-value" style="color:var(--accent4)">${fmt.bs(costoAcum)}</div></div>
     </div>
+    <div style="margin-bottom:14px;padding:10px 14px;background:rgba(108,99,255,.08);border-radius:var(--r);font-size:.78rem;color:var(--text2)">
+      ⓘ El simulador no genera cuotas automáticas. El <b>plazo solicitado es informativo</b> y no determina el pago periódico. El equipo decide cuánto capital amortizar en cada ronda (pago voluntario).
+    </div>
     <div style="font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;border-bottom:2px solid var(--border2);margin:4px 0 8px">🏦 Movimiento de deuda financiera por ronda</div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Ronda</th><th>Deuda inicial</th><th>Desembolso</th><th>Sobregiro</th><th>Int. sobregiro</th><th>Capital pagado</th><th>Deuda final</th></tr></thead>
+      <thead><tr><th>Ronda</th><th>Deuda inicial</th><th>Desembolso</th><th>Sobregiro</th><th>Int. sobregiro</th><th>Pago voluntario capital</th><th>Deuda final</th></tr></thead>
       <tbody>${movRows}</tbody>
     </table></div>
-    <div style="margin:8px 0 16px;font-size:.74rem;color:var(--text3);font-style:italic">ⓘ ${ult.notaContinuidad || ''} La "deuda financiera" es sólo deuda bancaria/sobregiro (resultado.deudaFinal); NO incluye IVA ni otras obligaciones (esos van en Pasivos totales del Balance).</div>
+    ${alertasHtml}
+    <div style="margin:8px 0 16px;font-size:.74rem;color:var(--text3);font-style:italic">ⓘ ${ult.notaAmortizacion || ''} ${ult.notaContinuidad || ''} La "deuda financiera" es sólo deuda bancaria/sobregiro (resultado.deudaFinal); NO incluye IVA ni otras obligaciones (esos van en Pasivos totales del Balance).</div>
     ${cards}`;
 }
 
