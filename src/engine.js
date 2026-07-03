@@ -583,6 +583,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     interesesPrestamo = roundBs(montoP * tasa);
     comisionApertura  = roundBs(montoP * params.comisionAperturaPrestamo);
   }
+  // IVA crédito de la comisión de apertura — convención interna 13% (entero, igual que el resto
+  // de ivaCredito). Se define UNA sola vez y se reutiliza en gastoFinanciero y en ivaCredito para
+  // no duplicar la fórmula ni contar el IVA dos veces. Antes: comisión BRUTA en el ER + su IVA
+  // como crédito ⇒ descuadre patrimonial acumulado = Σ round(comisionApertura×13%).
+  const ivaCreditoComisionApertura = Math.round(comisionApertura * 13 / 100);
+  const comisionAperturaNeta       = roundBs(comisionApertura - ivaCreditoComisionApertura);
 
   // ── Gastos operativos en P&L ────────────────────────────────────────────
   const tasaIVA_op = params.tasaIVA ?? 0.13;
@@ -727,8 +733,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     // NOTA: interesesPrestamo y comisionApertura van en gastoFinanciero (post-EBIT)
   );
 
-  // Gasto financiero separado (intereses y comisiones de deuda)
-  const gastoFinanciero = roundBs(interesesPrestamo + comisionApertura);
+  // Gasto financiero separado (intereses y comisión NETA de IVA — el IVA va a crédito fiscal)
+  const gastoFinanciero = roundBs(interesesPrestamo + comisionAperturaNeta);
 
   // EBIT = Earnings Before Interest & Taxes (correcto: sin gastos financieros)
   let utilidadNeta_operat = roundBs(utilidadBruta - gastosOp - gastoFinanciero);
@@ -817,7 +823,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     + Math.round(gastoInvestigacion_mkt    * 13/100)
     + Math.round(gastoInnovacion           * 13/100)
     + Math.round(comisiones                * 13/100)
-    + Math.round(comisionApertura          * 13/100);
+    + ivaCreditoComisionApertura;  // canónico (= Math.round(comisionApertura×13/100)) — sin cambio de valor
     // costoAlmacenamiento: costo interno sin factura — coherente con S6 y S10
     // NO genera IVA crédito (igual que calidad y operarios)
   const ivaSaldoAFavorAnt = d.ivaSaldoAFavorAnterior ?? 0;  // crédito fiscal acumulado de ronda anterior
@@ -1054,6 +1060,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     intangiblesNetos,
     costoAlmacenamiento, gastoInnovacion, gastoInvestigacion_mkt,
     interesesPrestamo, comisionApertura, interesSobregiro,
+    comisionAperturaNeta, ivaCreditoComisionApertura,  // desglose IVA comisión (comisionApertura bruta sin cambio)
     gastoFinanciero: roundBs(gastoFinanciero + interesSobregiro),  // FASE 5A: incluye interés de sobregiro
     gastosOp, utilidadNeta,
 
