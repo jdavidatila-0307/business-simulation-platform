@@ -4,6 +4,11 @@
  * Dependencias: api(), fmt, state, toast
  */
 
+// Contador de secuencia para descartar respuestas de red obsoletas cuando el usuario
+// navega rápido entre rondas (R4→R5): la respuesta más lenta de una ronda vieja no debe
+// sobrescribir el reporte de la ronda seleccionada más recientemente.
+let reporteRequestSeq = 0;
+
 // equipo-noticias incluido aquí por dependencia
 async function loadEquipoNoticias() {
   const el = document.getElementById('noticiasContent');
@@ -152,16 +157,19 @@ window.switchMapTab = (idx, total) => {
 };
 
 window.mostrarReporteRonda = async (n, historialCache) => {
+  const requestId = ++reporteRequestSeq;
   document.querySelectorAll('#reportesContent .ronda-btn').forEach(b => {
     b.classList.toggle('active', parseInt(b.textContent.replace('Ronda ',''))===n);
   });
   const det = document.getElementById('reporteDetalle');
   if (!det) return;
+  det.innerHTML = '<p>Cargando reporte...</p>';
   try {
     const [repData, resData] = await Promise.all([
       api('GET', `/api/reportes/${n}`),
       api('GET', '/api/resultados'),
     ]);
+    if (requestId !== reporteRequestSeq) return;  // respuesta obsoleta — el usuario ya cambió de ronda
     const rep = repData.reportes;
     const historial = historialCache || resData.historial;
     const item = historial?.find(h=>h.ronda===n);
@@ -512,9 +520,11 @@ window.mostrarReporteRonda = async (n, historialCache) => {
           + '<div style="padding:14px 18px">' + elHTML + '</div></div>';
       }
     } // cierra else investigacion comprada
-    document.getElementById('reporteDetalle').innerHTML = html;
+    if (requestId !== reporteRequestSeq) return;  // respuesta obsoleta — el usuario ya cambió de ronda
+    if (det) det.innerHTML = html;
   } catch(e) {
-    document.getElementById('reporteDetalle').innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
+    if (requestId !== reporteRequestSeq) return;  // respuesta obsoleta — no mostrar error de una petición vieja
+    if (det) det.innerHTML = `<p style="color:var(--accent4);padding:16px">${e.message}</p>`;
   }
 };
 
