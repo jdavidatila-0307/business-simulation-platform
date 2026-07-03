@@ -865,8 +865,10 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const pagoIUE = impuestoIUE;      // CAJA: IUE se paga siempre que corresponde
 
   // P&L: IVA NO es gasto — solo IT e IUE son gastos del período (devengado)
-  // Nota: IT es gasto completo aunque parte salga de compensación (devengado ≠ percibido)
-  const totalImpuestos = roundBs(impuestoIT + impuestoIUE);  // FASE 0+4
+  // El IUE ya fue reconocido como gasto cuando se generó (ronda anual). La parte del IT
+  // compensada con ese saldo IUE (compensacionIT) NO se registra nuevamente como gasto —
+  // se expensa solo el IT efectivo (no compensado). Evita el doble gasto que descuadraba R5+.
+  const totalImpuestos = roundBs(ITefectivoCaja + impuestoIUE);  // FASE 0+4 (IT no compensado + IUE)
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
   const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
