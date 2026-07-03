@@ -382,8 +382,8 @@ window.mostrarReporteRonda = async (n, historialCache) => {
               const y   = Math.round(cy(p.calidad));
               const tip = p.empresa + ' · ' + p.producto + ' · Share: ' + (p.share*100).toFixed(1) + '%';
               return '<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+p.color+'" fill-opacity="0.75" stroke="'+p.color+'" stroke-width="2"><title>'+tip+'</title></circle>'
-                + '<text x="'+x+'" y="'+(y-r-4)+'" text-anchor="middle" font-size="8.5" fill="#E2E8F0" font-weight="600">'+p.empresa.substring(0,9)+'</text>'
-                + '<text x="'+x+'" y="'+(y+r+11)+'" text-anchor="middle" font-size="7.5" fill="#94A3B8">'+p.producto.substring(0,12)+'</text>';
+                + '<text x="'+x+'" y="'+(y-r-4)+'" text-anchor="middle" font-size="8.5" fill="#E2E8F0" font-weight="600">'+String(p.empresa ?? 'Equipo').substring(0,9)+'</text>'
+                + '<text x="'+x+'" y="'+(y+r+11)+'" text-anchor="middle" font-size="7.5" fill="#94A3B8">'+String(p.producto ?? '—').substring(0,12)+'</text>';
             }).join('');
 
             // Diamantes de competencia externa
@@ -393,7 +393,7 @@ window.mostrarReporteRonda = async (n, historialCache) => {
               const s = 9;
               const tip = e.nombre + ' (externo) · Part.ref: '+(e.share*100).toFixed(0)+'%';
               return '<polygon points="'+x+','+(y-s)+' '+(x+s)+','+y+' '+x+','+(y+s)+' '+(x-s)+','+y+'" fill="#F97316" fill-opacity="0.8" stroke="#FB923C" stroke-width="1.5"><title>'+tip+'</title></polygon>'
-                + '<text x="'+x+'" y="'+(y-s-4)+'" text-anchor="middle" font-size="8" fill="#FB923C">'+e.nombre.substring(0,16)+'</text>';
+                + '<text x="'+x+'" y="'+(y-s-4)+'" text-anchor="middle" font-size="8" fill="#FB923C">'+String(e.nombre ?? 'Empresa').substring(0,16)+'</text>';
             }).join('');
 
             // Ticks eje X (precio)

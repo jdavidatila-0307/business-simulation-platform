@@ -197,7 +197,10 @@ function generarReporteEstrategico(mercadoSegmentos, resultadosRonda, segmentosC
     if (!seg) return;
     if (!mapasPorSegmento[seg]) mapasPorSegmento[seg] = { puntos: [], externos: [], demandaFormal: 0, tendencia: '' };
     mapasPorSegmento[seg].puntos.push({
-      empresa:  r.equipoNombre,
+      // Fallback seguro: si la decisión no trajo equipoNombre (dato incompleto), usar el
+      // identificador del equipo en vez de undefined — evita romper el render (.substring)
+      // en el reporte Estratégico de OTROS equipos que ven este punto como competidor.
+      empresa:  r.equipoNombre || r.equipoOriginal || r.equipo || 'Equipo',
       producto: r.producto || '—',
       precio:   r.precioVenta  || 0,
       calidad:  r.calidad      || 0,
