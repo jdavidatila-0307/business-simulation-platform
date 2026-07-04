@@ -587,7 +587,8 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
     'producto',
     'segmentoObjetivo',
     'canalPrincipal',
-    'canalSecundario'
+    'canalSecundario',
+    'tipoInnovacion'
   ]);
   const sel = (field, opts) => {
     const valorReadOnly = camposProductoSelect.has(field)
