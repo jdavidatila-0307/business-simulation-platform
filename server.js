@@ -52,6 +52,57 @@ function equiposPendientesDecision(equipos, decisiones) {
     .filter(eq => !decisionDeEquipo(decisiones, eq.id)?.submitted);
 }
 
+function resolverRondaPreSimulacion(body = {}, sim = {}) {
+  const cfg = sim.config || {};
+  const currentRound = Number(cfg.currentRound || 1);
+  const totalRounds = Number(cfg.totalRounds || 20);
+  const raw = body.rondaNumero;
+
+  if (raw === undefined || raw === null || raw === '') {
+    return { ok: true, rondaNumero: currentRound, explicita: false };
+  }
+
+  if (!Number.isInteger(raw)) {
+    return { ok: false, status: 400, error: 'rondaNumero debe ser un entero' };
+  }
+  if (raw < 1) {
+    return { ok: false, status: 400, error: 'rondaNumero debe ser mayor o igual a 1' };
+  }
+  if (Number.isFinite(totalRounds) && raw > totalRounds) {
+    return { ok: false, status: 400, error: 'rondaNumero excede el total de rondas configurado' };
+  }
+
+  return { ok: true, rondaNumero: raw, explicita: true };
+}
+
+function validarRondaPreSimulacion(resuelta, sim = {}, ronda = null) {
+  if (!resuelta?.ok) return resuelta;
+  if (!ronda) return { ok: false, status: 400, error: 'Sin ronda' };
+  if (!resuelta.explicita && !['open','locked'].includes(sim.config?.roundState)) {
+    return { ok: false, status: 400, error: 'Estado incorrecto' };
+  }
+  if (!resuelta.explicita && ['simulated','calculada'].includes(ronda.estado)) {
+    return { ok: false, status: 400, error: 'Ya simulada' };
+  }
+  return resuelta;
+}
+
+function stableStringify(obj) {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+  return '{' + Object.keys(obj).sort()
+    .map(k => JSON.stringify(k) + ':' + stableStringify(obj[k]))
+    .join(',') + '}';
+}
+
+function soloCambiaPreSimulacion(rondaAntes, rondaDespues) {
+  const antes = { ...(rondaAntes || {}) };
+  const despues = { ...(rondaDespues || {}) };
+  delete antes.preSimulacion;
+  delete despues.preSimulacion;
+  return stableStringify(antes) === stableStringify(despues);
+}
+
 // FASE 1A — gastos fijos de Fase 0 obligatorios por equipo.
 // Devuelve los NOMBRES de equipos a los que les falta alguno de los 3 campos.
 // Un 0 EXPLÍCITO es válido; solo NULL/undefined/ausente bloquea.
@@ -1322,11 +1373,12 @@ async function route(req, res, body) {
   if (url === '/admin/ronda/pre-simular' && method === 'POST') {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
-    const n = sim.config.currentRound;
+    const rondaReq = resolverRondaPreSimulacion(body, sim);
+    if (!rondaReq.ok) return send(res, rondaReq.status || 400, { error: rondaReq.error });
+    const n = rondaReq.rondaNumero;
     const ronda = await storage.getRonda(sim.id, n);
-    if (!ronda) return send(res, 400, { error: 'Sin ronda' });
-    if (!['open','locked'].includes(sim.config.roundState)) return send(res, 400, { error: 'Estado incorrecto' });
-    if (['simulated','calculada'].includes(ronda.estado)) return send(res, 400, { error: 'Ya simulada' });
+    const rondaValidada = validarRondaPreSimulacion(rondaReq, sim, ronda);
+    if (!rondaValidada.ok) return send(res, rondaValidada.status || 400, { error: rondaValidada.error });
     const equipos = await storage.getEquipos(sim.id);
     const pendientes = equiposPendientesDecision(equipos, ronda.decisiones);
     if (pendientes.length) return send(res, 400, {
@@ -1362,10 +1414,18 @@ async function route(req, res, body) {
       const preResult = calcularPreSimulacion(decisiones, simCfg);
       const preSimulacion = {};
       preResult.resultado.forEach(r => { preSimulacion[r.equipo] = { ...r, confirmado: false }; });
+      if (rondaReq.explicita) {
+        const rondaPropuesta = { ...ronda, preSimulacion };
+        if (!soloCambiaPreSimulacion(ronda, rondaPropuesta)) {
+          return send(res, 500, { error: 'Abortado: la presimulacion modificaria datos fuera de preSimulacion' });
+        }
+        await storage.updateRonda(sim.id, n, { preSimulacion });
+        return send(res, 200, { ok: true, ronda: n, equiposCalculados: preResult.resultado.length, detalle: preResult.resultado });
+      }
       await storage.updateRonda(sim.id, n, { preSimulacion, preSimMercado: preResult.mercadoSegmentos });
       sim.config.roundState = 'pre-sim';
       await storage.updateSimulacion(sim.id, { config: sim.config });
-      return send(res, 200, { ok: true, equiposCalculados: preResult.resultado.length, detalle: preResult.resultado });
+      return send(res, 200, { ok: true, ronda: n, equiposCalculados: preResult.resultado.length, detalle: preResult.resultado });
     } catch(e) { return send(res, 500, { error: e.message }); }
   }
 
@@ -3076,8 +3136,8 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: 'Error interno del servidor' });
   }
 });
-
 // ── Adjuntar WebSocket al mismo servidor HTTP (mismo puerto, ruta /ws) ────────
+if (require.main === module) {
 initWebSocket(server);
 
 server.listen(PORT, '0.0.0.0', () => {
@@ -3088,3 +3148,12 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`║  → Industrias: ${listarPlantillas().join(', ')}    ║`);
   console.log(`╚═══════════════════════════════════════════════════════════╝\n`);
 });
+}
+
+module.exports = {
+  _test: {
+    resolverRondaPreSimulacion,
+    validarRondaPreSimulacion,
+    soloCambiaPreSimulacion,
+  },
+};
