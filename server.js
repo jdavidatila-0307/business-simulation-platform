@@ -1199,7 +1199,7 @@ async function route(req, res, body) {
       for (const eq of equipos.filter(e => !e.isBot)) {
         let dec = storage.defaultDecision(eq.id, eq.nombre, sim.parametros);
         const resPrev = Object.values(resObj)
-          .filter(v => v && typeof v === 'object' && v.equipoNombre)
+          .filter(v => v && typeof v === 'object' && (v.equipoOriginal || v.equipo))
           .find(r => r.equipoOriginal === eq.id || r.equipo === eq.id || (r.equipo||'').startsWith(eq.id));
 
         if (resPrev) {
@@ -2572,7 +2572,7 @@ async function route(req, res, body) {
       const prevRondaHid = await storage.getRonda(sim.id, Number(n) - 1);
       const resObjHid = prevRondaHid?.resultados?.resultados || prevRondaHid?.resultados || {};
       const resPrevHid = Object.values(resObjHid)
-        .filter(v => v && typeof v === 'object' && v.equipoNombre)
+        .filter(v => v && typeof v === 'object' && (v.equipoOriginal || v.equipo))
         .find(r => r.equipoOriginal === equipoId || r.equipo === equipoId || (r.equipo || '').startsWith(equipoId));
       if (resPrevHid) {
         const decRehid = propagarEstado(decision, resPrevHid, sim.parametros);
