@@ -103,6 +103,285 @@ function soloCambiaPreSimulacion(rondaAntes, rondaDespues) {
   return stableStringify(antes) === stableStringify(despues);
 }
 
+// =============================================================================
+// RECÁLCULO DE RONDAS — helpers compartidos entre /admin/recalcular-balance
+// (global, todas las rondas) y /admin/recalcular-ronda (una sola ronda)
+// =============================================================================
+async function estadoFase0Map(sim) {
+  const modo = leerModoInicio(sim);
+  const mapa = {};
+  if (modo === 'fase0') {
+    (await storage.getFase0(sim.id)).forEach(r => { mapa[r.equipo_id] = r; });
+  }
+  return mapa;
+}
+
+// Estado acumulado inicial (previo a R1) usado como semilla del recálculo global.
+function estadoEmpresaInicialSeed(sim, equipos, fase0Map) {
+  const modo = leerModoInicio(sim);
+  const estadoEmpresa = {};
+  equipos.forEach(eq => {
+    const _f0   = fase0Map[eq.id];
+    const _esF0 = modo === 'fase0' && _f0;
+    estadoEmpresa[eq.id] = {
+      resultadoAcumulado:    0,
+      // Capital permanente (invariante R1→Rn) — fase0: aporte real de socios; homogéneo: params.
+      capitalPermanente:     _esF0 ? Number(_f0.capital_total_otorgado)
+                                   : (sim.parametros?.capitalContable ?? sim.parametros?.capitalInicial ?? null),
+      // Campos de continuidad financiera para re-simulación
+      cajaFinal:             _esF0 ? Number(_f0.caja_inicial)            : (sim.parametros?.cajaInicial ?? 96000),
+      cxcFinal:              0,
+      deudaFinal:            _esF0 ? Number(_f0.deuda_inicial || 0)      : 0,
+      afNetos:               _esF0 ? Number(_f0.activos_fijos_comprados) : (sim.parametros?.activosFijosIniciales ?? 360000),
+      activosFijosBrutos:    _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
+      baseDepreciable:       _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
+      baseDepreciableMaquinaria: _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
+      baseDepreciableVehiculos: 0,
+      baseDepreciableMuebles: 0,
+      baseDepreciableComputo: 0,
+      depreciacionAcumulada: 0,
+      intangiblesBrutos:     0,
+      amortizacionAcumulada: 0,
+      brandEquityFinal:      50,
+      vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
+      operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
+      inventarioFinal:       0,
+      stockMPFinal:          0,
+      pedidosPendientesResta:[],
+    };
+  });
+  return estadoEmpresa;
+}
+
+// Reconstruye estadoEmpresa (misma forma que estadoEmpresaInicialSeed) a partir
+// de los resultados YA PERSISTIDOS de una ronda anterior — usado para recalcular
+// una única ronda histórica sin re-ejecutar las rondas previas.
+function estadoEmpresaDesdeResultados(resultadosPrevios, estadoEmpresaAnterior) {
+  const estadoEmpresa = {};
+  const porEmpresaRes = {};
+  Object.values(resultadosPrevios || {}).forEach(r => {
+    const eqId = r.equipoOriginal || r.equipo;
+    if (!porEmpresaRes[eqId]) porEmpresaRes[eqId] = [];
+    porEmpresaRes[eqId].push(r);
+  });
+  for (const [eqId, prods] of Object.entries(porEmpresaRes)) {
+    const p0 = prods[0];
+    const invFinalTotal = prods.reduce((s, p) => s + Math.max(0, p.inventarioFinal || 0), 0);
+    estadoEmpresa[eqId] = {
+      resultadoAcumulado:    p0.resultadoAcumulado ?? 0,
+      capitalPermanente:     estadoEmpresaAnterior?.[eqId]?.capitalPermanente ?? null,
+      cajaFinal:             p0.cajaFinal    ?? 0,
+      cxcFinal:              p0.cxcFinal     ?? 0,
+      deudaFinal:            p0.deudaFinal   ?? 0,
+      afNetos:               p0.afNetos      ?? 0,
+      activosFijosBrutos:    p0.activosFijosBrutos,
+      baseDepreciable:       p0.baseDepreciable,
+      baseDepreciableMaquinaria: p0.baseDepreciableMaquinaria,
+      baseDepreciableVehiculos:  p0.baseDepreciableVehiculos,
+      baseDepreciableMuebles:    p0.baseDepreciableMuebles,
+      baseDepreciableComputo:    p0.baseDepreciableComputo,
+      depreciacionAcumulada: p0.depreciacionAcumulada,
+      intangiblesBrutos:     p0.intangiblesBrutos,
+      amortizacionAcumulada: p0.amortizacionAcumulada,
+      brandEquityFinal:      p0.brandEquityFinal ?? 50,
+      vendedoresFinales:     p0.vendedoresFinales ?? 2,
+      operariosFinales:      p0.operariosFinales ?? 4,
+      capacidadMaxProduccion: p0.capacidadMaxProduccion,
+      inventarioFinal:       invFinalTotal,
+      stockMPFinal:          p0.stockMPFinal ?? 0,
+      pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
+      saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),
+      ivaAPagar:            Math.max(0, p0.ivaAPagar       ?? 0),
+      ivaSaldoAFavor:       Math.max(0, p0.ivaSaldoAFavor  ?? 0),
+    };
+  }
+  return estadoEmpresa;
+}
+
+// Sanitiza una decisión antes de re-simular (clamps de límites pedagógicamente
+// imposibles: operarios, producción, precio). Compartido por ambos endpoints.
+function sanitizarDecisionRecalculo(d, capMaxGlobal) {
+  if (!d) return d;
+  const s = { ...d };
+  const capMaxEquipo = s.capacidadMaxProduccion ?? capMaxGlobal;
+  if ((s.contratarOperarios || 0) > 100)  { s.contratarOperarios = 100; }
+  if ((s.despedirOperarios  || 0) > 100)  { s.despedirOperarios  = 100; }
+  if ((s.produccion         || 0) > capMaxEquipo) { s.produccion = capMaxEquipo; }
+  if ((s.precioVenta || 0) > 0 && (s.precioVenta || 0) < 10) { s.precioVenta = 10; }
+  if (Array.isArray(s.productos)) {
+    s.productos = s.productos.map(p => {
+      const capMaxProd = p.capacidadMaxProduccion ?? capMaxEquipo;
+      return {
+        ...p,
+        contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
+        despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
+        produccion:         Math.min(p.produccion         || 0, capMaxProd),
+      };
+    });
+  }
+  return s;
+}
+
+// Recalcula EXACTAMENTE la ronda `n`: re-ejecuta el motor con las decisiones
+// oficiales de esa ronda (ya canonicalizadas por storage.getRonda) y el estado
+// financiero de continuidad recibido en `estadoEmpresa` (estado de cierre de R(n-1)).
+// No persiste nada; el llamador decide qué guardar.
+function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estadoEmpresa, nuevoResObjAnterior }) {
+  const capMaxGlobal = sim.parametros?.capacidadMaxProduccion ?? 1500;
+  const decisionesOriginales = ronda.decisiones || {};
+  const decisiones = [];
+
+  for (const eq of equipos) {
+    const decOrigRaw = decisionesOriginales[eq.id];
+    if (!decOrigRaw) continue;
+    const decOrig = sanitizarDecisionRecalculo(decOrigRaw, capMaxGlobal);
+
+    const estado = estadoEmpresa[eq.id] || {};
+
+    const decRepropagada = {
+      ...decOrig,
+      ...(((estado.capitalPermanente ?? decOrig.capitalInicial) != null)
+        ? { capitalInicial: Number(estado.capitalPermanente ?? decOrig.capitalInicial) } : {}),
+      cajaInicial:                Math.max(0, estado.cajaFinal ?? 0),
+      cxcInicial:                 Math.max(0, estado.cxcFinal ?? 0),
+      deudaInicial:               Math.max(0, estado.deudaFinal ?? 0),
+      activosFijosIniciales:      Math.max(0, estado.afNetos ?? 78000),
+      brandEquityInicial:         estado.brandEquityFinal ?? 50,
+      vendedoresIniciales:        Math.max(0, (n <= 1
+                                    ? (decOrig.vendedoresIniciales ?? estado.vendedoresFinales)
+                                    : (estado.vendedoresFinales ?? decOrig.vendedoresIniciales)) ?? 0),
+      operariosIniciales:         Math.max(0, (n <= 1
+                                    ? (decOrig.operariosIniciales ?? estado.operariosFinales)
+                                    : (estado.operariosFinales ?? decOrig.operariosIniciales)) ?? 0),
+      capacidadMaxProduccion:     estado.capacidadMaxProduccion ?? decOrig.capacidadMaxProduccion ?? sim.parametros?.capacidadMaxProduccion,
+      inventarioInicial:          Math.max(0, estado.inventarioFinal ?? 0),
+      stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
+      pedidosPendientes:          estado.pedidosPendientesResta ?? [],
+      resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
+      saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),
+      ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),
+      ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),
+      ...(((estado.activosFijosBrutos ?? decOrig.activosFijosBrutos) != null) ? {
+        activosFijosBrutos:        estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+        baseDepreciable:           estado.baseDepreciable ?? decOrig.baseDepreciable ?? estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+        baseDepreciableMaquinaria: estado.baseDepreciableMaquinaria ?? decOrig.baseDepreciableMaquinaria ?? estado.baseDepreciable ?? decOrig.baseDepreciable ?? estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
+        baseDepreciableVehiculos:  estado.baseDepreciableVehiculos ?? decOrig.baseDepreciableVehiculos ?? 0,
+        baseDepreciableMuebles:    estado.baseDepreciableMuebles ?? decOrig.baseDepreciableMuebles ?? 0,
+        baseDepreciableComputo:    estado.baseDepreciableComputo ?? decOrig.baseDepreciableComputo ?? 0,
+        depreciacionAcumulada:     estado.depreciacionAcumulada ?? decOrig.depreciacionAcumulada ?? 0,
+      } : {}),
+      ...(((estado.intangiblesBrutos ?? decOrig.intangiblesBrutos) != null) ? {
+        intangiblesBrutos:         estado.intangiblesBrutos ?? decOrig.intangiblesBrutos,
+        amortizacionAcumulada:     estado.amortizacionAcumulada ?? decOrig.amortizacionAcumulada ?? 0,
+      } : {}),
+      incrementoCapacidadPendiente: 0,
+    };
+
+    if (Array.isArray(decRepropagada.productos)) {
+      decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
+        const prodId      = p.productoId || ('prod_' + (idx + 1));
+        const keyPrevProd = eq.id + '__' + prodId;
+        const resPrevProd = nuevoResObjAnterior[keyPrevProd] || null;
+        const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
+
+        return {
+          ...p,
+          cajaInicial:                idx === 0 ? decRepropagada.cajaInicial : 0,
+          cxcInicial:                 idx === 0 ? decRepropagada.cxcInicial : 0,
+          deudaInicial:               idx === 0 ? decRepropagada.deudaInicial : 0,
+          activosFijosIniciales:      idx === 0 ? decRepropagada.activosFijosIniciales : 0,
+          activosFijosBrutos:         idx === 0 ? decRepropagada.activosFijosBrutos : undefined,
+          baseDepreciable:            idx === 0 ? decRepropagada.baseDepreciable : undefined,
+          baseDepreciableMaquinaria:  idx === 0 ? decRepropagada.baseDepreciableMaquinaria : undefined,
+          baseDepreciableVehiculos:   idx === 0 ? decRepropagada.baseDepreciableVehiculos : undefined,
+          baseDepreciableMuebles:     idx === 0 ? decRepropagada.baseDepreciableMuebles : undefined,
+          baseDepreciableComputo:     idx === 0 ? decRepropagada.baseDepreciableComputo : undefined,
+          depreciacionAcumulada:      idx === 0 ? decRepropagada.depreciacionAcumulada : undefined,
+          intangiblesBrutos:          idx === 0 ? decRepropagada.intangiblesBrutos : undefined,
+          amortizacionAcumulada:      idx === 0 ? decRepropagada.amortizacionAcumulada : undefined,
+          brandEquityInicial:         decRepropagada.brandEquityInicial,
+          vendedoresIniciales:        decRepropagada.vendedoresIniciales,
+          operariosIniciales:         decRepropagada.operariosIniciales,
+          inventarioInicial:          invInicialProd,
+          stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
+          pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
+          resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
+          ivaAPagarAnterior:          idx === 0 ? (decRepropagada.ivaAPagarAnterior ?? 0) : 0,
+          saldoIUEcompensable:        decRepropagada.saldoIUEcompensable ?? 0,
+        };
+      });
+    }
+
+    decisiones.push(decRepropagada);
+  }
+  for (const [botId, botDec] of Object.entries(decisionesOriginales)) {
+    if (botId.startsWith('bot_') && botDec) {
+      decisiones.push(sanitizarDecisionRecalculo({ ...botDec }, capMaxGlobal));
+    }
+  }
+
+  if (!decisiones.length) {
+    throw new Error('Sin equipos con decisiones para recalcular');
+  }
+
+  const demandaBaseAnteriorMap = {};
+  if (n > 1) {
+    const rondaPrevia = rondas.find(r => r.numero === n - 1);
+    (rondaPrevia?.mercadoSegmentos || []).forEach(seg => {
+      demandaBaseAnteriorMap[seg.nombre] = seg.demandaBase;
+    });
+  }
+
+  const shockRonda = ronda.shock || generarShock(sim.id, n, sim.parametros?.probabilidadShock ?? 0.35, sim.parametros);
+
+  const simCfg = {
+    params:             sim.parametros,
+    tiposProducto:      sim.tipos_producto,
+    canales:            sim.canales,
+    segmentos:          sim.segmentos,
+    afinidadMatrix:     sim.afinidad_matrix,
+    competenciaExterna: sim.competencia_externa,
+    demandaBaseAnteriorMap,
+    rondaNumero:        n,
+    bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),
+    proveedores:        proveedores,
+    shock:              shockRonda,
+    equipos,
+  };
+
+  const result = ejecutarSimulador(decisiones, simCfg);
+
+  const nuevoResObj = {};
+  result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
+
+  const rondaPrevBase = n > 1 ? rondas.find(r => r.numero === n - 1) : null;
+  const resultadosAnteriores = rondaPrevBase
+    ? (rondaPrevBase.resultados?.resultados || rondaPrevBase.resultados || {})
+    : {};
+  const reportes = {};
+  for (const d of decisiones) {
+    reportes[d.equipo] = generarReportes(
+      d, result.mercadoSegmentos, result.atractivoEquipos,
+      nuevoResObj, simCfg, resultadosAnteriores
+    );
+  }
+
+  const estadoEmpresaActualizado = estadoEmpresaDesdeResultados(nuevoResObj, estadoEmpresa);
+
+  return {
+    nuevoResObj,
+    reportes,
+    shockRonda,
+    resultado: {
+      mercadoSegmentos: result.mercadoSegmentos,
+      atractivoEquipos: result.atractivoEquipos,
+      dashboard:        result.dashboard,
+      empresas:         result.empresas,
+      estadoEmpresaActualizado,
+    },
+  };
+}
+
 // FASE 1A — gastos fijos de Fase 0 obligatorios por equipo.
 // Devuelve los NOMBRES de equipos a los que les falta alguno de los 3 campos.
 // Un 0 EXPLÍCITO es válido; solo NULL/undefined/ausente bloquea.
@@ -1789,55 +2068,11 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
 
-    const CAPITAL_CONTABLE = sim.parametros?.capitalContable
-      ?? sim.parametros?.capitalInicial
-      ?? 680000;
     const equipos          = await storage.getEquipos(sim.id);
     const rondas           = await storage.getRondasAll(sim.id);
     const proveedores      = sim.proveedores || [];
-    const unidMP           = sim.parametros?.unidadesMPporUnidad ?? 1;
 
-    // FASE 6D-4 — en modo fase0 la apertura R1 sale de Fase 0, NO de params placeholder.
-    // El seed antiguo (params.cajaInicial=1, activosFijosIniciales=1) clobbeaba la caja real
-    // y disparaba sobregiro/pérdida espurios + capitalContable=2. Homogéneo conserva el seed legacy.
-    const _modoRecalc = leerModoInicio(sim);
-    const _fase0Map = {};
-    if (_modoRecalc === 'fase0') {
-      (await storage.getFase0(sim.id)).forEach(r => { _fase0Map[r.equipo_id] = r; });
-    }
-
-    // Estado acumulado por empresa — se propaga ronda a ronda
-    const estadoEmpresa = {};
-    equipos.forEach(eq => {
-      const _f0   = _fase0Map[eq.id];
-      const _esF0 = _modoRecalc === 'fase0' && _f0;
-      estadoEmpresa[eq.id] = {
-        resultadoAcumulado:    0,
-        // Capital permanente (invariante R1→Rn) — fase0: aporte real de socios; homogéneo: params.
-        capitalPermanente:     _esF0 ? Number(_f0.capital_total_otorgado)
-                                     : (sim.parametros?.capitalContable ?? sim.parametros?.capitalInicial ?? null),
-        // Campos de continuidad financiera para re-simulación
-        cajaFinal:             _esF0 ? Number(_f0.caja_inicial)            : (sim.parametros?.cajaInicial ?? 96000),
-        cxcFinal:              0,
-        deudaFinal:            _esF0 ? Number(_f0.deuda_inicial || 0)      : 0,
-        afNetos:               _esF0 ? Number(_f0.activos_fijos_comprados) : (sim.parametros?.activosFijosIniciales ?? 360000),
-        activosFijosBrutos:    _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
-        baseDepreciable:       _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
-        baseDepreciableMaquinaria: _esF0 ? Number(_f0.activos_fijos_comprados) : undefined,
-        baseDepreciableVehiculos: 0,
-        baseDepreciableMuebles: 0,
-        baseDepreciableComputo: 0,
-        depreciacionAcumulada: 0,
-        intangiblesBrutos:     0,
-        amortizacionAcumulada: 0,
-        brandEquityFinal:      50,
-        vendedoresFinales:     sim.parametros?.vendedoresIniciales ?? 2,
-        operariosFinales:      sim.parametros?.operariosIniciales ?? 4,
-        inventarioFinal:       0,
-        stockMPFinal:          0,
-        pedidosPendientesResta:[],
-      };
-    });
+    const estadoEmpresa = estadoEmpresaInicialSeed(sim, equipos, await estadoFase0Map(sim));
 
     let totalRondas = 0;
     let totalEmpresas = 0;
@@ -1864,251 +2099,15 @@ async function route(req, res, body) {
         continue;
       }
 
-      // ── Sanitizar decisiones extremas ──────────────────────────────────
-      // Evita que una decisión extrema (ej: 6868 operarios) falle todo el recálculo.
-      // Los límites son pedagógicamente imposibles de alcanzar en condiciones normales.
-      // Fallback GLOBAL de capacidad — sólo si la decisión/equipo no trae la suya.
-      // ?? (no ||) para no pisar un 0 explícito con el fallback.
-      const _capMaxGlobal = sim.parametros?.capacidadMaxProduccion ?? 1500;
-      function sanitizarDecision(d) {
-        if (!d) return d;
-        const s = { ...d };
-        // BUG R2-250: el clamp usaba el tope GLOBAL para todos los equipos, ignorando
-        // la capacidad por equipo (capacidadMaxProduccion en la decisión). Ahora se usa
-        // la capacidad del equipo y el global sólo como último fallback.
-        const capMaxEquipo = s.capacidadMaxProduccion ?? _capMaxGlobal;
-        if ((s.contratarOperarios || 0) > 100)  { console.warn(`[recalc] sanitize equipo=${d.equipoNombre}: contratarOperarios ${s.contratarOperarios}→100`); s.contratarOperarios = 100; }
-        if ((s.despedirOperarios  || 0) > 100)  { s.despedirOperarios  = 100; }
-        if ((s.produccion         || 0) > capMaxEquipo) { s.produccion = capMaxEquipo; }
-        if ((s.precioVenta || 0) > 0 && (s.precioVenta || 0) < 10) { s.precioVenta = 10; }
-        if (Array.isArray(s.productos)) {
-          s.productos = s.productos.map(p => {
-            // Capacidad por producto si existe; si no, la del equipo; global como último recurso.
-            const capMaxProd = p.capacidadMaxProduccion ?? capMaxEquipo;
-            return {
-              ...p,
-              contratarOperarios: Math.min(p.contratarOperarios || 0, 100),
-              despedirOperarios:  Math.min(p.despedirOperarios  || 0, 100),
-              produccion:         Math.min(p.produccion         || 0, capMaxProd),
-            };
-          });
-        }
-        return s;
-      }
-
-      // Construir decisiones re-propagadas: tomar las decisiones originales
-      // y reemplazar solo los campos financieros de continuidad con el estado real
-      const decisionesOriginales = ronda.decisiones || {};
-      const decisiones = [];
-
-      for (const eq of equipos) {
-        const decOrigRaw = decisionesOriginales[eq.id];
-        if (!decOrigRaw) continue;
-        const decOrig = sanitizarDecision(decOrigRaw);
-
-        const estado = estadoEmpresa[eq.id] || {};
-
-        // Campos de decisión originales (precio, producción, marketing, etc.) se conservan
-        // Solo se reemplazan los campos de continuidad financiera
-        const decRepropagada = {
-          ...decOrig,
-          // FASE 6D-4 — capital PERMANENTE del equipo (no es continuidad financiera; es invariante).
-          // Se inyecta para que el motor lo lea como capitalContable; fallback a la decisión original.
-          ...(((estado.capitalPermanente ?? decOrig.capitalInicial) != null)
-            ? { capitalInicial: Number(estado.capitalPermanente ?? decOrig.capitalInicial) } : {}),
-          // ── Continuidad financiera desde resultados reales ──
-          cajaInicial:                Math.max(0, estado.cajaFinal ?? 0),
-          cxcInicial:                 Math.max(0, estado.cxcFinal ?? 0),
-          deudaInicial:               Math.max(0, estado.deudaFinal ?? 0),
-          activosFijosIniciales:      Math.max(0, estado.afNetos ?? 78000),
-          brandEquityInicial:         estado.brandEquityFinal ?? 50,
-          // BUG operarios/vendedores (R3 mostraba 1): en el recálculo, para R1 el "estado" es el
-          // SEED GLOBAL (params.operariosIniciales), no un resultado real → pisaba la dotación por
-          // equipo (Fase 0 / decisión, p.ej. 3 operarios) y la colapsaba a 1, propagándose a R2+.
-          // Regla: R1 → decisión original (Fase 0) primero; R>1 → estado real de la ronda previa,
-          // con fallback a la decisión. Nunca el seed global si hay dato por equipo.
-          vendedoresIniciales:        Math.max(0, (n <= 1
-                                        ? (decOrig.vendedoresIniciales ?? estado.vendedoresFinales)
-                                        : (estado.vendedoresFinales ?? decOrig.vendedoresIniciales)) ?? 0),
-          operariosIniciales:         Math.max(0, (n <= 1
-                                        ? (decOrig.operariosIniciales ?? estado.operariosFinales)
-                                        : (estado.operariosFinales ?? decOrig.operariosIniciales)) ?? 0),
-          capacidadMaxProduccion:     estado.capacidadMaxProduccion ?? decOrig.capacidadMaxProduccion ?? sim.parametros?.capacidadMaxProduccion,
-          inventarioInicial:          Math.max(0, estado.inventarioFinal ?? 0),
-          stockMPInicial:             Math.max(0, estado.stockMPFinal ?? 0),
-          pedidosPendientes:          estado.pedidosPendientesResta ?? [],
-          resultadoAcumuladoAnterior: estado.resultadoAcumulado ?? 0,
-          saldoIUEcompensable:        Math.max(0, estado.saldoIUEfinal ?? 0),  // FASE 4
-          ivaAPagarAnterior:          Math.max(0, estado.ivaAPagar         ?? 0),  // IVA diferido
-          ivaSaldoAFavorAnterior:     Math.max(0, estado.ivaSaldoAFavor    ?? 0),  // crédito fiscal acumulado
-          // FASE 6C — PP&E (fase0): arrastrar bruto/base/acumulada SIN zeroar con estado.afNetos.
-          // R1 toma de decOrig (backfill); R2+ del estado acumulado. Homogéneo: ambos undefined → spread vacío.
-          ...(((estado.activosFijosBrutos ?? decOrig.activosFijosBrutos) != null) ? {
-            activosFijosBrutos:        estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
-            baseDepreciable:           estado.baseDepreciable ?? decOrig.baseDepreciable ?? estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
-            baseDepreciableMaquinaria: estado.baseDepreciableMaquinaria ?? decOrig.baseDepreciableMaquinaria ?? estado.baseDepreciable ?? decOrig.baseDepreciable ?? estado.activosFijosBrutos ?? decOrig.activosFijosBrutos,
-            baseDepreciableVehiculos:  estado.baseDepreciableVehiculos ?? decOrig.baseDepreciableVehiculos ?? 0,
-            baseDepreciableMuebles:    estado.baseDepreciableMuebles ?? decOrig.baseDepreciableMuebles ?? 0,
-            baseDepreciableComputo:    estado.baseDepreciableComputo ?? decOrig.baseDepreciableComputo ?? 0,
-            depreciacionAcumulada:     estado.depreciacionAcumulada ?? decOrig.depreciacionAcumulada ?? 0,
-          } : {}),
-          ...(((estado.intangiblesBrutos ?? decOrig.intangiblesBrutos) != null) ? {
-            intangiblesBrutos:         estado.intangiblesBrutos ?? decOrig.intangiblesBrutos,
-            amortizacionAcumulada:     estado.amortizacionAcumulada ?? decOrig.amortizacionAcumulada ?? 0,
-          } : {}),
-          incrementoCapacidadPendiente: 0,
-        };
-
-        // Multiproducto: propagar campos financieros a cada producto[]
-        // ivaAPagarAnterior y saldoIUE solo en prod_1 (controla la caja)
-        // inventarioInicial: cada producto recibe su propio inventario de la ronda anterior
-        if (Array.isArray(decRepropagada.productos)) {
-          decRepropagada.productos = decRepropagada.productos.map((p, idx) => {
-            // Buscar el resultado previo específico de este producto
-            // SOLO usar nuevoResObjAnterior (resultados recalculados de R(n-1)).
-            // NO usar resObj como fallback: resObj es la ronda ACTUAL, no la anterior.
-            // Para R1: nuevoResObjAnterior está vacío → invInicialProd = 0 (correcto).
-            const prodId      = p.productoId || ('prod_' + (idx + 1));
-            const keyPrevProd = eq.id + '__' + prodId;
-            const resPrevProd = nuevoResObjAnterior[keyPrevProd] || null;
-            // inventario específico por producto (no el total consolidado)
-            const invInicialProd = Math.max(0, resPrevProd?.inventarioFinal ?? 0);
-
-            return {
-              ...p,
-              cajaInicial:                idx === 0 ? decRepropagada.cajaInicial : 0,
-              cxcInicial:                 idx === 0 ? decRepropagada.cxcInicial : 0,
-              deudaInicial:               idx === 0 ? decRepropagada.deudaInicial : 0,
-              activosFijosIniciales:      idx === 0 ? decRepropagada.activosFijosIniciales : 0,
-              activosFijosBrutos:         idx === 0 ? decRepropagada.activosFijosBrutos : undefined,
-              baseDepreciable:            idx === 0 ? decRepropagada.baseDepreciable : undefined,
-              baseDepreciableMaquinaria:  idx === 0 ? decRepropagada.baseDepreciableMaquinaria : undefined,
-              baseDepreciableVehiculos:   idx === 0 ? decRepropagada.baseDepreciableVehiculos : undefined,
-              baseDepreciableMuebles:     idx === 0 ? decRepropagada.baseDepreciableMuebles : undefined,
-              baseDepreciableComputo:     idx === 0 ? decRepropagada.baseDepreciableComputo : undefined,
-              depreciacionAcumulada:      idx === 0 ? decRepropagada.depreciacionAcumulada : undefined,
-              intangiblesBrutos:          idx === 0 ? decRepropagada.intangiblesBrutos : undefined,
-              amortizacionAcumulada:      idx === 0 ? decRepropagada.amortizacionAcumulada : undefined,
-              brandEquityInicial:         decRepropagada.brandEquityInicial,
-              vendedoresIniciales:        decRepropagada.vendedoresIniciales,
-              operariosIniciales:         decRepropagada.operariosIniciales,
-              inventarioInicial:          invInicialProd,  // específico por producto ✅
-              stockMPInicial:             idx === 0 ? decRepropagada.stockMPInicial : 0,
-              pedidosPendientes:          idx === 0 ? decRepropagada.pedidosPendientes : [],
-              resultadoAcumuladoAnterior: decRepropagada.resultadoAcumuladoAnterior,
-              ivaAPagarAnterior:          idx === 0 ? (decRepropagada.ivaAPagarAnterior ?? 0) : 0,
-              saldoIUEcompensable:        decRepropagada.saldoIUEcompensable ?? 0,
-            };
-          });
-        }
-
-        decisiones.push(decRepropagada);
-      }
-      // ── Agregar bots IA dinámicos desde ronda.decisiones ─────────────
-      for (const [botId, botDec] of Object.entries(decisionesOriginales)) {
-        if (botId.startsWith('bot_') && botDec) {
-          decisiones.push(sanitizarDecision({ ...botDec }));
-        }
-      }
-
-      if (!decisiones.length) continue;
-
-      // Construir demandaBaseAnteriorMap desde la ronda anterior
-      const demandaBaseAnteriorMap = {};
-      if (n > 1) {
-        const rondaPrevia = rondas.find(r => r.numero === n - 1);
-        (rondaPrevia?.mercadoSegmentos || []).forEach(seg => {
-          demandaBaseAnteriorMap[seg.nombre] = seg.demandaBase;
-        });
-      }
-
-      // Usar el shock ya guardado en la ronda (no regenerar)
-      const shockRonda = ronda.shock || generarShock(sim.id, n, sim.parametros?.probabilidadShock ?? 0.35, sim.parametros);
-
-      const simCfg = {
-        params:             sim.parametros,
-        tiposProducto:      sim.tipos_producto,
-        canales:            sim.canales,
-        segmentos:          sim.segmentos,
-        afinidadMatrix:     sim.afinidad_matrix,
-        competenciaExterna: sim.competencia_externa,
-        demandaBaseAnteriorMap,
-        rondaNumero:        n,
-        bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
-        proveedores:        proveedores,
-        shock:              shockRonda,
-        equipos,
-      };
-
       try {
-        // Re-ejecutar el motor con las decisiones re-propagadas
-        const result = ejecutarSimulador(decisiones, simCfg);
-
-        // Construir nuevo resObj con los resultados recalculados
-        const nuevoResObj = {};
-        result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
-
-        // Regenerar reportes de investigación de mercado
-        // Para resultadosAnteriores usamos nuevoResObj de la ronda anterior
-        // que ya fue guardado en el loop. Si es R1, no hay anteriores.
-        const rondaPrevBase = n > 1 ? rondas.find(r => r.numero === n-1) : null;
-        const resultadosAnteriores = rondaPrevBase
-          ? (rondaPrevBase.resultados?.resultados || rondaPrevBase.resultados || {})
-          : {};
-        const reportes = {};
-        for (const d of decisiones) {
-          reportes[d.equipo] = generarReportes(
-            d, result.mercadoSegmentos, result.atractivoEquipos,
-            nuevoResObj, simCfg, resultadosAnteriores
-          );
-        }
-
-        // Actualizar estado propagado para la siguiente ronda
-        const porEmpresaRes = {};
-        Object.values(nuevoResObj).forEach(r => {
-          const eqId = r.equipoOriginal || r.equipo;
-          if (!porEmpresaRes[eqId]) porEmpresaRes[eqId] = [];
-          porEmpresaRes[eqId].push(r);
+        const { nuevoResObj, resultado, reportes, shockRonda } = recalcularUnaRonda({
+          sim, equipos, proveedores, rondas, ronda, n, estadoEmpresa, nuevoResObjAnterior,
         });
 
-        for (const [eqId, prods] of Object.entries(porEmpresaRes)) {
-          const p0           = prods[0];
-          const utilNeta     = prods.reduce((s,p) => s+(p.utilidadNeta||0), 0);
-          const invFinalTotal = prods.reduce((s,p) => s+Math.max(0,p.inventarioFinal||0), 0);
-          // Usar resultadoAcumulado del engine (incluye resultadoAcumuladoAnterior correctamente)
-          // Esto garantiza que el balance de apertura de la siguiente ronda cuadre
-          const resAcumuladoNuevo = p0.resultadoAcumulado ?? ((estadoEmpresa[eqId]?.resultadoAcumulado ?? 0) + utilNeta);
-
-          estadoEmpresa[eqId] = {
-            resultadoAcumulado:    resAcumuladoNuevo,
-            // FASE 6D-4 — capital permanente es invariante: se preserva a través de la reasignación.
-            capitalPermanente:     estadoEmpresa[eqId]?.capitalPermanente ?? null,
-            cajaFinal:             p0.cajaFinal    ?? 0,
-            cxcFinal:              p0.cxcFinal     ?? 0,
-            deudaFinal:            p0.deudaFinal   ?? 0,
-            afNetos:               p0.afNetos      ?? 0,
-            activosFijosBrutos:    p0.activosFijosBrutos,        // FASE 6C (undefined en homogéneo)
-            baseDepreciable:       p0.baseDepreciable,
-            baseDepreciableMaquinaria: p0.baseDepreciableMaquinaria,
-            baseDepreciableVehiculos:  p0.baseDepreciableVehiculos,
-            baseDepreciableMuebles:    p0.baseDepreciableMuebles,
-            baseDepreciableComputo:    p0.baseDepreciableComputo,
-            depreciacionAcumulada: p0.depreciacionAcumulada,
-            intangiblesBrutos:     p0.intangiblesBrutos,
-            amortizacionAcumulada: p0.amortizacionAcumulada,
-            brandEquityFinal:      p0.brandEquityFinal ?? 50,
-            vendedoresFinales:     p0.vendedoresFinales ?? 2,
-            operariosFinales:      p0.operariosFinales ?? 4,
-            capacidadMaxProduccion: p0.capacidadMaxProduccion,
-            inventarioFinal:       invFinalTotal,
-            stockMPFinal:          p0.stockMPFinal ?? 0,
-            pedidosPendientesResta: p0.pedidosPendientesResta ?? [],
-            saldoIUEfinal:         Math.max(0, p0.saldoIUEfinal ?? 0),  // FASE 4
-            ivaAPagar:            Math.max(0, p0.ivaAPagar       ?? 0),  // IVA diferido
-            ivaSaldoAFavor:       Math.max(0, p0.ivaSaldoAFavor  ?? 0),  // crédito fiscal acumulado
-          };
+        Object.entries(resultado.estadoEmpresaActualizado).forEach(([eqId, est]) => {
+          estadoEmpresa[eqId] = est;
           totalEmpresas++;
-        }
+        });
 
         // Guardar referencia a resultados de esta ronda para la siguiente
         nuevoResObjAnterior = nuevoResObj;
@@ -2116,10 +2115,10 @@ async function route(req, res, body) {
         // Guardar resultados recalculados
         await storage.updateRonda(sim.id, n, {
           resultados:       nuevoResObj,
-          mercadoSegmentos: result.mercadoSegmentos,
-          atractivoEquipos: result.atractivoEquipos,
-          dashboard:        result.dashboard,
-          empresas:         result.empresas,
+          mercadoSegmentos: resultado.mercadoSegmentos,
+          atractivoEquipos: resultado.atractivoEquipos,
+          dashboard:        resultado.dashboard,
+          empresas:         resultado.empresas,
           reportes,
           shock:            shockRonda,
         });
@@ -2141,6 +2140,112 @@ async function route(req, res, body) {
       empresas: totalEmpresas,
       errores,
     });
+  }
+
+  // Recalcula EXCLUSIVAMENTE una ronda histórica (no toca R1..R(n-1) ni R(n+1)..)
+  if (url === '/admin/recalcular-ronda' && method === 'POST') {
+    if (needAdmin()) return;
+    if (!sim) return send(res, 400, { error: 'Sin simulación' });
+
+    const rondaNumero = body?.rondaNumero;
+    if (!Number.isInteger(rondaNumero) || rondaNumero < 1) {
+      return send(res, 400, { error: 'rondaNumero debe ser un entero mayor o igual a 1' });
+    }
+
+    const totalRounds = Number(sim.config?.totalRounds || 20);
+    if (Number.isFinite(totalRounds) && rondaNumero > totalRounds) {
+      return send(res, 400, { error: 'rondaNumero excede el total de rondas configurado' });
+    }
+
+    const n = rondaNumero;
+    const ronda = await storage.getRonda(sim.id, n);
+    if (!ronda) return send(res, 400, { error: 'Sin ronda' });
+
+    const decisionesRonda = ronda.decisiones || {};
+    if (!Object.keys(decisionesRonda).length) {
+      return send(res, 400, { error: 'Faltan decisiones en la ronda a recalcular' });
+    }
+
+    let rondaAnterior = null;
+    if (n > 1) {
+      rondaAnterior = await storage.getRonda(sim.id, n - 1);
+      if (!rondaAnterior) return send(res, 400, { error: 'Falta la ronda anterior' });
+      const resAnt = rondaAnterior.resultados?.resultados || rondaAnterior.resultados || {};
+      if (!Object.keys(resAnt).length) {
+        return send(res, 400, { error: 'La ronda anterior no tiene resultados calculados' });
+      }
+    }
+
+    if (!ronda.preSimulacion || !Object.keys(ronda.preSimulacion).length) {
+      return send(res, 400, { error: 'Falta presimulación confirmada para esta ronda' });
+    }
+
+    // ── Copias de seguridad (comparación posterior; no se persisten) ──────
+    const snapshotAntes = {
+      decisiones:    stableStringify(ronda.decisiones || {}),
+      preSimulacion: stableStringify(ronda.preSimulacion || {}),
+      rondaAnterior: rondaAnterior ? stableStringify(rondaAnterior.resultados || {}) : null,
+    };
+    const rondaSiguiente = await storage.getRonda(sim.id, n + 1).catch(() => null);
+    const snapshotSiguiente = rondaSiguiente ? stableStringify(rondaSiguiente) : null;
+
+    try {
+      const equipos     = await storage.getEquipos(sim.id);
+      const rondas      = await storage.getRondasAll(sim.id);
+      const proveedores = sim.proveedores || [];
+
+      const estadoEmpresaBase = n > 1
+        ? estadoEmpresaDesdeResultados(
+            rondaAnterior.resultados?.resultados || rondaAnterior.resultados || {},
+            estadoEmpresaInicialSeed(sim, equipos, await estadoFase0Map(sim))
+          )
+        : estadoEmpresaInicialSeed(sim, equipos, await estadoFase0Map(sim));
+
+      const nuevoResObjAnterior = rondaAnterior
+        ? (rondaAnterior.resultados?.resultados || rondaAnterior.resultados || {})
+        : {};
+
+      const { nuevoResObj, reportes, shockRonda, resultado } = recalcularUnaRonda({
+        sim, equipos, proveedores, rondas, ronda, n,
+        estadoEmpresa: estadoEmpresaBase,
+        nuevoResObjAnterior,
+      });
+
+      // ── Guardia: verificar que decisiones/preSimulacion/ronda anterior no cambiaron ──
+      if (stableStringify(ronda.decisiones || {}) !== snapshotAntes.decisiones) {
+        return send(res, 500, { error: 'Abortado: las decisiones de la ronda cambiaron durante el recálculo' });
+      }
+      if (stableStringify(ronda.preSimulacion || {}) !== snapshotAntes.preSimulacion) {
+        return send(res, 500, { error: 'Abortado: la presimulacion cambio durante el recalculo' });
+      }
+      if (rondaAnterior && stableStringify(rondaAnterior.resultados || {}) !== snapshotAntes.rondaAnterior) {
+        return send(res, 500, { error: 'Abortado: la ronda anterior cambio durante el recalculo' });
+      }
+      const rondaSiguienteVerif = await storage.getRonda(sim.id, n + 1).catch(() => null);
+      const snapshotSiguienteVerif = rondaSiguienteVerif ? stableStringify(rondaSiguienteVerif) : null;
+      if (snapshotSiguiente !== snapshotSiguienteVerif) {
+        return send(res, 500, { error: 'Abortado: la ronda siguiente cambio durante el recalculo' });
+      }
+
+      await storage.updateRonda(sim.id, n, {
+        resultados:       nuevoResObj,
+        mercadoSegmentos: resultado.mercadoSegmentos,
+        atractivoEquipos: resultado.atractivoEquipos,
+        dashboard:        resultado.dashboard,
+        empresas:         resultado.empresas,
+        reportes,
+        shock:            shockRonda,
+      });
+
+      return send(res, 200, {
+        ok: true,
+        ronda: n,
+        equiposCalculados: Object.keys(nuevoResObj).length,
+        detalle: Object.values(nuevoResObj),
+      });
+    } catch (e) {
+      return send(res, 500, { error: e.message });
+    }
   }
 
   if (url === '/admin/ronda/siguiente' && method === 'POST') {
@@ -3155,5 +3260,8 @@ module.exports = {
     resolverRondaPreSimulacion,
     validarRondaPreSimulacion,
     soloCambiaPreSimulacion,
+    estadoEmpresaInicialSeed,
+    estadoEmpresaDesdeResultados,
+    recalcularUnaRonda,
   },
 };
