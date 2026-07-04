@@ -1,5 +1,15 @@
-const { calcularPreSimulacionConsolidada } = require('./src/engine');
-const cfg = require('./industrias/calzados_v1.json');
+const assert = require('assert');
+const { calcularPreSimulacionConsolidada } = require('../../src/engine');
+const industria = require('../../industrias/Calzados_COM540_1_2026_V2.json');
+
+const cfg = {
+  params: industria.params,
+  tiposProducto: industria.tiposProducto,
+  canales: industria.canales,
+  segmentos: industria.segmentos,
+  afinidadMatrix: industria.afinidadMatrix,
+  competenciaExterna: industria.competenciaExterna,
+};
 
 const decision = {
   equipo: 'eq_test',
@@ -9,9 +19,10 @@ const decision = {
   productos: [{
     productoId: 'prod_1',
     activo: true,
-    producto: 'Deportivas',
-    segmentoObjetivo: 'Jóvenes urbanos',
-    canalPrincipal: 'Tienda propia',
+    producto: 'Sneaker Cultural Premium',
+    segmentoObjetivo: 'Jóvenes urbanos / lifestyle boliviano',
+    canalPrincipal: 'Venta Digital',
+    canalSecundario: 'Ninguno',
     calidad: 5,
     precioVenta: 85,
     produccion: 500,
@@ -25,12 +36,11 @@ const decision = {
     despedirVendedores: 0,
     tipoPrestamo: 'Ninguno',
     montoPrestamo: 0,
-    tipoInvestigacion: 'No'
+    tipoInvestigacion: 'No',
   }],
-  // Campos planos para compatibilidad
-  producto: 'Deportivas',
-  segmentoObjetivo: 'Jóvenes urbanos',
-  canalPrincipal: 'Tienda propia',
+  producto: 'Sneaker Cultural Premium',
+  segmentoObjetivo: 'Jóvenes urbanos / lifestyle boliviano',
+  canalPrincipal: 'Venta Digital',
   canalSecundario: 'Ninguno',
   calidad: 5,
   precioVenta: 85,
@@ -55,10 +65,12 @@ const decision = {
   cxcInicial: 0,
   deudaInicial: 0,
   inventarioInicial: 0,
-  resultadoAcumuladoAnterior: 0
+  resultadoAcumuladoAnterior: 0,
 };
 
 const result = calcularPreSimulacionConsolidada([decision], cfg);
-console.log('Resultados:', JSON.stringify(result.resultado, null, 2));
-console.log('¿El primer resultado tiene equipo?', result.resultado[0]?.equipo);
-console.log('¿Coincide con equipoOriginal?', result.resultado[0]?.equipo === 'eq_test');
+assert.strictEqual(result.resultado.length, 1);
+assert.strictEqual(result.resultado[0]?.equipo, 'eq_test');
+assert.strictEqual(result.resultado[0]?.producto, 'Sneaker Cultural Premium');
+
+console.log('presim consolidada OK');

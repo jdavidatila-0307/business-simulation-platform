@@ -166,6 +166,113 @@ function expandirDecisionesMultiproducto(decisiones) {
   return expandidas;
 }
 
+function productoIdDeDecision(d = {}, idx = 0) {
+  if (d.productoId) return d.productoId;
+  const match = String(d.equipo || '').match(/__(prod_\d+)$/);
+  return match ? match[1] : `prod_${idx + 1}`;
+}
+
+function equipoBaseDeDecision(d = {}) {
+  if (d.equipoOriginal) return d.equipoOriginal;
+  return String(d.equipo || '').replace(/__prod_\d+$/, '');
+}
+
+function sinProductosEmbebidos(d = {}) {
+  const limpio = { ...d };
+  delete limpio.productos;
+  return limpio;
+}
+
+function camposEmpresaParaProductos(d = {}) {
+  const limpio = sinProductosEmbebidos(d);
+  [
+    'producto',
+    'productoId',
+    'segmento',
+    'segmentoObjetivo',
+    'canalPrincipal',
+    'canalSecundario',
+    'calidad',
+    'precioVenta',
+    'publicidad',
+    'promocion',
+    'eventos',
+    'marketingRedes',
+    'relacionesPublicas',
+    'produccion',
+    'inventarioInicial',
+    'stockMPInicial',
+    'cantidadMPpedida',
+    'proveedorElegido',
+    'innovacion',
+    'tipoInnovacion',
+    'montoInnovacion',
+    'brandEquityInicial',
+    'reputacionInicial',
+  ].forEach(campo => delete limpio[campo]);
+  return limpio;
+}
+
+function canonicalizarDecisionesMultiproducto(decisiones) {
+  const grupos = new Map();
+
+  (decisiones || []).forEach((decision, idx) => {
+    if (!decision || typeof decision !== 'object') return;
+    const equipoBase = equipoBaseDeDecision(decision);
+    if (!equipoBase) return;
+    if (!grupos.has(equipoBase)) grupos.set(equipoBase, []);
+    grupos.get(equipoBase).push({ decision, idx });
+  });
+
+  const canonicas = [];
+
+  for (const [equipoBase, items] of grupos.entries()) {
+    const tieneFilasNormalizadas = items.length > 1;
+    if (!tieneFilasNormalizadas) {
+      canonicas.push(items[0].decision);
+      continue;
+    }
+
+    const principal = items.find(({ decision }) => productoIdDeDecision(decision) === 'prod_1')
+      || items.find(({ decision }) => Array.isArray(decision.productos))
+      || items[0];
+    const camposEmpresa = camposEmpresaParaProductos(principal.decision);
+    const productosPorId = new Map();
+
+    if (Array.isArray(principal.decision.productos)) {
+      principal.decision.productos.forEach((producto, pidx) => {
+        if (!producto || typeof producto !== 'object') return;
+        const productoId = producto.productoId || `prod_${pidx + 1}`;
+        productosPorId.set(productoId, { ...producto, productoId });
+      });
+    }
+
+    items.forEach(({ decision, idx }) => {
+      const productoId = productoIdDeDecision(decision, idx);
+      const fallbackProducto = productosPorId.get(productoId) || {};
+      productosPorId.set(productoId, {
+        ...camposEmpresa,
+        ...fallbackProducto,
+        ...sinProductosEmbebidos(decision),
+        equipo: equipoBase,
+        equipoOriginal: equipoBase,
+        productoId,
+      });
+    });
+
+    [...productosPorId.entries()]
+      .sort(([a], [b]) => {
+        const ma = String(a).match(/^prod_(\d+)$/);
+        const mb = String(b).match(/^prod_(\d+)$/);
+        if (ma && mb) return Number(ma[1]) - Number(mb[1]);
+        return String(a).localeCompare(String(b));
+      })
+      .forEach(([, decision]) => canonicas.push(decision));
+  }
+
+  return canonicas;
+}
+
 
 
 // Demanda formal = demandaBase_T × (1 - pctContrabando)
@@ -1472,6 +1579,7 @@ function ejecutarSimulador(decisiones, cfg) {
   function calcularPreSimulacion(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix } = cfg;
   
+  decisiones = canonicalizarDecisionesMultiproducto(decisiones);
   decisiones = expandirDecisionesMultiproducto(decisiones);
 
   const mercadoSegmentos = calcularMercadoSegmentos(params, segmentos);
@@ -1667,11 +1775,8 @@ function calcularPreSimulacionConsolidada(decisiones, cfg) {
     return { mercadoSegmentos: [], resultado: [] };
   }
 
-  // Expandir productos (cada decisión de empresa se convierte en una por producto)
-  const expandidas = expandirDecisionesMultiproducto(decisionesHumanos);
-
-  // Calcular la pre‑simulación normal (con equipos expandidos)
-  const preSim = calcularPreSimulacion(expandidas, cfg);
+  // calcularPreSimulacion canoniza y expande internamente.
+  const preSim = calcularPreSimulacion(decisionesHumanos, cfg);
 
   // Consolidar por empresa original
   const consolidado = {};
@@ -1783,6 +1888,7 @@ module.exports = {
   calcularMercadoSegmentos,
   calcularPreSimulacion,
   calcularPreSimulacionConsolidada,
+  canonicalizarDecisionesMultiproducto,
   expandirDecisionesMultiproducto,
   consolidarPorEmpresa,
 };
