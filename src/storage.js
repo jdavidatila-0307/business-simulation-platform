@@ -281,6 +281,85 @@ async function findUserInSimulacion(simulacionId, userId, ownerId = null) {
 // =============================================================================
 // getRonda con lectura prioritaria de tablas normalizadas
 // =============================================================================
+function ordenarProductoId(a, b) {
+  const pa = String(a || '');
+  const pb = String(b || '');
+  const ma = pa.match(/^prod_(\d+)$/);
+  const mb = pb.match(/^prod_(\d+)$/);
+  if (ma && mb) return Number(ma[1]) - Number(mb[1]);
+  return pa.localeCompare(pb);
+}
+
+function productoDesdeFila(row, fallbackPorProductoId) {
+  const dec = row.decisiones || {};
+  const productoId = dec.productoId || row.producto_id || 'prod_1';
+  const fallback = fallbackPorProductoId.get(productoId) || {};
+  const producto = { ...fallback, ...dec, productoId };
+  delete producto.productos;
+  return producto;
+}
+
+function construirDecisionCanonicaDesdeFilas(filas) {
+  const ordenadas = [...(filas || [])].sort((a, b) => {
+    const byProduct = ordenarProductoId(a.producto_id, b.producto_id);
+    if (byProduct !== 0) return byProduct;
+    const da = a.enviada_at ? new Date(a.enviada_at).getTime() : 0;
+    const db = b.enviada_at ? new Date(b.enviada_at).getTime() : 0;
+    return db - da;
+  });
+
+  const baseRow = ordenadas.find(r => r.producto_id === 'prod_1') || ordenadas[0];
+  if (!baseRow) return null;
+
+  const baseDecision = baseRow.decisiones || {};
+  const fallbackPorProductoId = new Map();
+  if (Array.isArray(baseDecision.productos)) {
+    baseDecision.productos.forEach((p, idx) => {
+      const productoId = p?.productoId || `prod_${idx + 1}`;
+      fallbackPorProductoId.set(productoId, { ...p, productoId });
+    });
+  }
+
+  const productosPorId = new Map();
+  for (const [productoId, producto] of fallbackPorProductoId.entries()) {
+    productosPorId.set(productoId, producto);
+  }
+
+  for (const fila of ordenadas) {
+    const producto = productoDesdeFila(fila, fallbackPorProductoId);
+    productosPorId.set(producto.productoId, producto);
+  }
+
+  const productos = [...productosPorId.values()]
+    .sort((a, b) => ordenarProductoId(a.productoId, b.productoId));
+  const productoBase = productos.find(p => p.productoId === (baseDecision.productoId || baseRow.producto_id || 'prod_1'))
+    || productos[0]
+    || {};
+
+  return {
+    ...baseDecision,
+    productoId: productoBase.productoId || baseDecision.productoId || baseRow.producto_id || 'prod_1',
+    producto: productoBase.producto ?? baseDecision.producto,
+    productos,
+  };
+}
+
+function construirDecisionesCanonicas(decisionesRows) {
+  const porEquipo = new Map();
+  for (const row of decisionesRows || []) {
+    if (!row?.equipo_id) continue;
+    if (!porEquipo.has(row.equipo_id)) porEquipo.set(row.equipo_id, []);
+    porEquipo.get(row.equipo_id).push(row);
+  }
+
+  const decisionesMap = {};
+  for (const [equipoId, filas] of porEquipo.entries()) {
+    const decision = construirDecisionCanonicaDesdeFilas(filas);
+    if (decision) decisionesMap[equipoId] = decision;
+  }
+  return decisionesMap;
+}
+
 async function getRonda(simulacionId, n, ownerId = null) {
   try {
     const rondaRow = await pool.query(
@@ -295,23 +374,16 @@ async function getRonda(simulacionId, n, ownerId = null) {
       const resultados = row.resultados || {};
 
       const decisionesRows = await pool.query(
-        `SELECT equipo_id, decisiones
+        `SELECT equipo_id, producto_id, decisiones, enviada_at
          FROM   sim_decisiones
          WHERE  simulacion_id = $1
            AND  ronda_numero  = $2
-           AND  producto_id   = 'prod_1'
-         ORDER BY enviada_at DESC`,
+         ORDER BY equipo_id, producto_id`,
         [simulacionId, n]
       );
 
-      // Con ORDER BY enviada_at DESC, el primer registro por equipo es el más reciente
-      // Solo guardamos el primero para evitar que registros antiguos sobreescriban el nuevo
-      const decisionesMap = {};
-      for (const d of decisionesRows.rows) {
-        if (!decisionesMap[d.equipo_id]) {
-          decisionesMap[d.equipo_id] = d.decisiones;
-        }
-      }
+      // Reconstruye una decision canonica por equipo con todas sus filas producto.
+      const decisionesMap = construirDecisionesCanonicas(decisionesRows.rows);
 
       const estadoLegado = ESTADO_NUEVO_A_LEGACY[row.estado] || row.estado;
 
@@ -914,5 +986,6 @@ module.exports = {
   saveDecision,
   getSimConfig, updateSimConfig,
   getFase0, getFase0Equipo, upsertFase0,
-  genSimId, genCodigo
+  genSimId, genCodigo,
+  _test: { construirDecisionesCanonicas, construirDecisionCanonicaDesdeFilas }
 };
