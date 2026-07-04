@@ -583,10 +583,20 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
       ? `<input class="hoja-input editable" data-hoja-field="${field}" type="${type}" value="${val??''}" ${extra}/>`
       : `<span class="hoja-value-ro">${val??'—'}</span>`;
 
-  const sel = (field, opts) =>
-    isEditable
+  const camposProductoSelect = new Set([
+    'producto',
+    'segmentoObjetivo',
+    'canalPrincipal',
+    'canalSecundario'
+  ]);
+  const sel = (field, opts) => {
+    const valorReadOnly = camposProductoSelect.has(field)
+      ? (productoActivo?.[field] ?? decision?.[field] ?? '—')
+      : (decision?.[field] ?? '—');
+    return isEditable
       ? `<select class="hoja-select editable" data-hoja-field="${field}">${opts}</select>`
-      : `<span class="hoja-value-ro">${decision[field]||'—'}</span>`;
+      : `<span class="hoja-value-ro">${valorReadOnly}</span>`;
+  };
 
   const ta = (jfield, ph) =>
     isEditable
