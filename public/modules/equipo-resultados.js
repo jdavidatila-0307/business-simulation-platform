@@ -127,6 +127,11 @@ window.mostrarKpiRonda = (n, historial) => {
           ${kpiRow('Inventario / Producción',       invProd+'%', +invProd>20?'var(--accent4)':'var(--accent5)')}
           ${kpiRow('Capacidad efectiva (pares)',    fmt.num(r.capacidadEfectiva ?? '—'))}
           ${kpiRow('Stock MP disponible (unid)',    fmt.num(r.stockMPFinal ?? '—'))}
+          <tr><td colspan="2" style="padding:4px 12px;font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;background:rgba(255,255,255,.03)">Valor referencial operativo del stock consignado</td></tr>
+          ${kpiRow('Stock físico final de MP consignada (unid)', fmt.num(r.stockMPFinal ?? '—'))}
+          ${kpiRow('Costo unitario de referencia (Bs)',           r.costoMPunitario>0?fmt.d(r.costoMPunitario,2):'—')}
+          ${kpiRow('Valor referencial operativo (Bs)',            (r.stockMPFinal>0 && r.costoMPunitario>0)?fmt.bs(r.stockMPFinal*r.costoMPunitario):'—')}
+          <tr><td colspan="2" style="padding:2px 12px 6px;font-size:.68rem;color:var(--text3);line-height:1.4">Este importe es una referencia operativa calculada con el costo unitario de la ronda. No constituye inventario contable ni forma parte del Balance.</td></tr>
           <tr><td colspan="2" style="padding:4px 12px;font-family:var(--font-mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;background:rgba(255,255,255,.03)">Desglose Costo Unitario</td></tr>
           ${kpiRow('Costo unitario TOTAL (Bs)',     fmt.d(r.costoUnitario,2))}
           ${kpiRow('  └ Transformación (MOD+OH, Bs)', (() => {
@@ -173,18 +178,20 @@ window.mostrarKpiRonda = (n, historial) => {
                   + 'background:rgba(255,255,255,.03)">Producto ' + (i+1) + ': ' + (p.producto||'—') + '</td></tr>';
                 return hdr
                   + kpiRow('Vendedores finales', fmt.num(vf))
+                  + kpiRow('Gasto de vendedores (Bs)', p.costoVendedores!=null?fmt.bs(p.costoVendedores):'—')
                   + kpiRow('Ventas por vendedor (unid)', vpu)
                   + kpiRow('Ingresos netos por vendedor', ipu)
                   + kpiRow('Operarios finales', fmt.num(of))
-                  + kpiRow('Costo operarios (Bs)', co);
+                  + kpiRow('Gasto de operarios (Bs)', co);
               }).join('');
             }
             // Monoproducto: vista simple
             return kpiRow('Vendedores finales', vendFin)
+              + kpiRow('Gasto de vendedores (Bs)', r.costoVendedores!=null?fmt.bs(r.costoVendedores):'—')
               + kpiRow('Ventas por vendedor (unid)', ventasPorVend)
               + kpiRow('Ingresos netos por vendedor', ingrPorVend)
               + kpiRow('Operarios finales', fmt.num(r.operariosFinales ?? '—'))
-              + kpiRow('Costo operarios (Bs)', r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—');
+              + kpiRow('Gasto de operarios (Bs)', r.costoOperarios!=null?fmt.bs(r.costoOperarios):'—');
           })()}
         </table>
       </div>
