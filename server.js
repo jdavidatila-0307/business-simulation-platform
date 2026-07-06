@@ -2849,15 +2849,23 @@ async function route(req, res, body) {
     'resultadoAcumuladoAnterior', 'stockMPInicial', 'pedidosPendientes',
     'vendedoresIniciales', 'operariosIniciales', 'saldoIUEcompensable',
     'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
+    'capitalInicial', 'capitalContable',
   ];
   // Subconjunto de los anteriores que además NUNCA debe existir a nivel de
   // producto anidado — son campos exclusivamente de empresa (raíz). Los otros
   // 7 campos de la lista ya quedan protegidos indirectamente porque
   // expandirDecisionesMultiproducto los reconstruye desde camposEmpresa
   // (nivel raíz), sin leerlos del producto anidado.
+  //
+  // capitalInicial/capitalContable: camposEmpresaParaProductos (engine.js)
+  // NO los excluye de los productos anidados — confirmado por lectura directa
+  // (no incluidos en su lista de 21 campos) — así que aquí no son redundantes
+  // con ninguna protección ya existente en engine.js; son un mecanismo
+  // complementario, no duplicado.
   const CAMPOS_CONTINUIDAD_PROHIBIDOS_EN_PRODUCTO = [
     'stockMPInicial', 'pedidosPendientes', 'saldoIUEcompensable',
     'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
+    'capitalInicial', 'capitalContable',
   ];
   function protegerContinuidadServerOwned(decisionFusionada, cur) {
     for (const campo of CAMPOS_CONTINUIDAD_SERVER_OWNED) {
