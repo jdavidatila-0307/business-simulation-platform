@@ -1231,6 +1231,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 function ejecutarSimulador(decisiones, cfg) {
   const { params, tiposProducto, canales, segmentos, afinidadMatrix,
           demandaBaseAnteriorMap = {}, shock = null } = cfg;  // Etapa 2.2 + shocks
+  decisiones = canonicalizarDecisionesMultiproducto(decisiones);
   decisiones = expandirDecisionesMultiproducto(decisiones);
 
   // Calcular demanda formal de cada segmento (con crecimiento acumulado + shock)
@@ -1282,6 +1283,32 @@ function ejecutarSimulador(decisiones, cfg) {
 
   // Etapa 3.1: pasar proveedores en params para procesarPedidosMP
   const paramsConProveedores = { ...params, _proveedores: cfg.proveedores || [] };
+
+  // Etapa 3.1-fix: la materia prima es un pool ÚNICO por empresa (equipoOriginal),
+  // no por producto. expandirDecisionesMultiproducto puede copiar el mismo
+  // stockMPInicial/pedidosPendientes de empresa a cada producto expandido, así
+  // que llamar procesarPedidosMP() de forma aislada por producto hacía que
+  // cada producto "viera" el pool completo sin saber que otro producto de la
+  // misma empresa ya lo consumió. Se calcula una sola vez por empresa aquí,
+  // usando el primer producto presente como representante del pool de
+  // empresa, y se reparte secuencialmente en el .map() de abajo.
+  const poolMPPorEmpresa = new Map();
+  {
+    const primeraDecisionPorEmpresa = new Map();
+    decisiones.forEach(d => {
+      const key = d.equipoOriginal || d.equipo;
+      if (!primeraDecisionPorEmpresa.has(key)) primeraDecisionPorEmpresa.set(key, d);
+    });
+    const rondaNumPool = cfg.rondaNumero || 1;
+    primeraDecisionPorEmpresa.forEach((dRep, key) => {
+      const mpDataEmpresa = procesarPedidosMP(dRep, rondaNumPool, paramsConProveedores);
+      poolMPPorEmpresa.set(key, {
+        poolRestante: mpDataEmpresa.stockMPDisponible,
+        pedidosPendientesResta: mpDataEmpresa.pedidosPendientesResta,
+        pagoMP: mpDataEmpresa.pagoMP,
+      });
+    });
+  }
 
   // Calcular resultados financieros completos
   const resultados = decisiones.map(d => {
@@ -1450,10 +1477,13 @@ function ejecutarSimulador(decisiones, cfg) {
     // Etapa 3.2: calcular capacidad efectiva de operarios
     const opData = calcularOperarios(d, paramsConProveedores);
 
-    const mpData = procesarPedidosMP(d, rondaNum, paramsConProveedores);
+    // Etapa 3.1-fix: consumir secuencialmente del pool ÚNICO de la empresa,
+    // en vez de recalcular procesarPedidosMP por producto de forma aislada.
+    const empresaKeyMP = d.equipoOriginal || d.equipo;
+    const poolEmpresa = poolMPPorEmpresa.get(empresaKeyMP);
     const unidMP = paramsConProveedores.unidadesMPporUnidad ?? 1;
-    const produccionMaxMP = mpData.stockMPDisponible > 0
-      ? Math.floor(mpData.stockMPDisponible / unidMP)
+    const produccionMaxMP = poolEmpresa.poolRestante > 0
+      ? Math.floor(poolEmpresa.poolRestante / unidMP)
       : (d.proveedorElegido ? 0 : Infinity);  // con proveedor: stock=0 → no produce; sin proveedor: sin restricción (retrocompat.)
     // Etapa 3.2: producción limitada por capacidad efectiva (operarios) y MP
     const produccionReal = Math.min(
@@ -1466,6 +1496,9 @@ function ejecutarSimulador(decisiones, cfg) {
     // NO está operativa. La capacidad del equipo se conserva intacta; solo se
     // fuerza la producción a 0 por esta condición externa, sin tocar capacidadMaxProduccion.
     const produccionFinal = (rondaNum === 1 && cfg.bloquearProduccionR1 === true) ? 0 : produccionReal;
+    // Consumir del pool común — el remanente después de este producto es lo
+    // que verán los productos SIGUIENTES de la misma empresa en este .map().
+    poolEmpresa.poolRestante = Math.max(0, poolEmpresa.poolRestante - produccionFinal * unidMP);
     d = {
       ...d,
       rondaNumero:            rondaNum,    // Etapa 3.4: para cálculo IUE
@@ -1473,9 +1506,13 @@ function ejecutarSimulador(decisiones, cfg) {
       operariosFinales:       opData.operariosFinales,
       capacidadEfectiva:      opData.capacidadEfectiva,
       costoOperarios:         opData.costoOperarios,
-      stockMPFinal:           Math.max(0, mpData.stockMPDisponible - produccionFinal * unidMP),
-      pedidosPendientesResta: mpData.pedidosPendientesResta,
-      pagoMP:                 mpData.pagoMP,
+      // Valor PROVISIONAL — cada producto queda momentáneamente con el pool
+      // restante EN EL INSTANTE en que se procesó (no el consolidado final de
+      // la empresa). Se sobreescribe para TODOS los productos de la empresa
+      // en la segunda pasada de más abajo, después de que el .map() termine.
+      stockMPFinal:           poolEmpresa.poolRestante,
+      pedidosPendientesResta: poolEmpresa.pedidosPendientesResta,
+      pagoMP:                 poolEmpresa.pagoMP,
     };
 
     // Costo MP ajustado por factorCosto del proveedor
@@ -1559,6 +1596,21 @@ function ejecutarSimulador(decisiones, cfg) {
 //     dashboard: { totalVentas, totalIngresos, totalUtilidad, totalCaja } };
 //
 // Y REEMPLÁZALO con el siguiente:
+
+  // Etapa 3.1-fix (2/2): segunda pasada — reescribir stockMPFinal/pedidosPendientesResta/pagoMP
+  // de TODOS los productos de cada empresa con el valor CONSOLIDADO FINAL del
+  // pool (el remanente después de procesar TODOS los productos de esa
+  // empresa), para que sean consistentes entre sí y con lo que realmente se
+  // propaga a la ronda siguiente — evita que solo el último producto
+  // procesado tenga el valor correcto.
+  resultados.forEach(r => {
+    const key = r.equipoOriginal || r.equipo;
+    const poolEmpresa = poolMPPorEmpresa.get(key);
+    if (!poolEmpresa || r.sinDecision) return;   // sinDecision no participa del pool de MP
+    r.stockMPFinal = poolEmpresa.poolRestante;
+    r.pedidosPendientesResta = poolEmpresa.pedidosPendientesResta;
+    r.pagoMP = poolEmpresa.pagoMP;
+  });
 
   return {
     mercadoSegmentos,
