@@ -2837,6 +2837,43 @@ async function route(req, res, body) {
     });
   }
 
+  // Campos de continuidad financiera/física que storage.js (ensureRonda,
+  // líneas 748-772) ya calcula server-side desde resPrev de la ronda
+  // anterior. El cliente nunca debe poder sobrescribirlos: body.decision
+  // puede traer un valor obsoleto de state.decisiones en memoria (ver
+  // hallazgo de la auditoría RAIZ R6), así que se reescriben SIEMPRE con el
+  // valor de `cur` (lo que el servidor ya tenía guardado) después de la
+  // fusión, sin importar qué envíe el cliente en body.decision.
+  const CAMPOS_CONTINUIDAD_SERVER_OWNED = [
+    'cajaInicial', 'cxcInicial', 'deudaInicial', 'activosFijosIniciales',
+    'resultadoAcumuladoAnterior', 'stockMPInicial', 'pedidosPendientes',
+    'vendedoresIniciales', 'operariosIniciales', 'saldoIUEcompensable',
+    'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
+  ];
+  // Subconjunto de los anteriores que además NUNCA debe existir a nivel de
+  // producto anidado — son campos exclusivamente de empresa (raíz). Los otros
+  // 7 campos de la lista ya quedan protegidos indirectamente porque
+  // expandirDecisionesMultiproducto los reconstruye desde camposEmpresa
+  // (nivel raíz), sin leerlos del producto anidado.
+  const CAMPOS_CONTINUIDAD_PROHIBIDOS_EN_PRODUCTO = [
+    'stockMPInicial', 'pedidosPendientes', 'saldoIUEcompensable',
+    'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
+  ];
+  function protegerContinuidadServerOwned(decisionFusionada, cur) {
+    for (const campo of CAMPOS_CONTINUIDAD_SERVER_OWNED) {
+      if (campo in cur) decisionFusionada[campo] = cur[campo];
+    }
+    if (Array.isArray(decisionFusionada.productos)) {
+      decisionFusionada.productos.forEach(producto => {
+        if (!producto || typeof producto !== 'object') return;
+        CAMPOS_CONTINUIDAD_PROHIBIDOS_EN_PRODUCTO.forEach(campo => {
+          if (campo in producto) delete producto[campo];
+        });
+      });
+    }
+    return decisionFusionada;
+  }
+
   if (url === '/api/decisiones/guardar' && method === 'POST') {
     if (needEquipo()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
@@ -2857,7 +2894,10 @@ async function route(req, res, body) {
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
     if (!ronda.decisiones) ronda.decisiones = {};
     const cur = ronda.decisiones[equipoId] || {};
-    ronda.decisiones[equipoId] = { ...cur, ...body.decision, equipo: equipoId, submitted: cur.submitted||false };
+    ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
+      { ...cur, ...body.decision, equipo: equipoId, submitted: cur.submitted||false },
+      cur
+    );
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     return send(res, 200, { ok: true });
   }
@@ -2882,11 +2922,14 @@ async function route(req, res, body) {
     const errorDecision = validarDecisionEstudiante(body.decision);
     if (errorDecision) return send(res, 400, { error: 'Decisión incompleta: ' + errorDecision });
     const cur = ronda.decisiones[equipoId] || {};
-    ronda.decisiones[equipoId] = {
-      ...cur, ...body.decision, equipo: equipoId, submitted: true,
-      submittedAt: new Date().toISOString(), forcedByAdmin: false,
-      forcedReason: null, forcedAt: null
-    };
+    ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
+      {
+        ...cur, ...body.decision, equipo: equipoId, submitted: true,
+        submittedAt: new Date().toISOString(), forcedByAdmin: false,
+        forcedReason: null, forcedAt: null
+      },
+      cur
+    );
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
     return send(res, 200, { ok: true });
   }
