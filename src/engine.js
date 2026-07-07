@@ -1100,7 +1100,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // la utilidad de ese producto → la assertion no aplica (Meyer, Design by Contract).
   // El invariante A = P + Pat sigue garantizado por patrimonio derivado en TODOS los casos.
   const _esMultiProd  = typeof d.equipo === 'string' && d.equipo.includes('__prod_');
-  const _patrimonioER = roundBs(capitalContable + resultadoAcumulado);
+  const _ivaDebitoNeto = Math.max(0, ivaDebito - (d.ivaSaldoAFavorAnterior ?? 0));
+  const _patrimonioER = roundBs(capitalContable + resultadoAcumulado + (ivaDebito - _ivaDebitoNeto));
   const _divergencia  = Math.abs(patrimonio - _patrimonioER);
   if (!_esMultiProd && _divergencia > 500) {
     const _sobregiro  = sobregiro || 0;
@@ -1196,6 +1197,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     cxcFinal, invFinalValorizado, afNetos,
     totalActivos, deudaFinal, totalPasivos,
     capitalContable, resultadoAcumulado, patrimonio,
+    _alertaCuadre: (_divergencia > 500) ? {
+      equipo: d.equipo, ronda: d.rondaNumero ?? null,
+      divergencia: _divergencia, patrimonioReal: patrimonio,
+      patrimonioReconstruido: _patrimonioER,
+    } : null,
 
     // Etapa 3.3: obligaciones fiscales IVA
     ivaDebito, ivaCredito, ivaAPagar, pagoIVA,
