@@ -355,6 +355,17 @@ function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estad
   const nuevoResObj = {};
   result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
 
+  // Extraer _alertaCuadre (engine.js) no nulo por equipo/producto — divergencia
+  // de reconciliación de patrimonio (ej. IVA a favor no capturado) detectada
+  // por el motor. Se expone en el retorno para que ambos llamadores
+  // (recalcular-balance, recalcular-ronda) puedan incluirla en su respuesta.
+  const alertasCuadreRonda = [];
+  Object.values(nuevoResObj).forEach(r => {
+    if (r && typeof r === 'object' && r._alertaCuadre) {
+      alertasCuadreRonda.push({ equipoProducto: r.equipo, ...r._alertaCuadre });
+    }
+  });
+
   const rondaPrevBase = n > 1 ? rondas.find(r => r.numero === n - 1) : null;
   const resultadosAnteriores = rondaPrevBase
     ? (rondaPrevBase.resultados?.resultados || rondaPrevBase.resultados || {})
@@ -373,6 +384,7 @@ function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estad
     nuevoResObj,
     reportes,
     shockRonda,
+    alertasCuadreRonda,
     resultado: {
       mercadoSegmentos: result.mercadoSegmentos,
       atractivoEquipos: result.atractivoEquipos,
@@ -1991,6 +2003,16 @@ async function route(req, res, body) {
     try {
       const result = ejecutarSimulador(decisiones, simCfg);
 
+      // Extraer _alertaCuadre (engine.js) no nulo por equipo/producto —
+      // divergencia de reconciliación de patrimonio detectada por el motor
+      // (ej. IVA a favor no capturado).
+      const alertasCuadreRonda = [];
+      result.resultados.forEach(r => {
+        if (r && typeof r === 'object' && r._alertaCuadre) {
+          alertasCuadreRonda.push({ equipoProducto: r.equipo, ...r._alertaCuadre });
+        }
+      });
+
       rondaActualizada.estado      = 'simulated';
       rondaActualizada.ejecutadaAt = new Date().toISOString();
       rondaActualizada.mercadoSegmentos = result.mercadoSegmentos;
@@ -2056,6 +2078,7 @@ async function route(req, res, body) {
         equiposSimulados: decisiones.length,
         equiposHumanos:   nHumanos,
         equiposBots:      nBots,
+        alertasCuadreRonda,
       });
     } catch (e) {
       console.error('[server] Error en motor de simulación:', e.message, e.stack);
@@ -2078,6 +2101,7 @@ async function route(req, res, body) {
     let totalRondas = 0;
     let totalEmpresas = 0;
     const errores = [];
+    const alertasCuadre = []; // acumulado de todas las rondas procesadas
     let nuevoResObjAnterior = {};  // resultados recalculados de la ronda anterior
 
     // ── Procesar cada ronda en orden cronológico ──────────────────────────
@@ -2101,9 +2125,13 @@ async function route(req, res, body) {
       }
 
       try {
-        const { nuevoResObj, resultado, reportes, shockRonda } = recalcularUnaRonda({
+        const { nuevoResObj, resultado, reportes, shockRonda, alertasCuadreRonda } = recalcularUnaRonda({
           sim, equipos, proveedores, rondas, ronda, n, estadoEmpresa, nuevoResObjAnterior,
         });
+
+        if (alertasCuadreRonda.length) {
+          alertasCuadre.push({ ronda: n, alertas: alertasCuadreRonda });
+        }
 
         Object.entries(resultado.estadoEmpresaActualizado).forEach(([eqId, est]) => {
           estadoEmpresa[eqId] = est;
@@ -2140,6 +2168,7 @@ async function route(req, res, body) {
       rondas:  totalRondas,
       empresas: totalEmpresas,
       errores,
+      alertasCuadre,
     });
   }
 
@@ -2206,7 +2235,7 @@ async function route(req, res, body) {
         ? (rondaAnterior.resultados?.resultados || rondaAnterior.resultados || {})
         : {};
 
-      const { nuevoResObj, reportes, shockRonda, resultado } = recalcularUnaRonda({
+      const { nuevoResObj, reportes, shockRonda, resultado, alertasCuadreRonda } = recalcularUnaRonda({
         sim, equipos, proveedores, rondas, ronda, n,
         estadoEmpresa: estadoEmpresaBase,
         nuevoResObjAnterior,
@@ -2243,6 +2272,7 @@ async function route(req, res, body) {
         ronda: n,
         equiposCalculados: Object.keys(nuevoResObj).length,
         detalle: Object.values(nuevoResObj),
+        alertasCuadreRonda,
       });
     } catch (e) {
       return send(res, 500, { error: e.message });
