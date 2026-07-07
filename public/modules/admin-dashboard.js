@@ -1002,6 +1002,9 @@ function buildAdminResultsHTML(rd) {
   const dashRows = equipos.map((r,rank) => {
     const origIdx = eqs.findIndex(e => e.equipoNombre === r.equipoNombre);
     const hl = rank === 0 ? 'background:rgba(6,255,165,.07);font-weight:700;' : '';
+    const alertaCuadreHTML = r._alertaCuadre
+      ? '<span class="badge badge-alert" title="Divergencia: '+r._alertaCuadre.divergencia+' Bs | Patrimonio real: '+r._alertaCuadre.patrimonioReal+' | Reconstruido: '+r._alertaCuadre.patrimonioReconstruido+'">⚠ CUADRE</span>'
+      : '';
     return '<tr style="'+hl+'border-bottom:1px solid var(--border)">'
       + '<td style="padding:7px 12px;text-align:center;font-weight:700;color:'+tc(origIdx)+'">'+( rank+1)+'</td>'
       + '<td style="padding:7px 12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+tc(origIdx)+';margin-right:6px;vertical-align:middle"></span>'+r.equipoNombre+'</td>'
@@ -1010,7 +1013,7 @@ function buildAdminResultsHTML(rd) {
       + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)"><strong>'+bsBO(r.utilidadNeta||0)+'</strong></td>'
       + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+bsBO(r.cajaFinal||0)+'</td>'
       + '<td style="padding:7px 12px;text-align:right;font-family:var(--font-mono)">'+(r.roiMarketing!=null?Math.round(r.roiMarketing*100)/100+'x':'—')+'</td>'
-      + '<td style="padding:7px 12px;text-align:center;font-size:1rem">'+semaforo(r)+'</td>'
+      + '<td style="padding:7px 12px;text-align:center;font-size:1rem">'+semaforo(r)+' '+alertaCuadreHTML+'</td>'
       + '</tr>';
   }).join('');
 
