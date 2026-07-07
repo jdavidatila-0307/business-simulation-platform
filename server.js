@@ -23,6 +23,7 @@ const storage  = require('./src/storage');
 const { ejecutarSimulador, propagarEstado, calcularMercadoSegmentos, calcularPreSimulacion } = require('./src/engine');
 const { generarReportes } = require('./src/reports');
 const { leerModoInicio, hidratarEstadoInicialR1 } = require('./src/initializer');   // lectura centralizada de inicio Fase 0
+const { NIVELES_PLANTA_FASE0 } = require('./src/constants');
 
 // Mínimo operativo por nivel de planta en Fase 0. La validación se replica en
 // servidor para impedir que una petición directa persista o envíe un valor inválido.
@@ -2850,6 +2851,7 @@ async function route(req, res, body) {
     'vendedoresIniciales', 'operariosIniciales', 'saldoIUEcompensable',
     'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
     'capitalInicial', 'capitalContable',
+    'capacidadMaxProduccion',
   ];
   // Subconjunto de los anteriores que además NUNCA debe existir a nivel de
   // producto anidado — son campos exclusivamente de empresa (raíz). Los otros
@@ -2866,7 +2868,142 @@ async function route(req, res, body) {
     'stockMPInicial', 'pedidosPendientes', 'saldoIUEcompensable',
     'ivaAPagarAnterior', 'ivaSaldoAFavorAnterior',
     'capitalInicial', 'capitalContable',
+    'capacidadMaxProduccion',
   ];
+
+  const CAMPOS_PRODUCTO_PERMITIDOS = [
+    'producto', 'segmentoObjetivo', 'canalPrincipal', 'canalSecundario',
+    'calidad', 'precioVenta', 'produccion',
+    'publicidad', 'promocion', 'eventos', 'marketingRedes', 'relacionesPublicas',
+    'innovacion', 'tipoInnovacion', 'montoInnovacion',
+  ];
+
+  const CAMPOS_EMPRESA_PERMITIDOS = [
+    'contratarVendedores', 'despedirVendedores',
+    'contratarOperarios', 'despedirOperarios', 'montoCapacitacion',
+    'tipoPrestamo', 'montoPrestamo', 'plazoPrestamo', 'amortizacion',
+    'tipoInvestigacion',
+    'proveedorElegido', 'cantidadMPpedida',
+  ];
+
+  const PAQUETES_AMPLIACION_SERVER = [
+    { key: '',      factor: 0 },
+    { key: 'menor', factor: 0.25 },
+    { key: 'media', factor: 0.50 },
+    { key: 'alta',  factor: 0.75 },
+  ];
+  const PAQUETES_MAQUINARIA_SERVER = [
+    { key: '',         factor: 0 },
+    { key: 'basica',   factor: 0.25 },
+    { key: 'estandar', factor: 0.50 },
+    { key: 'avanzada', factor: 1.00 },
+  ];
+  function factorPaqueteServer(lista, key) {
+    const f = lista.find(x => x.key === String(key || ''));
+    return f ? f.factor : 0;
+  }
+  function numNoNegativo(v) {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  }
+  function montoComplementarioServer(tipo, paquete, params) {
+    const p = params || {};
+    const key = String(paquete || '');
+    if (tipo === 'vehiculos') {
+      if (key === 'nivel1') return numNoNegativo(p.costoVehiculoNivel1);
+      if (key === 'nivel2') return numNoNegativo(p.costoVehiculoNivel2);
+      if (key === 'nivel3') return numNoNegativo(p.costoVehiculoNivel3);
+      return 0;
+    }
+    if (key !== 'si') return 0;
+    if (tipo === 'muebles')  return numNoNegativo(p.costoMuebles);
+    if (tipo === 'computo')  return numNoNegativo(p.costoComputo);
+    if (tipo === 'patentes') return numNoNegativo(p.costoPatentes);
+    return 0;
+  }
+  function catalogoPlantasFase0Server(params) {
+    const p = params || {};
+    return NIVELES_PLANTA_FASE0.map(d => ({
+      n: d.n,
+      nombre: p['fase0_af_' + d.n + '_nombre'] || d.nombre,
+      monto: (p['fase0_af_' + d.n + '_monto'] != null) ? Number(p['fase0_af_' + d.n + '_monto']) : d.monto,
+      capacidad: (p['fase0_af_' + d.n + '_capacidad'] != null) ? Number(p['fase0_af_' + d.n + '_capacidad']) : d.capacidad,
+    }));
+  }
+
+  function reconstruirInversionActivosPermitida(invCur, invCliente, decisionBase, params) {
+    const cli = invCliente || {};
+    const p = params || {};
+    const capActual = numNoNegativo(decisionBase?.capacidadMaxProduccion ?? p.capacidadMaxProduccion ?? 1500);
+
+    const out = {};
+
+    const tipoPlanta = String(cli.nuevaPlanta?.tipoPlanta ?? '');
+    const planta = catalogoPlantasFase0Server(p).find(c => String(c.n) === tipoPlanta);
+    out.nuevaPlanta = {
+      tipoPlanta,
+      monto: planta ? numNoNegativo(planta.monto) : 0,
+      incrementoCapacidad: planta ? numNoNegativo(planta.capacidad) : 0,
+    };
+
+    const paqueteAmpl = String(cli.ampliacionPlanta?.paquete ?? '');
+    const capAmpl = Math.round(capActual * factorPaqueteServer(PAQUETES_AMPLIACION_SERVER, paqueteAmpl));
+    out.ampliacionPlanta = {
+      paquete: paqueteAmpl,
+      incrementoCapacidad: capAmpl,
+      monto: Math.round(capAmpl * numNoNegativo(p.costoPorUnidadCapacidadAmpliacion)),
+    };
+
+    const paqueteMaq = String(cli.maquinaria?.paquete ?? '');
+    const capMaq = Math.round(capActual * factorPaqueteServer(PAQUETES_MAQUINARIA_SERVER, paqueteMaq));
+    out.maquinaria = {
+      paquete: paqueteMaq,
+      incrementoCapacidad: capMaq,
+      monto: Math.round(capMaq * numNoNegativo(p.costoPorUnidadCapacidadMaquinaria)),
+    };
+
+    ['vehiculos', 'muebles', 'computo', 'patentes'].forEach(tipo => {
+      const paquete = String(cli[tipo]?.paquete ?? '');
+      out[tipo] = { paquete, monto: montoComplementarioServer(tipo, paquete, p) };
+    });
+
+    return out;
+  }
+
+  function reconstruirDecisionPermitida(cur, decisionCliente, params) {
+    const d = decisionCliente || {};
+    const base = { ...cur };
+
+    CAMPOS_EMPRESA_PERMITIDOS.forEach(campo => {
+      if (campo in d) base[campo] = d[campo];
+    });
+
+    if ('justificaciones' in d) {
+      base.justificaciones = (d.justificaciones && typeof d.justificaciones === 'object' && !Array.isArray(d.justificaciones))
+        ? { ...d.justificaciones }
+        : (cur.justificaciones || {});
+    }
+
+    if (Array.isArray(d.productos)) {
+      base.productos = d.productos.map((p, idx) => {
+        const curProducto = (Array.isArray(cur.productos) && cur.productos[idx]) || {};
+        const prodBase = { ...curProducto };
+        CAMPOS_PRODUCTO_PERMITIDOS.forEach(campo => {
+          if (campo in (p || {})) prodBase[campo] = p[campo];
+        });
+        if (curProducto.productoId != null) prodBase.productoId = curProducto.productoId;
+        const curInversion = curProducto.inversionActivos || {};
+        const cliInversion = p?.inversionActivos || {};
+        prodBase.inversionActivos = reconstruirInversionActivosPermitida(
+          curInversion, cliInversion, base, params
+        );
+        return prodBase;
+      });
+    }
+
+    return base;
+  }
+
   function protegerContinuidadServerOwned(decisionFusionada, cur) {
     for (const campo of CAMPOS_CONTINUIDAD_SERVER_OWNED) {
       if (campo in cur) decisionFusionada[campo] = cur[campo];
@@ -2902,8 +3039,9 @@ async function route(req, res, body) {
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
     if (!ronda.decisiones) ronda.decisiones = {};
     const cur = ronda.decisiones[equipoId] || {};
+    const decisionAllowlist = reconstruirDecisionPermitida(cur, body.decision, sim.parametros || {});
     ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
-      { ...cur, ...body.decision, equipo: equipoId, submitted: cur.submitted||false },
+      { ...decisionAllowlist, equipo: equipoId, submitted: cur.submitted||false },
       cur
     );
     await storage.updateRonda(sim.id, n, { decisiones: ronda.decisiones });
@@ -2930,9 +3068,10 @@ async function route(req, res, body) {
     const errorDecision = validarDecisionEstudiante(body.decision);
     if (errorDecision) return send(res, 400, { error: 'Decisión incompleta: ' + errorDecision });
     const cur = ronda.decisiones[equipoId] || {};
+    const decisionAllowlist = reconstruirDecisionPermitida(cur, body.decision, sim.parametros || {});
     ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
       {
-        ...cur, ...body.decision, equipo: equipoId, submitted: true,
+        ...decisionAllowlist, equipo: equipoId, submitted: true,
         submittedAt: new Date().toISOString(), forcedByAdmin: false,
         forcedReason: null, forcedAt: null
       },
