@@ -227,6 +227,22 @@ function sanitizarDecisionRecalculo(d, capMaxGlobal) {
 // oficiales de esa ronda (ya canonicalizadas por storage.getRonda) y el estado
 // financiero de continuidad recibido en `estadoEmpresa` (estado de cierre de R(n-1)).
 // No persiste nada; el llamador decide qué guardar.
+
+// Extrae _alertaCuadre (engine.js) no nulo por equipo/producto — divergencia
+// de reconciliación de patrimonio (ej. IVA a favor no capturado) detectada
+// por el motor. Función pura, reutilizada por recalcularUnaRonda y por el
+// handler de /admin/simular (ambos ejecutan ejecutarSimulador de forma
+// independiente y necesitan el mismo procesamiento de su resultado).
+function extraerAlertasCuadreRonda(resultadosArray) {
+  const alertasCuadreRonda = [];
+  resultadosArray.forEach(r => {
+    if (r && typeof r === 'object' && r._alertaCuadre) {
+      alertasCuadreRonda.push({ equipoProducto: r.equipo, ...r._alertaCuadre });
+    }
+  });
+  return alertasCuadreRonda;
+}
+
 function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estadoEmpresa, nuevoResObjAnterior }) {
   const capMaxGlobal = sim.parametros?.capacidadMaxProduccion ?? 1500;
   const decisionesOriginales = ronda.decisiones || {};
@@ -355,16 +371,7 @@ function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estad
   const nuevoResObj = {};
   result.resultados.forEach(r => { nuevoResObj[r.equipo] = r; });
 
-  // Extraer _alertaCuadre (engine.js) no nulo por equipo/producto — divergencia
-  // de reconciliación de patrimonio (ej. IVA a favor no capturado) detectada
-  // por el motor. Se expone en el retorno para que ambos llamadores
-  // (recalcular-balance, recalcular-ronda) puedan incluirla en su respuesta.
-  const alertasCuadreRonda = [];
-  Object.values(nuevoResObj).forEach(r => {
-    if (r && typeof r === 'object' && r._alertaCuadre) {
-      alertasCuadreRonda.push({ equipoProducto: r.equipo, ...r._alertaCuadre });
-    }
-  });
+  const alertasCuadreRonda = extraerAlertasCuadreRonda(Object.values(nuevoResObj));
 
   const rondaPrevBase = n > 1 ? rondas.find(r => r.numero === n - 1) : null;
   const resultadosAnteriores = rondaPrevBase
@@ -2003,15 +2010,7 @@ async function route(req, res, body) {
     try {
       const result = ejecutarSimulador(decisiones, simCfg);
 
-      // Extraer _alertaCuadre (engine.js) no nulo por equipo/producto —
-      // divergencia de reconciliación de patrimonio detectada por el motor
-      // (ej. IVA a favor no capturado).
-      const alertasCuadreRonda = [];
-      result.resultados.forEach(r => {
-        if (r && typeof r === 'object' && r._alertaCuadre) {
-          alertasCuadreRonda.push({ equipoProducto: r.equipo, ...r._alertaCuadre });
-        }
-      });
+      const alertasCuadreRonda = extraerAlertasCuadreRonda(result.resultados);
 
       rondaActualizada.estado      = 'simulated';
       rondaActualizada.ejecutadaAt = new Date().toISOString();
