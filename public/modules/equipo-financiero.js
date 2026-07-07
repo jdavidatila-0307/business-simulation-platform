@@ -346,10 +346,16 @@ window.mostrarFinanciero = (n) => {
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
                 : 0;
-              const patrimonio = capital + acumAnt + utilidad;
+              const patrimonioVisible = capital + acumAnt + utilidad;
+              // FASE 6D-5 — patrimonio real: usar r.patrimonio (totalActivos-totalPasivos,
+              // ya calculado por el motor) en vez de recomponerlo, para no perder
+              // efectos contables que no pasan por utilidadNeta (ej. IVA a favor).
+              const patrimonio = Number(r.patrimonio ?? patrimonioVisible);
+              const otrosEfectos = patrimonio - patrimonioVisible;
               return finRow('Capital contable / social', capital,  false, 'neutral')
                 + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
                 + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
+                + (Math.abs(otrosEfectos) >= 1 ? finRow('Otros efectos (IVA a favor y similares)', otrosEfectos, false, otrosEfectos>=0?'pos':'neg') : '')
                 + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
                 + finRowSub('= TOTAL PATRIMONIO', patrimonio, true);
             })()}
@@ -361,15 +367,11 @@ window.mostrarFinanciero = (n) => {
             ${(() => {
               const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
               const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0);
-              // FASE 6D-4 — validar las PARTIDAS VISIBLES de patrimonio (capital+resAcumAnt+utilidad)
-              // contra A−P. Antes se comparaba el plug A−P contra sí mismo → "cuadra" tautológico.
-              const capital   = Number(r.capitalContable ?? 0);
-              const utilidad  = r.utilidadNeta || 0;
-              const acumAnt   = r.resultadoAcumulado != null ? (r.resultadoAcumulado - utilidad) : 0;
-              const patVisible= capital + acumAnt + utilidad;
-              const totalPP   = totalP + patVisible;     // pasivos + patrimonio VISIBLE
-              const plug      = totalA - totalP;         // patrimonio contable derivado (informativo)
-              const diff      = totalA - totalPP;
+              // FASE 6D-5 — usar r.patrimonio (verdad del motor) en vez del plug
+              // "partidas visibles", que no incluye efectos como IVA a favor.
+              const patrimonio = Number(r.patrimonio ?? (totalA - totalP));
+              const totalPP    = totalP + patrimonio;
+              const diff       = totalA - totalPP;
               const cuadra    = Math.abs(diff) < 2;
               return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
                 + '<div style="margin-top:8px;padding:8px 12px;background:'
@@ -377,7 +379,6 @@ window.mostrarFinanciero = (n) => {
                 + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
                 + (cuadra ? '✓ Balance cuadra' : '⚠ Descuadre ' + fmt.bs(diff))
                 + ' (Activos = ' + fmt.bs(totalA) + ' | P+P visible = ' + fmt.bs(totalPP) + ')'
-                + (cuadra ? '' : '<br>Patrimonio contable derivado (A−P) = ' + fmt.bs(plug))
                 + '</div>';
             })()}
           </div>

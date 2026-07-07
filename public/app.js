@@ -1088,8 +1088,12 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
       const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
       const capital = r.capitalContable ?? 0;
       const utilidad = r.utilidadNeta||0;
-      const acumAnt = totalA - totalP - capital - utilidad;
-      const cuadra  = Math.abs(totalA - totalP - (capital+acumAnt+utilidad)) < 2;
+      // FASE 6D-5 — acumAnt visible solo para desglose pedagógico; el total real
+      // usa r.patrimonio (motor), no el plug A-P-capital-utilidad (tautológico).
+      const acumAnt = r.resultadoAcumulado != null ? (r.resultadoAcumulado - utilidad) : 0;
+      const patrimonioTotal = Number(r.patrimonio ?? (r.totalActivos - r.totalPasivos));
+      const totalPasivosReal = Number(r.totalPasivos ?? totalP);
+      const cuadra  = Math.abs((r.totalActivos ?? totalA) - totalPasivosReal - patrimonioTotal) < 2;
       html += sec('Activo Corriente')
         + finRow('Caja y bancos',              r.cajaFinal,           false,'pos')
         + finRow('Cuentas por cobrar (CxC)',   r.cxcFinal,            false,'neutral')
@@ -1114,13 +1118,14 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
         + finRow('Capital contable / social', capital, false,'neutral')
         + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
         + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
+        + (Math.abs(patrimonioTotal - (capital+acumAnt+utilidad)) >= 1 ? finRow('Otros efectos (IVA a favor y similares)', patrimonioTotal - (capital+acumAnt+utilidad), false, 'neutral') : '')
         + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
-        + finRowSub('= TOTAL PATRIMONIO', totalA-totalP, true)
-        + finRowSub('TOTAL PASIVOS + PATRIMONIO', totalA, true)
+        + finRowSub('= TOTAL PATRIMONIO', patrimonioTotal, true)
+        + finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPasivosReal + patrimonioTotal, true)
         + '<div style="margin-top:8px;padding:8px 12px;background:'+(cuadra?'rgba(6,255,165,.08)':'rgba(255,107,107,.08)')
         + ';border-radius:var(--r);font-size:.78rem;font-family:var(--font-mono)">'
         + (cuadra?'✓ Balance cuadra':'⚠ Verificar balance')
-        + ' (Activos = '+fmt.bs(totalA)+' | P+P = '+fmt.bs(totalA)+')</div>';
+        + ' (Activos = '+fmt.bs(r.totalActivos ?? totalA)+' | P+P = '+fmt.bs(totalPasivosReal+patrimonioTotal)+')</div>';
 
     } else if (tab === 'fe') {
       const sec  = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;padding:6px 0;border-bottom:2px solid var(--border2);margin-bottom:4px">'+lbl+'</div>';
@@ -3115,10 +3120,13 @@ window.mostrarFinanciero = (n) => {
               const acumAnt  = r.resultadoAcumulado != null
                 ? (r.resultadoAcumulado - utilidad)   // acumulado ANTES de esta ronda
                 : 0;
-              const patrimonio = capital + acumAnt + utilidad;
+              const patrimonioVisible = capital + acumAnt + utilidad;
+              const patrimonio = Number(r.patrimonio ?? patrimonioVisible);
+              const otrosEfectos = patrimonio - patrimonioVisible;
               return finRow('Capital contable / social', capital,  false, 'neutral')
                 + finRow('Resultados acumulados', acumAnt, false, acumAnt>=0?'pos':'neg')
                 + finRow('Utilidad / pérdida del período', utilidad, false, utilidad>=0?'pos':'neg')
+                + (Math.abs(otrosEfectos) >= 1 ? finRow('Otros efectos (IVA a favor y similares)', otrosEfectos, false, otrosEfectos>=0?'pos':'neg') : '')
                 + '<div style="height:4px;border-top:2px solid var(--border2)"></div>'
                 + finRowSub('= TOTAL PATRIMONIO', patrimonio, true);
             })()}
@@ -3130,7 +3138,7 @@ window.mostrarFinanciero = (n) => {
             ${(() => {
               const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
               const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
-              const patrim   = r.patrimonio || (totalA - totalP);
+              const patrim   = Number(r.patrimonio ?? (totalA - totalP));  // fix: ?? en vez de || (evita descartar 0 legítimo)
               const totalPP  = totalP + patrim;
               const cuadra   = Math.abs(totalA - totalPP) < 2;
               return finRowSub('TOTAL PASIVOS + PATRIMONIO', totalPP, true)
