@@ -137,15 +137,40 @@ async function recalcularSecuencia(sim, { desdeRonda, hastaRonda }, deps) {
 
       const cuadre = verificarCuadreRonda(nuevoResObj, toleranciaDescuadre);
 
+      // Recorrer nuevoResObj buscando _alertaCuadre (engine.js) no nulo por
+      // equipo/producto — divergencia de reconciliación de patrimonio
+      // (ej. IVA a favor no capturado) que el motor ya detectó pero que
+      // verificarCuadreRonda (A=P+Pat puro) no ve, porque ese invariante
+      // sigue cuadrando; es una alerta distinta, no un descuadre A≠P+Pat.
+      const alertasCuadre = [];
+      Object.entries(nuevoResObj || {}).forEach(([key, r]) => {
+        if (r && typeof r === 'object' && r._alertaCuadre) {
+          alertasCuadre.push({ equipoProducto: key, ...r._alertaCuadre });
+        }
+      });
+
+      const estadoRonda = !cuadre.ok
+        ? 'DESCUADRE'
+        : (alertasCuadre.length ? 'ALERTA_CUADRE' : 'OK');
+
       reportePorRonda.push({
         ronda: numero,
-        ok: cuadre.ok,
+        ok: estadoRonda === 'OK',
+        estado: estadoRonda,
         maxDescuadre: cuadre.maxDescuadre,
         equiposCalculados: Object.keys(nuevoResObj).length,
         detalleCuadre: cuadre.detalles,
+        alertasCuadre,
         persistido: false, // se corrige abajo si se llamó a persistir()
       });
-      if (!cuadre.ok) todoOk = false;
+
+      if (estadoRonda !== 'OK') {
+        todoOk = false;
+        // Detener la secuencia: no persistir esta ronda, no continuar con
+        // ninguna ronda posterior — mismo criterio para descuadre A≠P+Pat
+        // y para _alertaCuadre (IVA a favor u otra reconciliación).
+        break;
+      }
 
       if (typeof persistir === 'function') {
         await persistir(sim, numero, {
@@ -166,8 +191,9 @@ async function recalcularSecuencia(sim, { desdeRonda, hastaRonda }, deps) {
       estadoEmpresa = resultado.estadoEmpresaActualizado;
       nuevoResObjAnterior = nuevoResObj;
     } catch (e) {
-      reportePorRonda.push({ ronda: numero, ok: false, error: e.message });
+      reportePorRonda.push({ ronda: numero, ok: false, estado: 'ERROR', error: e.message });
       todoOk = false;
+      break;
     }
   }
 
