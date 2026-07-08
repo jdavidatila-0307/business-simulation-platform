@@ -849,7 +849,7 @@ async function hojaRenderRonda(n, decision, roundState, resultado) {
     ` : ''}
 
         <!-- S2.6: MATERIA PRIMA — Etapa 3.1 -->
-    ${(ref.proveedores && ref.proveedores.length > 0 && p.modulos_modMateriaPrima !== 0) ? `
+    ${(ref.proveedores && ref.proveedores.length > 0 && p.modulos_modMateriaPrima !== 0 && hojaProductoActivo === 0) ? `
     <div class="hoja-section">
       <div class="hoja-section-title">2.6 · Materia Prima — Compra de insumos</div>
       <table class="hoja-table">
