@@ -487,13 +487,21 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
         if (productos) {
           for (const prod of productos) {
             const productoId = prod.productoId || 'prod_1';
+            const prodConEstado = {
+              ...prod,
+              submitted: decisionObj.submitted,
+              submittedAt: decisionObj.submittedAt,
+              forcedByAdmin: decisionObj.forcedByAdmin,
+              forcedReason: decisionObj.forcedReason,
+              forcedAt: decisionObj.forcedAt,
+            };
             await pool.query(
               `INSERT INTO sim_decisiones
                  (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
                VALUES ($1, $2, $3, $4, $5::jsonb, $6::TIMESTAMPTZ)
                ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
                DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
-              [simulacionId, n, equipoId, productoId, JSON.stringify(prod), enviadaAt]
+              [simulacionId, n, equipoId, productoId, JSON.stringify(prodConEstado), enviadaAt]
             );
           }
         } else {
