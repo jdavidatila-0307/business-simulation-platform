@@ -3191,7 +3191,9 @@ async function route(req, res, body) {
         const pid       = p.productoId || 'prod_1';
         const prevP     = _prevInvMap[pid] || null;
         const ptIni     = prevP ? (prevP.inventarioFinal ?? 0) : 0;
-        const mpIni     = prevP ? (prevP.stockMPFinal ?? 0) : (_decInv?.stockMPInicial ?? 0);
+        const mpIni     = prevP
+                             ? (prevP.stockMPFinal ?? 0)
+                             : (pid === 'prod_1' ? (_decInv?.stockMPInicial ?? 0) : 0);
         const prod      = p.produccion ?? 0;
         const consumoMP = _rnd2(prod * _unidMP);
         const mpFin     = p.stockMPFinal ?? 0;
