@@ -3068,6 +3068,9 @@ async function route(req, res, body) {
     if (sim.config.roundState === 'pending') return send(res, 400, { error: 'Ronda no habilitada' });
     if (!ronda.decisiones) ronda.decisiones = {};
     const cur = ronda.decisiones[equipoId] || {};
+    if (cur.submitted === true) {
+      return send(res, 400, { error: 'Ya enviaste tu decisión para esta ronda. No se puede modificar un borrador después del envío.' });
+    }
     const decisionAllowlist = reconstruirDecisionPermitida(cur, body.decision, sim.parametros || {});
     ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
       { ...decisionAllowlist, equipo: equipoId, submitted: cur.submitted||false },
@@ -3097,6 +3100,9 @@ async function route(req, res, body) {
     const errorDecision = validarDecisionEstudiante(body.decision);
     if (errorDecision) return send(res, 400, { error: 'Decisión incompleta: ' + errorDecision });
     const cur = ronda.decisiones[equipoId] || {};
+    if (cur.submitted === true) {
+      return send(res, 400, { error: 'Ya enviaste tu decisión para esta ronda. Si necesitas corregirla, contacta al profesor.' });
+    }
     const decisionAllowlist = reconstruirDecisionPermitida(cur, body.decision, sim.parametros || {});
     ronda.decisiones[equipoId] = protegerContinuidadServerOwned(
       {
