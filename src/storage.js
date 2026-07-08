@@ -434,7 +434,11 @@ async function updateRonda(simulacionId, n, data, ownerId = null) {
   const sim = await getSimulacion(simulacionId, ownerId);
   if (!sim) throw new Error('Simulación no encontrada');
   const rondas = sim.rondas || {};
-  rondas[String(n)] = { ...rondas[String(n)], ...data };
+  const rondaExistente = rondas[String(n)] || {};
+  const decisionesFusionadas = data.decisiones
+    ? { ...(rondaExistente.decisiones || {}), ...data.decisiones }
+    : rondaExistente.decisiones;
+  rondas[String(n)] = { ...rondaExistente, ...data, ...(decisionesFusionadas ? { decisiones: decisionesFusionadas } : {}) };
   await updateSimulacion(simulacionId, { rondas }, ownerId);
 
 console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ronda:', n);
