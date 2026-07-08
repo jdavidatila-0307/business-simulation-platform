@@ -1375,6 +1375,11 @@ async function initEquipo() {
   document.querySelectorAll('#screen-equipo .nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
       document.getElementById('btnPrintHoja').style.display = btn.dataset.view === 'eq-hoja' ? '' : 'none';
+      const esHoja = btn.dataset.view === 'eq-hoja';
+      const btnG = document.getElementById('btnGuardar');
+      const btnE = document.getElementById('btnEnviar');
+      if (btnG) btnG.style.display = esHoja ? 'none' : '';
+      if (btnE) btnE.style.display = esHoja ? 'none' : '';
     });
   });
 
@@ -1423,9 +1428,12 @@ async function loadDecisionForm() {
   const submitted   = data.decision.submitted;
   const isEditable  = !isSimulated && !isPending && !isLocked && !submitted;
 
-  document.getElementById('decRondaNum').textContent = n;
-  document.getElementById('equipoRoundBadge').textContent = `Ronda ${n}/20`;
-  document.getElementById('equipoStateBadge').textContent =
+  const _decRondaNum = document.getElementById('decRondaNum');
+  if (_decRondaNum) _decRondaNum.textContent = n;
+  const _roundBadge = document.getElementById('equipoRoundBadge');
+  if (_roundBadge) _roundBadge.textContent = `Ronda ${n}/20`;
+  const _stateBadge = document.getElementById('equipoStateBadge');
+  if (_stateBadge) _stateBadge.textContent =
     isSimulated ? '🔒 Simulada'
     : isPending  ? '⏸ Pendiente'
     : isLocked   ? '🔒 Cerrada'
