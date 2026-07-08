@@ -1312,6 +1312,8 @@ function ejecutarSimulador(decisiones, cfg) {
         poolRestante: mpDataEmpresa.stockMPDisponible,
         pedidosPendientesResta: mpDataEmpresa.pedidosPendientesResta,
         pagoMP: mpDataEmpresa.pagoMP,
+        proveedorElegido: dRep.proveedorElegido || null,
+        cantidadMPpedida: dRep.cantidadMPpedida ?? 0,
       });
     });
   }
@@ -1490,7 +1492,7 @@ function ejecutarSimulador(decisiones, cfg) {
     const unidMP = paramsConProveedores.unidadesMPporUnidad ?? 1;
     const produccionMaxMP = poolEmpresa.poolRestante > 0
       ? Math.floor(poolEmpresa.poolRestante / unidMP)
-      : (d.proveedorElegido ? 0 : Infinity);  // con proveedor: stock=0 → no produce; sin proveedor: sin restricción (retrocompat.)
+      : (poolEmpresa.proveedorElegido ? 0 : Infinity);  // con proveedor: stock=0 → no produce; sin proveedor: sin restricción (retrocompat.)
     // Etapa 3.2: producción limitada por capacidad efectiva (operarios) y MP
     const produccionReal = Math.min(
       d.produccion || 0,
@@ -1526,7 +1528,7 @@ function ejecutarSimulador(decisiones, cfg) {
     // costoMPunit = costoMPbase × factorCosto_proveedor
     //   → se pasa a calcularCostoUnitario para reemplazar la porción MP del costoBase
     const provData_cu   = (paramsConProveedores._proveedores || []).find(
-      p => p.id === d.proveedorElegido || p.nombre === d.proveedorElegido
+      p => p.id === poolEmpresa.proveedorElegido || p.nombre === poolEmpresa.proveedorElegido
     );
     const pctMP_cu      = paramsConProveedores.pctMateriaPrima ?? 0.40;
     const tp_cu         = tiposProducto[d.producto] || tiposProducto[d.tipoProducto];
@@ -1571,7 +1573,7 @@ function ejecutarSimulador(decisiones, cfg) {
       costoMPunitario:     costoMPunit,
       costoBaseProducto:   dEnriquecido.costoBaseProducto,
       costoCalidadUnit:    dEnriquecido.costoCalidadUnit,
-      proveedorElegido:    d.proveedorElegido || null,
+      proveedorElegido:    poolEmpresa.proveedorElegido || null,
       // Desglose visual correcto post-rediseño MP
       costoTransformacion: roundBs(cbProd * (1 - pctMP_enr)),
       // efInnovacion para el desglose
