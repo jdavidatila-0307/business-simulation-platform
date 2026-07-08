@@ -199,13 +199,14 @@ function sincronizarHojaConEstado() {
       'canalSecundario','calidad','precioVenta','produccion','publicidad',
       'promocion','eventos','marketingRedes','relacionesPublicas',
       'innovacion','tipoInnovacion','montoInnovacion'];
-    if (state.decisiones.productos?.[0] && prodFields.includes(field)) {
-      state.decisiones.productos[0][field] = v;
+    const idxActivo = (typeof hojaProductoActivo === 'number') ? hojaProductoActivo : 0;
+    if (state.decisiones.productos?.[idxActivo] && prodFields.includes(field)) {
+      state.decisiones.productos[idxActivo][field] = v;
     }
     if (field === 'producto' || field === 'tipoProducto') {
       state.decisiones['producto'] = v;
-      if (state.decisiones.productos?.[0]) {
-        state.decisiones.productos[0].producto = v;
+      if (state.decisiones.productos?.[idxActivo]) {
+        state.decisiones.productos[idxActivo].producto = v;
       }
     }
     state.decisiones[field] = v;
