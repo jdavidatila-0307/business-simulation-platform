@@ -1290,16 +1290,22 @@ if (isEditable) {
       });
     });
     document.getElementById('btnHojaGuardar')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btnHojaGuardar');
+      if (btn.disabled) return;
+      btn.disabled = true;
       try {
         sincronizarHojaConEstado();
         decision = state.decisiones;
         await api('POST','/api/decisiones/guardar',{decision});
         toast('💾 Guardado','success');
       }
-      catch(e) { toast(e.message,'error'); }
+      catch(e) { toast(e.message,'error'); btn.disabled = false; }
     });
     document.getElementById('btnHojaEnviar')?.addEventListener('click', async () => {
       if (!confirm('¿Enviar decisiones?\n\nEl profesor ejecutará la simulación cuando todos los equipos hayan enviado.')) return;
+      const btn = document.getElementById('btnHojaEnviar');
+      if (btn.disabled) return;
+      btn.disabled = true;
       try {
         sincronizarHojaConEstado();
         decision = state.decisiones;
@@ -1307,7 +1313,7 @@ if (isEditable) {
         await api('POST','/api/decisiones/enviar',{decision: _d3});
         toast('✅ Enviado','success');
         await loadHojaDecision();
-      } catch(e) { toast(e.message,'error'); }
+      } catch(e) { toast(e.message,'error'); btn.disabled = false; }
     });
   }
 
