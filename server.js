@@ -3199,8 +3199,7 @@ async function route(req, res, body) {
         const mpFin     = p.stockMPFinal ?? 0;
         const entregas  = _rnd2(mpFin - mpIni + consumoMP);
         const cuMP      = p.costoMPunitario ?? 0;
-        const compras   = (_decProd[pid]?.cantidadMPpedida)
-                            ?? (todosProductos.length === 1 ? (_decInv?.cantidadMPpedida ?? 0) : 0);
+        const compras   = _decInv?.cantidadMPpedida ?? 0;
         p.inventarios = {
           inventarioPTInicial: ptIni,
           produccion:          prod,
