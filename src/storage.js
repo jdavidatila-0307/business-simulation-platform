@@ -492,16 +492,16 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
               [simulacionId, n, equipoId, productoId, JSON.stringify(prod), enviadaAt]
             );
           }
+        } else {
+          await pool.query(
+            `INSERT INTO sim_decisiones
+               (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
+             VALUES ($1, $2, $3, 'prod_1', $4::jsonb, $5::TIMESTAMPTZ)
+             ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
+             DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
+            [simulacionId, n, equipoId, JSON.stringify(decisionObj), enviadaAt]
+          );
         }
-
-        await pool.query(
-          `INSERT INTO sim_decisiones
-             (simulacion_id, ronda_numero, equipo_id, producto_id, decisiones, enviada_at)
-           VALUES ($1, $2, $3, 'prod_1', $4::jsonb, $5::TIMESTAMPTZ)
-           ON CONFLICT (simulacion_id, ronda_numero, equipo_id, producto_id)
-           DO UPDATE SET decisiones = EXCLUDED.decisiones, enviada_at = EXCLUDED.enviada_at`,
-          [simulacionId, n, equipoId, JSON.stringify(decisionObj), enviadaAt]
-        );
       }
     }
   } catch (errNuevo) {
