@@ -327,9 +327,6 @@ function crearProductoDefault(idx) {
     contratarOperarios:  0,
     despedirOperarios:   0,
     montoCapacitacion:   0,
-    // Etapa 3.1: Materia Prima
-    proveedorElegido:    '',
-    cantidadMPpedida:    0,
     // Campos legado (para no romper motor con decisiones monoproducto viejas)
     tipoPrestamo: 'Ninguno',
     montoPrestamo: 0,
@@ -1205,7 +1202,6 @@ if (isEditable) {
             'contratarOperarios','despedirOperarios','montoCapacitacion',
             'tipoPrestamo','montoPrestamo','plazoPrestamo','amortizacion',
             'tipoInvestigacion',
-            'proveedorElegido','cantidadMPpedida',
           ];
 
           if (camposEmpresa.includes(field)) {
@@ -1214,6 +1210,10 @@ if (isEditable) {
             if (Array.isArray(state.decisiones.productos)) {
               state.decisiones.productos.forEach(p => { p[field] = v; });
             }
+          } else if (field === 'proveedorElegido' || field === 'cantidadMPpedida') {
+            // Materia prima: decisión única de empresa, SOLO en raíz — nunca se propaga
+            // a productos[] individuales (Diseño 2 completo, ver commits aa5dd05, f6eedf5)
+            state.decisiones[field] = v;
           } else {
             // Campo de producto: guardar solo en el producto activo
             const prod = state.decisiones.productos[hojaProductoActivo];
