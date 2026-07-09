@@ -1955,7 +1955,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:12px 16px">
             ${(() => {
               const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0);
               const patrim   = r.patrimonio || (totalA - totalP);
               const totalPP  = totalP + patrim;
               const cuadra   = Math.abs(totalA - totalPP) < 2;
