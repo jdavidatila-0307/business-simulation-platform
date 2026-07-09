@@ -1085,7 +1085,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
     } else if (tab === 'bg') {
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
       const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);  // ivaCredito ya compensado
-      const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
+      const totalP  = (r.deudaFinal||0)+(r.ivaAPagar||0);
       const capital = r.capitalContable ?? 0;
       const utilidad = r.utilidadNeta||0;
       // FASE 6D-5 — acumAnt visible solo para desglose pedagógico; el total real
@@ -3147,7 +3147,7 @@ window.mostrarFinanciero = (n) => {
           <div style="padding:12px 16px">
             ${(() => {
               const totalA   = r.totalActivos||(r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);
-              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0)+(r.sobregiro||0);
+              const totalP   = (r.deudaFinal||0)+(r.ivaAPagar||0);
               const patrim   = Number(r.patrimonio ?? (totalA - totalP));  // fix: ?? en vez de || (evita descartar 0 legítimo)
               const totalPP  = totalP + patrim;
               const cuadra   = Math.abs(totalA - totalPP) < 2;
