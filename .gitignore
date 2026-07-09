@@ -4,4 +4,4 @@ db.json
 data/
 *.log
 .DS_Store
-coverage/
+coverage/backups/
