@@ -3022,7 +3022,7 @@ async function route(req, res, body) {
         });
         if (curProducto.productoId != null) prodBase.productoId = curProducto.productoId;
         const curInversion = curProducto.inversionActivos || {};
-        const cliInversion = p?.inversionActivos || d.inversionActivos || {};
+        const cliInversion = d.inversionActivos || {};
         prodBase.inversionActivos = reconstruirInversionActivosPermitida(
           curInversion, cliInversion, base, params
         );
