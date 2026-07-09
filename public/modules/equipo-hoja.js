@@ -353,6 +353,7 @@ async function loadHojaDecision() {
   }
 
   hojaRondaActual = decData.ronda;
+  hojaTieneCambiosSinGuardar = false;
 
   // Construir navegación de rondas
   const simuladas = new Set((resData.historial || []).map(h => h.ronda));
@@ -373,6 +374,11 @@ async function loadHojaDecision() {
 // Navegar a otra ronda desde el selector
 window.hojaIrRonda = async (n) => {
   if (n === hojaRondaActual) return;
+  if (hojaTieneCambiosSinGuardar) {
+    if (!confirm('Tienes cambios sin guardar en esta ronda. Si continúas, se perderán. Si quieres conservarlos, cancela y usa el botón "Guardar borrador" antes de navegar. ¿Deseas continuar sin guardarlos?')) {
+      return;
+    }
+  }
   hojaRondaActual = n;
   document.querySelectorAll('.hoja-round-btn').forEach((b, i) => b.classList.toggle('active', i+1===n));
 
@@ -384,6 +390,7 @@ window.hojaIrRonda = async (n) => {
     // Ronda actual: cargar decisión editable
     const decData = await api('GET', '/api/decisiones');
     if (n === decData.ronda) {
+      hojaTieneCambiosSinGuardar = false;
       await hojaRenderRonda(n, decData.decision, decData.roundState, null);
       return;
     }
@@ -391,6 +398,7 @@ window.hojaIrRonda = async (n) => {
     const resData = await api('GET', '/api/resultados');
     const item = resData.historial?.find(h => h.ronda === n);
     if (item) {
+      hojaTieneCambiosSinGuardar = false;
       await hojaRenderRonda(n, item.decision || {}, 'simulated', item.resultado);
     } else {
       cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sin datos para la ronda ${n}</p></div>`;
@@ -1063,6 +1071,8 @@ if (isEditable) {
       el.type === 'checkbox' ? 'change' : 'input',
       () => {
 
+        hojaTieneCambiosSinGuardar = true;
+
         let v =
           el.type === 'checkbox' ? el.checked
           : el.type === 'number' ? +el.value
@@ -1247,6 +1257,7 @@ if (isEditable) {
   cont.querySelectorAll('[data-activo-tipo][data-activo-campo]').forEach(el => {
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(evt, () => {
+      hojaTieneCambiosSinGuardar = true;
       if (el.tagName !== 'SELECT') {
         const valor = normalizarNumeroNoNegativo(el.value);
         if (+el.value !== valor) el.value = valor;
@@ -1286,6 +1297,7 @@ if (isEditable) {
 
     cont.querySelectorAll('[data-hoja-just]').forEach(el => {
       el.addEventListener('input', () => {
+        hojaTieneCambiosSinGuardar = true;
         if (!decision.justificaciones) decision.justificaciones = {};
         decision.justificaciones[el.dataset.hojaJust] = el.value;
         if (state.decisiones?.justificaciones) state.decisiones.justificaciones[el.dataset.hojaJust] = el.value;
@@ -1299,6 +1311,7 @@ if (isEditable) {
         sincronizarHojaConEstado();
         decision = state.decisiones;
         await api('POST','/api/decisiones/guardar',{decision});
+        hojaTieneCambiosSinGuardar = false;
         toast('💾 Guardado','success');
       }
       catch(e) { toast(e.message,'error'); btn.disabled = false; }
@@ -1313,6 +1326,7 @@ if (isEditable) {
         decision = state.decisiones;
         const _d3 = JSON.parse(JSON.stringify(decision, (k,v) => v===undefined?null:v));
         await api('POST','/api/decisiones/enviar',{decision: _d3});
+        hojaTieneCambiosSinGuardar = false;
         toast('✅ Enviado','success');
         await loadHojaDecision();
       } catch(e) { toast(e.message,'error'); btn.disabled = false; }
