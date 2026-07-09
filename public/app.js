@@ -1641,6 +1641,8 @@ let hojaRondaActual = 1;   // ronda que está mostrando el selector
 
 let hojaProductoActivo = 0;
 
+let hojaTieneCambiosSinGuardar = false;
+
 function normalizarDecisionMultiproducto(decision) {
   decision = decision || {};
 
