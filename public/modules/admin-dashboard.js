@@ -782,7 +782,7 @@ function buildVistaEstudiantePorEquipo(rd, tab) {
     } else if (tab === 'bg') {
       const sec = lbl => '<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:4px 0;border-bottom:1px solid var(--border);margin-top:6px">'+lbl+'</div>';
       const totalA  = (r.cajaFinal||0)+(r.cxcFinal||0)+(r.invFinalValorizado||0)+(r.afNetos||0);  // ivaCredito ya compensado
-      const totalP  = (r.deudaFinal||0)+(r.sobregiro||0);  // ivaAPagar ya pagado
+      const totalP  = (r.deudaFinal||0)+(r.ivaAPagar||0);
       const capital = r.capitalContable ?? 0;
       const utilidad = r.utilidadNeta||0;
       const acumAnt = totalA - totalP - capital - utilidad;
