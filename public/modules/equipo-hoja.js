@@ -372,6 +372,7 @@ async function loadHojaDecision() {
 
 // Navegar a otra ronda desde el selector
 window.hojaIrRonda = async (n) => {
+  if (n === hojaRondaActual) return;
   hojaRondaActual = n;
   document.querySelectorAll('.hoja-round-btn').forEach((b, i) => b.classList.toggle('active', i+1===n));
 
