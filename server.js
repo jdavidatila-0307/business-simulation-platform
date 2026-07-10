@@ -3049,6 +3049,12 @@ async function route(req, res, body) {
   }
 
   if (url === '/api/decisiones/guardar' && method === 'POST') {
+    console.log('[DEBUG-SERVER-GUARDAR]', JSON.stringify({
+      tieneProductos: Array.isArray(body.decision?.productos),
+      numProductos: body.decision?.productos?.length,
+      productoIds: body.decision?.productos?.map(p=>p?.productoId),
+      camposRaiz: {producto: body.decision?.producto, calidad: body.decision?.calidad, precioVenta: body.decision?.precioVenta}
+    }));
     if (needEquipo()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const equipoId = s.userId;
@@ -3081,6 +3087,12 @@ async function route(req, res, body) {
   }
 
   if (url === '/api/decisiones/enviar' && method === 'POST') {
+    console.log('[DEBUG-SERVER-ENVIAR]', JSON.stringify({
+      tieneProductos: Array.isArray(body.decision?.productos),
+      numProductos: body.decision?.productos?.length,
+      productoIds: body.decision?.productos?.map(p=>p?.productoId),
+      camposRaiz: {producto: body.decision?.producto, calidad: body.decision?.calidad, precioVenta: body.decision?.precioVenta}
+    }));
     if (needEquipo()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     const equipoId = s.userId;
