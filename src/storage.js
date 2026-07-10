@@ -509,6 +509,14 @@ console.log('[DUAL-WRITE] insertando en sim_rondas para sim:', simulacionId, 'ro
               capitalInicial: decisionObj.capitalInicial,
               capitalContable: decisionObj.capitalContable,
               capacidadMaxProduccion: decisionObj.capacidadMaxProduccion,
+              tipoPrestamo: decisionObj.tipoPrestamo,
+              montoPrestamo: decisionObj.montoPrestamo,
+              plazoPrestamo: decisionObj.plazoPrestamo,
+              amortizacion: decisionObj.amortizacion,
+              tipoInvestigacion: decisionObj.tipoInvestigacion,
+              justificaciones: decisionObj.justificaciones,
+              rrhh: decisionObj.rrhh,
+              finanzas: decisionObj.finanzas,
             };
             await pool.query(
               `INSERT INTO sim_decisiones
