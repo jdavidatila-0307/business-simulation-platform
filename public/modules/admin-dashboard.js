@@ -124,7 +124,7 @@ async function loadAdminDashboard() {
                   const producto        = p0.producto  || r.producto  || '—';
                   const demandaAsignada = (r.productos||[]).reduce((s,p) => s+(p.demandaAsignada||0), 0) || r.demandaAsignada || 0;
                   const ventasEstimadas = (r.productos||[]).reduce((s,p) => s+(p.ventasEstimadas||0), 0) || r.ventasEstimadas || 0;
-                  const shareEstimado   = (r.productos||[]).reduce((s,p) => s+(p.shareEstimado||0), 0)   || r.shareEstimado   || 0;
+                  const shareEstimado   = r.shareEstimado || 0;
                   const nombre          = r.equipoNombre || r.nombre || r.equipo || '—';
                   const nProds          = r.productos?.length || 1;
                   return `<tr>
