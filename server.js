@@ -3020,7 +3020,7 @@ async function route(req, res, body) {
         CAMPOS_PRODUCTO_PERMITIDOS.forEach(campo => {
           if (campo in (p || {})) prodBase[campo] = p[campo];
         });
-        if (curProducto.productoId != null) prodBase.productoId = curProducto.productoId;
+        prodBase.productoId = curProducto.productoId ?? p?.productoId ?? prodBase.productoId;
         const curInversion = curProducto.inversionActivos || {};
         const cliInversion = d.inversionActivos || {};
         prodBase.inversionActivos = reconstruirInversionActivosPermitida(
