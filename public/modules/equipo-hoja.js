@@ -203,13 +203,15 @@ function sincronizarHojaConEstado() {
     if (state.decisiones.productos?.[idxActivo] && prodFields.includes(field)) {
       state.decisiones.productos[idxActivo][field] = v;
     }
-    if (field === 'producto' || field === 'tipoProducto') {
+    if (idxActivo === 0 && (field === 'producto' || field === 'tipoProducto')) {
       state.decisiones['producto'] = v;
       if (state.decisiones.productos?.[idxActivo]) {
         state.decisiones.productos[idxActivo].producto = v;
       }
     }
-    state.decisiones[field] = v;
+    if (!prodFields.includes(field) || idxActivo === 0) {
+      state.decisiones[field] = v;
+    }
   });
   sincronizarInversionActivosDesdeDOM(document);
 }
