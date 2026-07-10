@@ -219,6 +219,7 @@ function sincronizarHojaConEstado() {
 async function guardarDecision() {
   try {
     sincronizarHojaConEstado();
+    console.log('[DEBUG-PRODUCTOS]', 'guardar', JSON.stringify({len: state.decisiones.productos?.length, ids: state.decisiones.productos?.map(p=>p?.productoId), prod: state.decisiones.productos?.map(p=>({id:p?.productoId,produccion:p?.produccion}))}));
     await api('POST','/api/decisiones/guardar',{ decision: state.decisiones });
     toast('💾 Decisiones guardadas','success');
   } catch(e) { toast(e.message,'error'); }
@@ -228,6 +229,7 @@ async function enviarDecision() {
   if (!confirm('¿Enviar decisiones al simulador?\n\nPodrás ver tus resultados cuando el profesor ejecute la simulación.')) return;
   try {
     sincronizarHojaConEstado();
+    console.log('[DEBUG-PRODUCTOS]', 'enviar', JSON.stringify({len: state.decisiones.productos?.length, ids: state.decisiones.productos?.map(p=>p?.productoId), prod: state.decisiones.productos?.map(p=>({id:p?.productoId,produccion:p?.produccion}))}));
     const _d1 = JSON.parse(JSON.stringify(state.decisiones, (k,v) => v===undefined?null:v));
     await api('POST','/api/decisiones/enviar',{ decision: _d1 });
     toast('✅ Decisiones enviadas correctamente','success');
