@@ -1389,7 +1389,7 @@ async function initEquipo() {
   try {
     const decData = await api('GET', '/api/decisiones');
     state.ref = decData.referencia || null;
-    state.decisiones = decData.decision;
+    state.decisiones = normalizarDecisionMultiproducto(decData.decision);
     const f0Data = await api('GET', '/api/fase0').catch(() => null);
     if (f0Data && f0Data.fase0Activa &&
         f0Data.registro?.estado !== 'enviado' &&
@@ -1420,7 +1420,7 @@ async function initEquipo() {
 // ── Decision Form ──────────────────────────────────────────
 async function loadDecisionForm() {
   const data = await api('GET','/api/decisiones');
-  state.decisiones = data.decision;
+  state.decisiones = normalizarDecisionMultiproducto(data.decision);
   const n = data.ronda;
   const isSimulated = data.roundState === 'simulated';
   const isPending   = data.roundState === 'pending';
