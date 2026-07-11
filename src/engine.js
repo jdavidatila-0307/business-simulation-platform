@@ -681,11 +681,18 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     return 0;
   })() : 0;
 
-  // Financiamiento
+  // Financiamiento — costo de EMPRESA (una sola línea de crédito), no por producto.
+  // esProductoPrincipal se define más abajo (línea ~772) — inline aquí, misma fórmula exacta.
   const montoP = d.montoPrestamo || 0;
   const tipoP  = d.tipoPrestamo  || 'Ninguno';
+  const _modeloCostosPP = params.modeloCostos || 'mixto';
+  const _esPPFinanciamiento = _modeloCostosPP === 'mixto'
+    ? (d.productoId === 'prod_1' || !d.productoId)
+    : _modeloCostosPP === 'directo'
+    ? false
+    : true;
   let interesesPrestamo = 0, comisionApertura = 0;
-  if (tipoP !== 'Ninguno' && montoP > 0) {
+  if (_esPPFinanciamiento && tipoP !== 'Ninguno' && montoP > 0) {
     const tasa = tipoP === 'Operativo' ? params.tasaPrestamoOperativo : params.tasaPrestamoInversion;
     interesesPrestamo = roundBs(montoP * tasa);
     comisionApertura  = roundBs(montoP * params.comisionAperturaPrestamo);
@@ -758,13 +765,11 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const ivaCredMPunit = roundBs(costoMPunitario_bruto * (params.tasaIVA ?? 0.13));
   const cuBruto = roundBs(costoUnitario + ivaCredMPunit);  // CU bruto para caja
 
-  // Gastos SIN factura → precio completo en P&L
-  const gastoCostoVend  = d.costoVendedores || 0;   // sueldos: relación laboral
-  const gastoOperarios  = d.costoOperarios  || 0;   // sueldos: relación laboral — específico por línea
-
   // Alternativa 3 — Costos mixtos multiproducto:
-  //   COMUNES (se cobran UNA sola vez, en prod_1): admin, planta, depreciación
-  //   ESPECÍFICOS (por cada línea activa): operarios ← ya arriba
+  //   COMUNES (se cobran UNA sola vez, en prod_1): admin, planta, depreciación,
+  //   vendedores, operarios (nómina), intereses/comisión de préstamo, amortización.
+  //   ESPECÍFICOS (por cada línea activa): capacidad de producción/operarios,
+  //   materia prima, marketing de producto, calidad, innovación.
   //
   // modeloCostos configurable por industria (params.modeloCostos):
   //   'mixto'     → Alternativa 3: costos comunes solo en prod_1 (default)
@@ -776,6 +781,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
     : modeloCostos === 'directo'
     ? false   // directo: ningún producto paga costos fijos
     : true;   // absorcion: todos los productos pagan costos fijos completos
+
+  // Gastos SIN factura → precio completo en P&L
+  // Vendedores y operarios (nómina) son plantilla de EMPRESA, replicada idéntica
+  // en cada producto expandido — se cobran una sola vez, en el producto principal.
+  const gastoCostoVend  = esProductoPrincipal ? (d.costoVendedores || 0) : 0;   // sueldos: relación laboral
+  const gastoOperarios  = esProductoPrincipal ? (d.costoOperarios  || 0) : 0;   // sueldos: relación laboral (nómina, no capacidad)
   // FASE 3 — prioridad decision > params. 0 explícito es válido → usar != null, NO ||.
   // En modo fase0 la decisión trae los gastos fijos hidratados (FASE 2); en homogéneo
   // d.* es undefined → se usa params (comportamiento homogéneo intacto).
@@ -862,9 +873,12 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   // La variable se mantiene para compatibilidad con el return pero = 0
   const pagoProduccion = 0;  // S7: eliminado — no hay pago único de producción
   const pagoMPbruto    = roundBs((d.costoMPunitario || 0) * (d.produccion || 0)); // S4: MP bruto
-  const pagoMktTotal   = gastoTotalMarketing; // ya incluye vendedores
-  const pagoAdmin      = gastoAdminFijoEff;
-  const pagoPlanta     = gastoFijoPlantaEff;
+  // Gate de caja: vendedores solo salen de caja una vez (producto principal),
+  // simétrico al gate ya aplicado en el P&L (gastoCostoVend, líneas 781-782).
+  const gastoTotalMarketingGateado = gastoTotalMarketing - (d.costoVendedores || 0) + gastoCostoVend;
+  const pagoMktTotal   = gastoTotalMarketingGateado; // ya incluye vendedores (gateado)
+  const pagoAdmin      = gastoAdminFijo;
+  const pagoPlanta     = gastoPlantaFijo;
   const pagoSueldosAdmin = gastoSueldosAdmin;
   // Nota: depreciación no es salida de caja
   const pagoInnovacion = gastoInnovacion;
@@ -978,7 +992,7 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
   const totalImpuestos = roundBs(ITefectivoCaja + impuestoIUE);  // FASE 0+4 (IT no compensado + IUE)
   utilidadNeta = roundBs(utilidadNeta_operat - totalImpuestos);
 
-  const pagoOperarios  = d.costoOperarios || 0;  // S6: operarios salen de caja
+  const pagoOperarios  = gastoOperarios;  // S6: operarios salen de caja (gateado, simétrico a vendedores)
   // pagoCalidad: componente de calidad sobre 5 × unidades producidas
   // Se calcula desde costoCalidadUnit que viene del resultado (ya tiene tiposProducto)
   const _pctCalPago    = params?.pctCostoCalidad ?? 0.08;
@@ -1000,7 +1014,8 @@ function calcularResultadosFinancieros(d, ventas, costoUnitario, gastoTotalMarke
 
   // S7: totalPagos con pagos REALES individuales (sin pagoProduccion)
   // pagoAmortizacion: reembolso del principal al banco (reduce caja Y reduce deuda)
-  const pagoAmortizacion = d.amortizacion || 0;
+  // Gateado: préstamo es de EMPRESA (una sola línea de crédito), no por producto.
+  const pagoAmortizacion = esProductoPrincipal ? (d.amortizacion || 0) : 0;
   const totalPagos = roundBs(
     pagoMP           +  // S4: MP bruto al proveedor
     pagoComisiones   +  // S3: comisión al canal
