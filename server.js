@@ -2371,13 +2371,15 @@ async function route(req, res, body) {
         // ── Balance consolidado DERIVADO ──────────────────────────────────────
         // totalActivos/patrimonio quedaban con el valor de prod_1 (spread inicial
         // {...r}), ignorando que cajaFinal YA se consolidó (suma, fix 02fe566).
-        // Se reconstruye: cajaFinal consolidado + saldos de empresa únicos de prod_1.
-        // OJO: en ESTE endpoint invFinalValorizado SÍ está en la whitelist 'sumar'
-        // (línea ~2343), así que e.invFinalValorizado ya está consolidado → se usa e.*,
-        // no p0.*. cxcFinal/afNetos/intangiblesNetos NO están en sumar → van de prod_1.
+        // Componentes SUMADOS (varían por producto — confirmado con datos reales):
+        //   cajaFinal (e.cajaFinal, ya sumado por whitelist), cxcFinal, invFinalValorizado.
+        //   OJO: en ESTE endpoint invFinalValorizado SÍ está en la whitelist 'sumar'
+        //   (línea ~2343) → e.invFinalValorizado ya sumado. cxcFinal NO está → se suma aquí.
+        // ÚNICOS de empresa (idénticos entre productos → de prod_1): afNetos, intangiblesNetos.
         // || 0 blinda contra afNetos/intangiblesNetos = null (productos pre-fix NaN a061a20).
         const p0Adm = e.productos[0];
-        e.totalActivos = _rnd2Adm((e.cajaFinal || 0) + (p0Adm.cxcFinal || 0) + (e.invFinalValorizado || 0) + (p0Adm.afNetos || 0) + (p0Adm.intangiblesNetos || 0));
+        const _cxcAdm = e.productos.reduce((s,p) => s + (p.cxcFinal || 0), 0);
+        e.totalActivos = _rnd2Adm((e.cajaFinal || 0) + _cxcAdm + (e.invFinalValorizado || 0) + (p0Adm.afNetos || 0) + (p0Adm.intangiblesNetos || 0));
         e.totalPasivos = _rnd2Adm((p0Adm.deudaFinal || 0) + (p0Adm.ivaAPagar || 0));
         e.patrimonio   = _rnd2Adm(e.totalActivos - e.totalPasivos);
       }
@@ -3268,13 +3270,16 @@ async function route(req, res, body) {
         consolidado.ivaAPagar      = todosProductos[0].ivaAPagar;
         consolidado.resultadoAcumulado = todosProductos[0].resultadoAcumulado;
         // ── Balance consolidado DERIVADO (no todosProductos[0], que solo refleja prod_1) ──
-        // totalActivos debe reconstruirse desde cajaFinal YA consolidado (suma) + los
-        // saldos de empresa únicos (cxcFinal/afNetos/intangiblesNetos de prod_1). Si se
-        // dejara todosProductos[0].totalActivos, la caja consolidada (mayor) excederia el
-        // Total Activos mostrado → inconsistencia visible en el Balance del estudiante.
+        // totalActivos se reconstruye desde los componentes consolidados correctamente:
+        //   SUMADOS entre productos (varían por producto — confirmado con datos reales):
+        //     cajaFinal (ya sumado arriba), cxcFinal, invFinalValorizado
+        //   ÚNICOS de empresa (idénticos en todos los productos → de prod_1):
+        //     afNetos, intangiblesNetos (gateados por esProductoPrincipal en el motor)
+        // Si se tomara cxcFinal/inv de prod_1, el total quedaria corto y la caja
+        // consolidada (mayor) podria exceder el Total Activos → inconsistencia visible.
         // || 0 blinda contra afNetos/intangiblesNetos = null (productos pre-fix NaN a061a20).
-        const _cxcFinalEmp   = todosProductos[0].cxcFinal || 0;
-        const _invFinalEmp   = todosProductos[0].invFinalValorizado || 0;
+        const _cxcFinalEmp   = todosProductos.reduce((s,p) => s + (p.cxcFinal || 0), 0);
+        const _invFinalEmp   = todosProductos.reduce((s,p) => s + (p.invFinalValorizado || 0), 0);
         const _afNetosEmp    = todosProductos[0].afNetos || 0;
         const _intangNetosEmp= todosProductos[0].intangiblesNetos || 0;
         consolidado.totalActivos = _rnd2(consolidado.cajaFinal + _cxcFinalEmp + _invFinalEmp + _afNetosEmp + _intangNetosEmp);
