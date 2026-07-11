@@ -2362,11 +2362,24 @@ async function route(req, res, body) {
     });
 
     // Calcular shareReal total por empresa (suma de shares de todos sus productos)
+    const _rnd2Adm = (x) => Math.round((Number(x) || 0) * 100) / 100;
     Object.values(porEmpresa).forEach(e => {
       if (e.productos.length > 1) {
         e.shareReal = e.productos.reduce((s,p) => s + (p.shareReal||0), 0);
         e.producto  = 'Multiproducto (' + e.productos.length + ')';
         e.segmento  = [...new Set(e.productos.map(p => p.segmento||'—'))].join(', ');
+        // ── Balance consolidado DERIVADO ──────────────────────────────────────
+        // totalActivos/patrimonio quedaban con el valor de prod_1 (spread inicial
+        // {...r}), ignorando que cajaFinal YA se consolidó (suma, fix 02fe566).
+        // Se reconstruye: cajaFinal consolidado + saldos de empresa únicos de prod_1.
+        // OJO: en ESTE endpoint invFinalValorizado SÍ está en la whitelist 'sumar'
+        // (línea ~2343), así que e.invFinalValorizado ya está consolidado → se usa e.*,
+        // no p0.*. cxcFinal/afNetos/intangiblesNetos NO están en sumar → van de prod_1.
+        // || 0 blinda contra afNetos/intangiblesNetos = null (productos pre-fix NaN a061a20).
+        const p0Adm = e.productos[0];
+        e.totalActivos = _rnd2Adm((e.cajaFinal || 0) + (p0Adm.cxcFinal || 0) + (e.invFinalValorizado || 0) + (p0Adm.afNetos || 0) + (p0Adm.intangiblesNetos || 0));
+        e.totalPasivos = _rnd2Adm((p0Adm.deudaFinal || 0) + (p0Adm.ivaAPagar || 0));
+        e.patrimonio   = _rnd2Adm(e.totalActivos - e.totalPasivos);
       }
     });
 
@@ -3247,9 +3260,6 @@ async function route(req, res, body) {
         // (mismo criterio que utilidadNeta/ebit — no es un saldo único como deudaFinal/afNetos).
         consolidado.cajaFinal      = todosProductos.reduce((s,p) => s + (p.cajaFinal||0), 0);
         consolidado.deudaFinal     = todosProductos[0].deudaFinal;
-        consolidado.patrimonio     = todosProductos[0].patrimonio;
-        consolidado.totalActivos   = todosProductos[0].totalActivos;
-        consolidado.totalPasivos   = todosProductos[0].totalPasivos;
         consolidado.capitalContable= todosProductos[0].capitalContable;
         consolidado.afNetos        = todosProductos[0].afNetos;
         consolidado.brandEquityFinal = todosProductos[0].brandEquityFinal;
@@ -3257,6 +3267,19 @@ async function route(req, res, body) {
         // ivaAPagar es pasivo de empresa — NO se suma por producto
         consolidado.ivaAPagar      = todosProductos[0].ivaAPagar;
         consolidado.resultadoAcumulado = todosProductos[0].resultadoAcumulado;
+        // ── Balance consolidado DERIVADO (no todosProductos[0], que solo refleja prod_1) ──
+        // totalActivos debe reconstruirse desde cajaFinal YA consolidado (suma) + los
+        // saldos de empresa únicos (cxcFinal/afNetos/intangiblesNetos de prod_1). Si se
+        // dejara todosProductos[0].totalActivos, la caja consolidada (mayor) excederia el
+        // Total Activos mostrado → inconsistencia visible en el Balance del estudiante.
+        // || 0 blinda contra afNetos/intangiblesNetos = null (productos pre-fix NaN a061a20).
+        const _cxcFinalEmp   = todosProductos[0].cxcFinal || 0;
+        const _invFinalEmp   = todosProductos[0].invFinalValorizado || 0;
+        const _afNetosEmp    = todosProductos[0].afNetos || 0;
+        const _intangNetosEmp= todosProductos[0].intangiblesNetos || 0;
+        consolidado.totalActivos = _rnd2(consolidado.cajaFinal + _cxcFinalEmp + _invFinalEmp + _afNetosEmp + _intangNetosEmp);
+        consolidado.totalPasivos = _rnd2((todosProductos[0].deudaFinal || 0) + (todosProductos[0].ivaAPagar || 0));
+        consolidado.patrimonio   = _rnd2(consolidado.totalActivos - consolidado.totalPasivos);
         consolidado.producto       = 'Multiproducto (' + todosProductos.length + ')';
         consolidado.productos      = todosProductos; // array completo para el desglose
         resultado = consolidado;
