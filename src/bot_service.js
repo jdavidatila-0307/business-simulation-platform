@@ -388,14 +388,38 @@ async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
     return [];
   }
 
+  // Aplanar decisiones de empresa a nivel producto — un equipo multiproducto
+  // debe contar como "equipo humano" en CADA segmento donde tiene un producto
+  // activo, no solo en el segmento reflejado en la raíz (compatibilidad prod_1).
+  const decisionesAplanadas = (decisionesHumanas || []).flatMap(d => {
+    if (Array.isArray(d.productos) && d.productos.length) {
+      return d.productos
+        .filter(p => p.activo !== false)
+        .map(p => ({
+          isBot: d.isBot,
+          segmentoObjetivo: p.segmentoObjetivo,
+          producto: p.producto,
+          precioVenta: p.precioVenta,
+        }));
+    }
+    return [d]; // formato legado monoproducto, ya plano
+  });
+
+  const segmentosACubir = detectarSegmentosSinEquipo(decisionesAplanadas, segmentos);
+
+  if (!segmentosACubir.length) {
+    console.log('[bot_service] Todos los segmentos ya tienen equipo humano — no se generan bots.');
+    return [];
+  }
+
   // Resetear contador de nombres para consistencia por ronda
-  _nombreIdx = (rondaNum - 1) * segmentos.length % NOMBRES_EMPRESAS.length;
+  _nombreIdx = (rondaNum - 1) * segmentosACubir.length % NOMBRES_EMPRESAS.length;
 
-  console.log(`[bot_service] Generando 1 bot para cada uno de los ${segmentos.length} segmentos (R${rondaNum})...`);
+  console.log(`[bot_service] Generando 1 bot para cada uno de los ${segmentosACubir.length} segmento(s) sin cobertura humana (R${rondaNum})...`);
 
-  // Generar 1 bot por segmento en paralelo
+  // Generar 1 bot por segmento sin cobertura, en paralelo
   const bots = await Promise.all(
-    segmentos.map(async (segmento) => {
+    segmentosACubir.map(async (segmento) => {
       const empresa = siguienteNombreEmpresa();
       // ID interno limpio — no expone nombre del segmento
       const botId   = `bot_${empresa.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_r${rondaNum}`;
