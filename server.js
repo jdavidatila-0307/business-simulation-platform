@@ -1998,7 +1998,7 @@ async function route(req, res, body) {
     const nivelIA2 = sim.config?.nivelCompetidoresIA;
     if (nivelIA2 && nivelIA2 !== 'ninguno') {
       try {
-        const botsIA = await generarBotsParaSegmentos(decisiones, { ...simCfg, nivelCompetidoresIA: nivelIA2 }, n);
+        const botsIA = await generarBotsParaSegmentos(decisiones, { ...simCfg, nivelCompetidoresIA: nivelIA2, botsEnTodoSegmento: sim.config?.botsEnTodoSegmento === true }, n);
         botsIA.forEach(b => decisiones.push(b));
         await Promise.all(botsIA.map(b => storage.saveDecision(sim.id, n, b.equipo, 'prod_1', b)));
         console.log('[server] bots IA persistidos en sim_decisiones');

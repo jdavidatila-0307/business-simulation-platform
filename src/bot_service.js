@@ -405,17 +405,24 @@ async function generarBotsParaSegmentos(decisionesHumanas, cfg, rondaNum) {
     return [d]; // formato legado monoproducto, ya plano
   });
 
-  const segmentosACubir = detectarSegmentosSinEquipo(decisionesAplanadas, segmentos);
+  // Política de cobertura de bots (configurable por el profesor, sim.config):
+  //   botsEnTodoSegmento=true  → un bot en CADA segmento (presión competitiva permanente,
+  //                              incluso donde ya hay equipo humano)
+  //   botsEnTodoSegmento=false → solo segmentos sin equipo humano (comportamiento 9a9ba64, default)
+  const botsEnTodoSegmento = cfg.botsEnTodoSegmento === true;
+  const segmentosACubir = botsEnTodoSegmento
+    ? segmentos
+    : detectarSegmentosSinEquipo(decisionesAplanadas, segmentos);
 
   if (!segmentosACubir.length) {
-    console.log('[bot_service] Todos los segmentos ya tienen equipo humano — no se generan bots.');
+    console.log('[bot_service] Sin segmentos que cubrir — no se generan bots.');
     return [];
   }
 
   // Resetear contador de nombres para consistencia por ronda
   _nombreIdx = (rondaNum - 1) * segmentosACubir.length % NOMBRES_EMPRESAS.length;
 
-  console.log(`[bot_service] Generando 1 bot para cada uno de los ${segmentosACubir.length} segmento(s) sin cobertura humana (R${rondaNum})...`);
+  console.log(`[bot_service] Generando 1 bot para cada uno de los ${segmentosACubir.length} segmento(s) ${botsEnTodoSegmento ? '(cobertura TOTAL, incluye segmentos con equipo humano)' : 'sin cobertura humana'} (R${rondaNum})...`);
 
   // Generar 1 bot por segmento sin cobertura, en paralelo
   const bots = await Promise.all(
