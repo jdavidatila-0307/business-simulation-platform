@@ -2335,7 +2335,7 @@ async function route(req, res, body) {
           'gastosOp','utilidadNeta','ebit',
           'impuestoIT','impuestoIUE','totalImpuestos',
           // Caja
-          'pagoProduccion','pagoMP','pagoMktTotal','totalPagos','cobrosContado',
+          'pagoProduccion','pagoMP','pagoMktTotal','totalPagos','cobrosContado','cajaFinal',
           'ingresoPrestamo','publicidad',
           // IVA
           'ivaDebito','ivaCredito',
