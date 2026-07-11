@@ -3243,7 +3243,9 @@ async function route(req, res, body) {
           consolidado[k] = todosProductos.reduce((s,p) => s + (p[k]||0), 0);
         });
         // Campos de empresa (tomar del primer producto — pasivos y balance únicos)
-        consolidado.cajaFinal      = todosProductos[0].cajaFinal;
+        // cajaFinal SÍ se suma: es efectivo real de la empresa, acumulable por producto
+        // (mismo criterio que utilidadNeta/ebit — no es un saldo único como deudaFinal/afNetos).
+        consolidado.cajaFinal      = todosProductos.reduce((s,p) => s + (p.cajaFinal||0), 0);
         consolidado.deudaFinal     = todosProductos[0].deudaFinal;
         consolidado.patrimonio     = todosProductos[0].patrimonio;
         consolidado.totalActivos   = todosProductos[0].totalActivos;
