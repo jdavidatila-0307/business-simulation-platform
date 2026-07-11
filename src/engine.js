@@ -23,7 +23,12 @@ function normalizarInversionActivos(d = {}) {
       total: 0,
       incrementoCapacidadDisponible: 0,
       incrementoCapacidadComprada: 0,
-      detalle: {}
+      // detalle con TODAS las claves en 0 (NO {} vacío): los call sites de fase0
+      // (engine.js ~811 y ~1353) suman `detalle.X` SIN fallback, así que un {}
+      // produce `número + undefined = NaN`, que se propaga a afNetos/totalActivos/
+      // patrimonio. Se usa esta rama también para productos no-principales (línea 798,
+      // {isBot:true}) y para productos sin decisión (línea 1343) en modo Fase 0.
+      detalle: { nuevaPlanta: 0, ampliacionPlanta: 0, maquinaria: 0, vehiculos: 0, muebles: 0, computo: 0, patentes: 0 }
     };
   }
   const inv = d.inversionActivos || {};
