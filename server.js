@@ -2854,6 +2854,7 @@ async function route(req, res, body) {
           costoComputo:                cfg.params.costoComputo                 ?? 43650,
           costoPatentes:               cfg.params.costoPatentes                ?? 1400,
         },
+        modoInicio: leerModoInicio(sim),   // expone el modo al equipo (hoja: desglose capacidad en homogéneo)
         // Etapa 3.1: catálogo de proveedores para la hoja de decisión
         // Fallback: si la sim se creó antes de la Etapa 3.1, leer de la plantilla
         proveedores: (() => {

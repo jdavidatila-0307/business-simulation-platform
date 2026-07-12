@@ -1102,6 +1102,7 @@ if (isEditable) {
         const montoCapLive     = +(cont.querySelector('[data-hoja-field="montoCapacitacion"]')?.value ?? decision.montoCapacitacion ?? 0);
         const capOperariosLive = Math.round(opFinalesLive * (p?.productividadBase ?? 440) * (1 + factorCapLive * montoCapLive / 10000));
         const capMaxProduccionLive = Math.min(capPlantaLive, capOperariosLive);
+        const modoInicioHoja = state.ref?.modoInicio || 'fase0';   // fail-safe: sin dato → fase0 (mensaje actual)
 
         // ── Límites por campo ─────────────────────────────────────────────
         const LIMITES_CAMPO = {
@@ -1160,7 +1161,13 @@ if (isEditable) {
               refCell.innerHTML = '<span style="color:var(--accent4)">⚠ Supera el tope real (' + fmt.num(capMaxProduccionLive) + ' u = min[planta ' + fmt.num(capPlantaLive) + ', ' + opFinalesLive + ' op.×' + (p?.productividadBase||440) + '=' + fmt.num(capOperariosLive) + ']).</span>';
             } else {
               const pct = Math.round(v_orig / capMaxProduccionLive * 100);
-              refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% del tope real (' + fmt.num(capMaxProduccionLive) + ' u)</span>';
+              if (modoInicioHoja === 'homogeneo') {
+                // Homogéneo: mostrar el desglose planta/operarios también en el mensaje normal
+                refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% del tope real (' + fmt.num(capMaxProduccionLive) + ' u = min[planta ' + fmt.num(capPlantaLive) + ', ' + opFinalesLive + ' op.×' + (p?.productividadBase||440) + '=' + fmt.num(capOperariosLive) + ']).</span>';
+              } else {
+                // Fase 0: mensaje ACTUAL, sin cambios
+                refCell.innerHTML = '<span style="color:var(--accent5)">✓ ' + pct + '% del tope real (' + fmt.num(capMaxProduccionLive) + ' u)</span>';
+              }
             }
           }
         }
