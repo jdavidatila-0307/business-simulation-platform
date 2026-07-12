@@ -745,6 +745,8 @@ function defaultDecision(equipoId, equipoNombre, params, equipo = {}) {
     cajaInicial,                                      // por equipo si eq.capitalInicial, sino global
     capitalInicial,                                   // para que el motor calcule capitalContable correcto
     activosFijosIniciales: af,
+    operariosIniciales:     p.operariosIniciales ?? 4,        // top-level: el motor lee d.operariosIniciales (faltaba; solo estaba en productos[0])
+    capacidadMaxProduccion: p.capacidadMaxProduccion ?? 1500, // top-level: sin esto la producción se topa a 0 en R1 homogéneo
     cxcInicial: p.cxcInicial ?? 0,
     deudaInicial: p.deudaInicial ?? 0,
     inventarioInicial: p.inventarioInicialUnid ?? 0,
