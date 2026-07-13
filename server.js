@@ -3390,7 +3390,22 @@ async function route(req, res, body) {
         .filter(([k]) => k.startsWith('fase0_'))
     );
     fase0Params.sueldosAdministrativosFijos = sim.parametros?.sueldosAdministrativosFijos ?? 0;
-    return send(res, 200, { fase0Activa, registro, equipoId, fase0Params,
+    // Modo 'homogeneo_activos': la caja operativa y el capital de inversión son
+    // GLOBALES (params, iguales para todos), no asignados por equipo. Se inyectan en
+    // el registro que ve el equipo SOLO si su fila aún no los tiene guardados
+    // (respeta lo ya persistido si el equipo ya avanzó). Modo 'fase0' clásico: sin cambio.
+    let registroFinal = registro;
+    if (leerModoInicio(sim) === 'homogeneo_activos') {
+      const base = registro || {};
+      const cajaGlobal = sim.parametros?.cajaOperativaHomogeneoActivos ?? 0;
+      const invGlobal  = sim.parametros?.capitalInversionHomogeneoActivos ?? 0;
+      registroFinal = {
+        ...base,
+        caja_inicial_docente: base.caja_inicial_docente ?? cajaGlobal,
+        capital_inversion:    base.capital_inversion ?? invGlobal,
+      };
+    }
+    return send(res, 200, { fase0Activa, registro: registroFinal, equipoId, fase0Params,
       modoInicio: leerModoInicio(sim) });
   }
 
