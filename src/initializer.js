@@ -18,7 +18,7 @@
  */
 function getEstadoInicial(params, fase0, modoInicio) {
   const p = params || {};
-  const usarFase0 = modoInicio === 'fase0'
+  const usarFase0 = (modoInicio === 'fase0' || modoInicio === 'homogeneo_activos')
     && fase0
     && (fase0.estado === 'enviado' || fase0.estado === 'cerrado')
     && fase0.caja_inicial != null;
