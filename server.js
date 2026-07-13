@@ -108,10 +108,17 @@ function soloCambiaPreSimulacion(rondaAntes, rondaDespues) {
 // RECÁLCULO DE RONDAS — helpers compartidos entre /admin/recalcular-balance
 // (global, todas las rondas) y /admin/recalcular-ronda (una sola ronda)
 // =============================================================================
+// Modos que usan el flujo de constitución diferenciada (sim_fase0): 'fase0' clásico
+// y 'homogeneo_activos' (misma mecánica; caja/inversión globales). Centraliza la
+// decisión para no repetir `modoInicio === 'fase0'` en cada punto de hidratación/gate.
+function usaConstitucionFase0(sim) {
+  const m = leerModoInicio(sim);
+  return m === 'fase0' || m === 'homogeneo_activos';
+}
+
 async function estadoFase0Map(sim) {
-  const modo = leerModoInicio(sim);
   const mapa = {};
-  if (modo === 'fase0') {
+  if (usaConstitucionFase0(sim)) {
     (await storage.getFase0(sim.id)).forEach(r => { mapa[r.equipo_id] = r; });
   }
   return mapa;
@@ -119,11 +126,10 @@ async function estadoFase0Map(sim) {
 
 // Estado acumulado inicial (previo a R1) usado como semilla del recálculo global.
 function estadoEmpresaInicialSeed(sim, equipos, fase0Map) {
-  const modo = leerModoInicio(sim);
   const estadoEmpresa = {};
   equipos.forEach(eq => {
     const _f0   = fase0Map[eq.id];
-    const _esF0 = modo === 'fase0' && _f0;
+    const _esF0 = usaConstitucionFase0(sim) && _f0;
     estadoEmpresa[eq.id] = {
       resultadoAcumulado:    0,
       // Capital permanente (invariante R1→Rn) — fase0: aporte real de socios; homogéneo: params.
@@ -360,7 +366,7 @@ function recalcularUnaRonda({ sim, equipos, proveedores, rondas, ronda, n, estad
     competenciaExterna: sim.competencia_externa,
     demandaBaseAnteriorMap,
     rondaNumero:        n,
-    bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),
+    bloquearProduccionR1: usaConstitucionFase0(sim),
     proveedores:        proveedores,
     shock:              shockRonda,
     equipos,
@@ -1520,8 +1526,7 @@ async function route(req, res, body) {
     if (needAdmin()) return;
     if (!sim) return send(res, 400, { error: 'Sin simulación' });
     if (sim.config.roundState !== 'pending') return send(res, 400, { error: 'No está pendiente' });
-    const modoInicioActivar = leerModoInicio(sim);
-    if (modoInicioActivar === 'fase0' && sim.config.fase0Activa === true) {
+    if (usaConstitucionFase0(sim) && sim.config.fase0Activa === true) {
       return send(res, 400, { error: 'No se puede activar la ronda: Fase 0 sigue abierta. Cierra Fase 0 primero (Admin → Fase 0 → Cerrar Fase 0).' });
     }
     sim.config.roundState = 'open';
@@ -1541,7 +1546,7 @@ async function route(req, res, body) {
 
       const modoInicio = leerModoInicio(sim);
       let fase0PorEquipo = {};
-      if (modoInicio === 'fase0') {
+      if (usaConstitucionFase0(sim)) {
         const registrosFase0 = await storage.getFase0(sim.id);
         registrosFase0.forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
       }
@@ -1556,7 +1561,7 @@ async function route(req, res, body) {
           dec = propagarEstado(dec, resPrev, sim.parametros);
           console.log(`[server] ${eq.nombre}: caja=${dec.cajaInicial} vend=${dec.vendedoresIniciales} oper=${dec.operariosIniciales} saldoIUE=${dec.saldoIUEcompensable}`);
         } else {
-          if (modoInicio === 'fase0' && n === 1) {
+          if (usaConstitucionFase0(sim) && n === 1) {
             dec = hidratarEstadoInicialR1(dec, sim.parametros, fase0PorEquipo[eq.id] || null, modoInicio, n);
             console.log(`[server] ${eq.nombre}: estado inicial R1 hidratado desde Fase 0`);
           } else {
@@ -1564,7 +1569,7 @@ async function route(req, res, body) {
           }
         }
         // Activos complementarios Fase 0 (inmutables) — re-leídos de BD cada ronda
-        if (modoInicio === 'fase0' && fase0PorEquipo[eq.id]) {
+        if (usaConstitucionFase0(sim) && fase0PorEquipo[eq.id]) {
           const f0 = fase0PorEquipo[eq.id];
           dec.vehiculo_nivel           = Number(f0.vehiculo_nivel || 0);
           dec.muebles_comprado         = !!f0.muebles_comprado;
@@ -1585,7 +1590,7 @@ async function route(req, res, body) {
       // R1 puede tener borradores creados antes de activarse. Rehidratar sólo
       // los no enviados/no forzados para no perder el Balance Inicial Fase 0.
       const modoInicio = leerModoInicio(sim);
-      if (modoInicio === 'fase0' && n === 1) {
+      if (usaConstitucionFase0(sim) && n === 1) {
         const fase0PorEquipo = {};
         (await storage.getFase0(sim.id)).forEach(r => { fase0PorEquipo[r.equipo_id] = r; });
         const equipos = await storage.getEquipos(sim.id);
@@ -1648,7 +1653,7 @@ async function route(req, res, body) {
     if (actual?.submitted && !actual.forcedByAdmin) return send(res, 400, { error: 'El equipo ya envió una decisión normal' });
     let baseDecision = actual || storage.defaultDecision(equipo.id, equipo.nombre, sim.parametros, equipo);
     const modoInicio = leerModoInicio(sim);
-    if (!actual && modoInicio === 'fase0' && Number(n) === 1) {
+    if (!actual && usaConstitucionFase0(sim) && Number(n) === 1) {
       const fase0 = await storage.getFase0Equipo(sim.id, equipoId);
       baseDecision = hidratarEstadoInicialR1(baseDecision, sim.parametros, fase0, modoInicio, n);
     } else if (!actual && Number(n) >= 2) {
@@ -1870,7 +1875,7 @@ async function route(req, res, body) {
     });
 
     // FASE 1A — bloqueo: en modo fase0, R1 no se calcula sin los 3 gastos fijos de Fase 0.
-    if (leerModoInicio(sim) === 'fase0' && n === 1) {
+    if (usaConstitucionFase0(sim) && n === 1) {
       const humanosFG = equipos.filter(eq => eq.rol === 'equipo' && !eq.isBot);
       const regFG = {};
       (await storage.getFase0(sim.id)).forEach(r => { regFG[r.equipo_id] = r; });
@@ -1926,7 +1931,7 @@ async function route(req, res, body) {
       competenciaExterna:    sim.competencia_externa,
       demandaBaseAnteriorMap,  // Etapa 2.2: demanda dinámica
       rondaNumero:    n,         // Etapa 3.1: número de ronda para lead time
-      bloquearProduccionR1: (sim.metadata?.modoInicio === 'fase0'),  // lead time maquinaria: R1 sin producción en modo Fase 0
+      bloquearProduccionR1: usaConstitucionFase0(sim),  // lead time maquinaria: R1 sin producción en modo Fase 0
       proveedores:    sim.proveedores || [],  // Etapa 3.1: catálogo de proveedores
       shock,                   // Shock de mercado: afecta demandaFormal de segmentos
       equipos,                 // Lista de equipos (para reportes Premium/Estratégico)
