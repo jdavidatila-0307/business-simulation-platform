@@ -59,6 +59,10 @@ async function loadAdminParametros() {
         ${pf('CxC inicial (Bs)','cxcInicial')}
         ${pf('Deuda inicial (Bs)','deudaInicial')}
         ${pf('Capacidad máx producción (unid)','capacidadMaxProduccion')}
+        ${data.modoInicio === 'homogeneo_activos' ? `
+        ${pf('Caja operativa (Homogéneo con activos)','cajaOperativaHomogeneoActivos','Igual para TODOS los equipos. Efectivo operativo antes de invertir en activos.')}
+        ${pf('Capital de inversión (Homogéneo con activos)','capitalInversionHomogeneoActivos','Igual para TODOS los equipos. Presupuesto que cada equipo decide cómo gastar en activos en su pantalla de Fase 0.')}
+        ` : ''}
       </div>
 
       <div class="param-card">
