@@ -799,11 +799,18 @@ async function loadAdminSimulaciones() {
                   <div style="font-size:.72rem;color:var(--text3)">Cada equipo define su empresa antes de R1. Más realista y pedagógico.</div>
                 </div>
               </label>
-              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-                <input type="radio" name="newSimModo" value="homogeneo" style="margin-top:3px"/>
+              <label style="display:none;align-items:flex-start;gap:8px;cursor:pointer">
+                <input type="radio" name="newSimModo" value="homogeneo" disabled style="margin-top:3px"/>
                 <div>
                   <strong>Homogéneo — Condiciones iguales</strong>
                   <div style="font-size:.72rem;color:var(--text3)">Todos los equipos arrancan igual. Ideal para demos o cursos cortos.</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+                <input type="radio" name="newSimModo" value="homogeneo_activos" style="margin-top:3px"/>
+                <div>
+                  <strong>Homogéneo con activos — Constitución con presupuesto igual</strong>
+                  <div style="font-size:.72rem;color:var(--text3)">Cada equipo elige su propia planta, vehículo, muebles, cómputo y patentes (como Fase 0). El docente fija un mismo presupuesto de caja e inversión para todos.</div>
                 </div>
               </label>
             </div>
