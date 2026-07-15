@@ -185,6 +185,9 @@ async function loadAdminFase0() {
         + '<td class="num">' + (credOp  > 0 ? fmt.bs(credOp)  : '—') + '</td>'
         + '<td class="num">' + (credInv > 0 ? fmt.bs(credInv) : '—') + '</td>'
         + '<td class="num">' + (costoFijoMin > 0 ? fmt.bs(costoFijoMin) : '—') + '</td>'
+        + '<td class="num">' + (gAdm != null ? fmt.bs(gAdm) : '—') + '</td>'
+        + '<td class="num">' + (gPla != null ? fmt.bs(gPla) : '—') + '</td>'
+        + '<td class="num">' + (gSue != null ? fmt.bs(gSue) : '—') + '</td>'
         + '<td>' + btnCapital + btnHabilitar + btnCredito + btnCostoFijo + btnGastosFijos + '</td>'
         + '</tr>';
     }).join('');
@@ -199,6 +202,9 @@ async function loadAdminFase0() {
       + '<th>Inversión (Bs)</th><th>Total (Bs)</th>'
       + '<th>Créd. Op<br>(Bs)</th><th>Créd. Inv<br>(Bs)</th>'
       + '<th>Costo Fijo<br>Mín. (Bs)</th>'
+      + '<th>Gasto Admin.<br>Fijo (Bs)</th>'
+      + '<th>Gasto Fijo<br>Planta (Bs)</th>'
+      + '<th>Sueldos Admin.<br>Fijos (Bs)</th>'
       + '<th>Acciones</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div></div>';
     f0WireNivelesConfig();
